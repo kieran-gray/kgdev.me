@@ -1,21 +1,20 @@
 ---
 layout: ../../layouts/post.astro
-title: "The Quest for Exactly-Once Event Delivery: Part 1"
+title: 'The Quest for Exactly-Once Event Delivery: Part 1'
 pubDate: 2025-06-07
-description: "Attempting to achieve exactly-once event delivery semantics in my FernLabour.com codebase."
-author: "Kieran Gray"
+description: 'Attempting to achieve exactly-once event delivery semantics in my FernLabour.com codebase.'
+author: 'Kieran Gray'
 isPinned: false
 excerpt: We’re about to go on a bit of an adventure, I’m not sure how difficult it’s going to be (or if it’s possible), but I’m going to learn some things, and maybe you can learn some things too...
 image:
   src:
   alt:
-tags: ["python", "architecture", "events"]
+tags: ['python', 'architecture', 'events']
 ---
 
 We’re about to go on a bit of an adventure, I’m not sure how difficult it’s going to be (or if it’s possible), but I’m going to learn some things, and maybe you can learn some things too.
 
 I have a distributed event driven web application [FernLabour.com](http://FernLabour.com) and I want to try and attempt to get an exactly once delivery guarantee for all events that I am generating. Let’s get into it.
-
 
 ## What is an event?
 
@@ -23,37 +22,31 @@ An event is an immutable representation of something that happened. They typical
 
 In my application Domain Events are created when significant happenings occur in a given service such as `labour.begun`, `contraction.ended`, or `notification.sent`. These events are then published to a message bus where other interested services can subscribe to and consume them.
 
-
 ## What is an exactly once delivery guarantee?
 
 Exactly once delivery is one of the three important delivery semantics to be aware of when discussing distributed systems and events. The three are:
 
 - At-Most-Once
-    - Events are not guaranteed to be produced or consumed.
-    - Events can be lost and will not be retried.
-    - Fine for use cases where minor data loss is acceptable, such as logging.
+  - Events are not guaranteed to be produced or consumed.
+  - Events can be lost and will not be retried.
+  - Fine for use cases where minor data loss is acceptable, such as logging.
 
 ![EventDeliverabilityAtMostOnce](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/eventdeliverabilityatmostonce-1.webp)
 
-
-
 - At-Least-Once
-    - Events are guaranteed to be delivered at least once.
-    - Failures will be retried.
-    - There may be duplicate events on the producer side and the events may be delivered multiple times (or to multiple consumers).
-    - For use cases where guaranteed delivery is necessary.
-    - Consumers need to be idempotent so events with side-effects are not consumed multiple times.
+  - Events are guaranteed to be delivered at least once.
+  - Failures will be retried.
+  - There may be duplicate events on the producer side and the events may be delivered multiple times (or to multiple consumers).
+  - For use cases where guaranteed delivery is necessary.
+  - Consumers need to be idempotent so events with side-effects are not consumed multiple times.
 
 ![EventDeliverabilityAtLeastOnce(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/eventdeliverabilityatleastonce1-1.webp)
 
-
-
 - Exactly-Once
-    - Events are guaranteed to only be produced and delivered once.
-    - The most difficult to achieve.
+  - Events are guaranteed to only be produced and delivered once.
+  - The most difficult to achieve.
 
 ![EventDeliverabilityExactlyOnce](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/eventdeliverabilityexactlyonce-1.webp)
-
 
 ## Example request
 
@@ -73,8 +66,7 @@ Makes sense, Labour Service handles all labour related things like planning, sta
 
 In this example, the new mum is completing her labour with a request to the Labour Service, which triggers a domain event. Then Notification Service is picking up that domain event and triggering a notification to all of the people who are subscribed for updates.
 
-*this is not exactly how my notifications system is structured, but this makes for a better quality example.
-
+\*this is not exactly how my notifications system is structured, but this makes for a better quality example.
 
 ## Investigating the Producer Side
 
@@ -94,7 +86,7 @@ class CompleteLabourService:
 	event_producer: EventProducer,
     ) -> None:
     ... # Omitting for brevity
-				
+
     async def complete_labour(
 	self, labour_id: str, end_time: datetime,
     ) -> LabourDTO:
@@ -102,7 +94,7 @@ class CompleteLabourService:
 	labour = await self._labour_repository.get_labour_by_id(
             labour_id=labour_id
         )
-		
+
 	# Mark it as completed, if allowed
 	labour = CompleteLabourService().complete_labour(
             labour=labour, end_time=end_time
@@ -119,7 +111,6 @@ class CompleteLabourService:
 ```
 
 Immediately we can see something that could be a problem. We are committing our changes to the database and publishing the event to the message bus separately. What if one of them fails?
-
 
 ### Failure Scenarios
 
@@ -141,13 +132,11 @@ We might naively think that we can just flip the order around so we produce an e
 
 ![CompleteLabourRequestReversed](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/completelabourrequestreversed.webp)
 
-
 ### The Dual Write Problem
 
-This is known as the dual write problem and it is going to be our nemesis as we work towards Exactly-Once delivery. The dual write problem occurs when we need to update two disconnected systems atomically, in our case when persisting changes to a database and publishing an event to a message bus, but the same problem would occur if instead of publishing an event we were sending an email, or making an API call. 
+This is known as the dual write problem and it is going to be our nemesis as we work towards Exactly-Once delivery. The dual write problem occurs when we need to update two disconnected systems atomically, in our case when persisting changes to a database and publishing an event to a message bus, but the same problem would occur if instead of publishing an event we were sending an email, or making an API call.
 
 Since the systems are disconnected we cannot make our updates in a transaction so failures can lead to data inconsistencies that are hard to track down.
-
 
 ## Solutions
 
@@ -156,7 +145,6 @@ There are a number of different approaches that you can take for resolving the d
 I want a simple solution without additional infrastructure to manage, so CDC is out. And Listen To Yourself would involve changes to the frontend to handle state not being updated and returned as part of the request, so that’s out too.
 
 What we are going to implement instead is a transactional outbox.
-
 
 ## Transactional Outbox
 
@@ -167,6 +155,7 @@ These events can then be asynchronously published to our message bus.
 ![CompleteLabourRequestOutbox](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/completelabourrequestoutbox.webp)
 
 Or, in code as part of a CompleteLabourService application service:
+
 ```python
 class CompleteLabourService:
     def __init__(
@@ -185,7 +174,7 @@ class CompleteLabourService:
 	labour = await self._labour_repository.get_labour_by_id(
             labour_id=labour_id
         )
-		
+
 	# Mark it as completed, if allowed
 	labour = CompleteLabourService().complete_labour(
             labour=labour, end_time=end_time
@@ -199,10 +188,10 @@ class CompleteLabourService:
 	    # Repositories now save the changes but do not commit to the database
 	    await self._labour_repository.save(labour)
 	    await self._domain_event_repository.save(labour.domain_events)
-			  
-	# Spawn a background task to publish events asynchronously 
+
+	# Spawn a background task to publish events asynchronously
         self._domain_event_publisher.publish_batch_in_background()
-		    
+
 	# Return a DTO
 	return LabourDTO.from_domain(labour)
 ```
@@ -214,6 +203,7 @@ Our asynchronous processing works by fetching a list of unpublished events from 
 ![AsyncProcessing(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/asyncprocessing1.webp)
 
 Or, as code:
+
 ```python
 class DomainEventPublisher:
     def __init__(
@@ -224,7 +214,7 @@ class DomainEventPublisher:
         task_manager: TaskManager,
     ) -> None:
         ... # Omitting for brevity
-    
+
     def publish_batch_in_background(self) -> None:
 	# TaskManager could be an external task queue like Celery/Dramatiq/RabbitMQ.
 	# The TaskManager I am using is creating asyncio tasks so I don't need
@@ -232,7 +222,7 @@ class DomainEventPublisher:
         self._task_manager.create_task(
             self.publish_batch(), name=f"publish_batch_in_background:{uuid4()}"
         )
-    
+
     async def publish_batch(self) -> None:
 	# In a single unit of work
         async with self._unit_of_work:
@@ -241,16 +231,15 @@ class DomainEventPublisher:
             if not domain_events:
                 # Nothing to publish
                 return
-            
+
             # Publish them to the message bus via the event producer
             result = await self._event_producer.publish_batch(events=domain_events)
-            
+
             # Mark successfully published events as published
             await self._domain_event_repository.mark_many_as_published(
 		domain_event_ids=result.success_ids
             )
 ```
-
 
 ### What if the outbox publish fails?
 
@@ -259,7 +248,6 @@ You may notice another potential dual write problem here, what if we fetch the u
 In this case the events would be published multiple times.
 
 ![CompleteLabourRequestOutboxDBFailure](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/completelabourrequestoutboxdbfailure.webp)
-
 
 ### Comparing Risk
 
@@ -277,15 +265,13 @@ Additionally, no more inconsistencies will be created while Cloud SQL is down, b
 
 ![AtLeastOnceDowntime](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/atleastoncedowntime.webp)
 
-
 ## Conclusion
 
 So, have we achieved the Exactly-Once delivery that we set out for? No, but we do now have At-Least-Once delivery with a very low chance of event duplication, which is a significant upgrade from our starting point of At-Most-Once delivery.
 
-Our quest is not over, we can still achieve Exactly-Once *processing*, where we guarantee that our consumers only process a message once. In a future blog post I will investigate the message bus and consumer sides to see what we can do to achieve this.
+Our quest is not over, we can still achieve Exactly-Once _processing_, where we guarantee that our consumers only process a message once. In a future blog post I will investigate the message bus and consumer sides to see what we can do to achieve this.
 
 Thanks for following along.
-
 
 ## Bonus: Handling Concurrent Event Publishing
 
@@ -305,15 +291,15 @@ If another worker queries the database for unpublished events, it will find the 
 
 ![DBLock](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/dblock.webp)
 
-We can improve this further using the `SKIP LOCKED` option. 
+We can improve this further using the `SKIP LOCKED` option.
 
 When combined with `FOR UPDATE`, it allows additional workers to skip over any rows that are locked, rather than waiting for them to become available. The result is that each worker only receives events that are not already being processed by another worker, improving throughput and eliminating the idle time of waiting for locks to release.
 ![DBLockSkip](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/dblockskip.webp)
 
-
 ### Code Example
 
 Here is the repository method for fetching unpublished domain events using SQLAlchemy.
+
 ```python
 async def get_unpublished(self, limit: int = 100) -> list[DomainEvent]:
     """

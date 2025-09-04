@@ -1,14 +1,14 @@
 ---
 layout: ../../layouts/post.astro
-title: "The Quest for Exactly-Once Event Delivery: Part 2"
+title: 'The Quest for Exactly-Once Event Delivery: Part 2'
 pubDate: 2025-07-13
-description: "Attempting to achieve exactly-once event delivery semantics in my FernLabour.com codebase."
-author: "Kieran Gray"
+description: 'Attempting to achieve exactly-once event delivery semantics in my FernLabour.com codebase.'
+author: 'Kieran Gray'
 excerpt: The adventure continues. In our last post we started the quest for the holy grail of distributed systems - Exactly-Once delivery. We tackled the first half of the problem by building a reliable producer with a transactional outbox, guaranteeing that we will never lose an event. This is a big step forward, we’ve moved from At-Most-Once delivery to an At-Least-Once delivery guarantee.
 image:
   src:
   alt:
-tags: ["python", "architecture", "events"]
+tags: ['python', 'architecture', 'events']
 ---
 
 The adventure continues. In our last post we started the quest for the holy grail of distributed systems: Exactly-Once delivery. We tackled the first half of the problem by building a reliable producer with a transactional outbox, guaranteeing that we will never lose an event. This is a big step forward, we’ve moved from At-Most-Once delivery to an At-Least-Once delivery guarantee.
@@ -16,7 +16,6 @@ The adventure continues. In our last post we started the quest for the holy grai
 This guarantee however, comes with a new challenge. Because our outbox publisher may re-publish an event that was already successfully sent to the message bus, we now face the possibility of duplicate events. A single `labour.completed` event may arrive at our Notification Service twice. While this is preferable to not arriving at all, sending duplicate notifications is a poor user experience.
 
 So the next logical step is on the consumer side: how do we process each event exactly once, even if it arrives more than once?
-
 
 ## Recap
 
@@ -63,7 +62,7 @@ See appendix A for a more in depth discussion of GCP Pub/Sub.
 
 In a distributed event-driven system, an event consumer is any service or component that subscribes to a message bus and reacts to new events by performing some kind of work, often triggering side effects such as updating a database or sending notifications.
 
-Consumers typically pull messages from the message bus (in our case GCP Pub/Sub), process them, and then either acknowledge (ack) the message if processed successfully, or negatively acknowledge (nack) otherwise. An ack marks the event as handled so it should not be delivered again. 
+Consumers typically pull messages from the message bus (in our case GCP Pub/Sub), process them, and then either acknowledge (ack) the message if processed successfully, or negatively acknowledge (nack) otherwise. An ack marks the event as handled so it should not be delivered again.
 
 If an event is nacked, then it can be redelivered for processing again, typically after a short delay. If an event persistently fails then it can be moved to a Dead Letter Queue (DLQ), where it can remain until a dev is free to investigate the failure.
 
@@ -98,8 +97,8 @@ There is a potential problem here: a rogue consumer could simply not check the l
 Let’s break down how the lock works:
 
 - `pg_try_advisory_xact_lock(key)` will:
-    - Acquire the lock and return `true` if it's available.
-    - Fail immediately (returning `false`) if another session already holds the lock.
+  - Acquire the lock and return `true` if it's available.
+  - Fail immediately (returning `false`) if another session already holds the lock.
 - The `xact` suffix means that the lock is automatically released when the transaction ends, no explicit release required.
 
 This means that if two consumers try to process the same event:
@@ -119,7 +118,7 @@ class SQLAlchemyEventClaimManager:
 	lock_key = await self._get_lock_key_for_event(event_id=event_id)
         stmt_advisory_lock = text("SELECT pg_try_advisory_xact_lock(:key)")
         result = await self._session.execute(stmt_advisory_lock, {"key": lock_key})
-        
+
         if not result.scalar_one():
 	    raise LockContentionError(f"Event '{event_id}' is locked by another consumer.")
 ```
@@ -142,7 +141,7 @@ class SQLAlchemyEventClaimManager:
 
 ### Full Deduplication Flow
 
-Now we have all of the necessary parts, let’s look at how the full deduplication flow works. 
+Now we have all of the necessary parts, let’s look at how the full deduplication flow works.
 
 When we receive an event, in a transaction we will:
 
@@ -215,14 +214,12 @@ Pub/Sub offers two types of subscription that can be used to get events to consu
 
 The first type is a **pull** subscription, this means the consumer is responsible for pulling events. There are two different pull methods available in Pub/Sub.
 
-The first pull method available is **streaming pull**, this method has the consumer open up a persistent streaming connection with Pub/Sub. When new messages are available the Pub/Sub server sends them through the connection to the consumer.  This method is the best for high throughput and low latency applications.
+The first pull method available is **streaming pull**, this method has the consumer open up a persistent streaming connection with Pub/Sub. When new messages are available the Pub/Sub server sends them through the connection to the consumer. This method is the best for high throughput and low latency applications.
 
 ![StreamingPull(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/streamingpull1.webp)
 
-
 The other pull method available is unary pull, with this method the consumer requests a maximum number of messages and Pub/Sub responds with up to that maximum number of messages. Once the request is complete the connection is closed. This method is less efficient than streaming pull and is not recommended unless you have a strict requirement for the number of messages a consumer can consume at a time or a limit on consumer resources.
 ![UnaryPull(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/unarypull1.webp)
-
 
 The other type of subscription available is **push**, with push subscriptions you define an endpoint for Pub/Sub to send messages to and they are automatically pushed to that endpoint as they are received. The tradeoff with this method is that the consumer must have a public HTTPS endpoint whereas the pull subscriptions just require access to Pub/Sub. For applications with low load it may be more cost effective to use a scale to 0 serverless endpoint for handling events instead of a persistently running consumer.
 ![Push(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/push1.webp)
@@ -233,15 +230,15 @@ Additionally, it does not solve the problem described in this post: duplicates c
 
 ## Appendix B: Event Claim Manager Implementation
 
-Full code example: 
+Full code example:
 
 ```python
 class SQLAlchemyEventClaimManager:
     """Claim manager used to ensure that events are only handled once."""
-    
+
     def __init__(self, session: AsyncSession):
 	self._session = session
-		 
+
     async def _get_lock_key_for_event(self, event_id: str) -> int:
 	hash = hashlib.sha256(event_id.encode()).digest()
 	return int.from_bytes(hash[:8], signed=True)
@@ -250,17 +247,17 @@ class SQLAlchemyEventClaimManager:
 	lock_key = await self._get_lock_key_for_event(event_id=event_id)
         stmt_advisory_lock = text("SELECT pg_try_advisory_xact_lock(:key)")
         result = await self._session.execute(stmt_advisory_lock, {"key": lock_key})
-        
+
         if not result.scalar_one():
 	    raise LockContentionError(f"Event '{event_id}' is locked by another consumer.")
-    
+
     async def _get_event_processing_state(self, event_id: str) -> str | None:
 	stmt_select = select(consumer_processed_events_table.c.status).where(
 	    consumer_processed_events_table.c.event_id == event_id
 	)
 	result = await self._session.execute(stmt_select)
 	return result.scalar_one_or_none()
-    
+
     async def _insert_event(self, event_id: str) -> None:
 	stmt_insert = (
 	    insert(consumer_processed_events_table)
@@ -268,11 +265,11 @@ class SQLAlchemyEventClaimManager:
 	    .on_conflict_do_nothing()
 	)
 	await self._session.execute(stmt_insert)
-    
+
     async def try_claim_event(self, event_id: str) -> None:
-	"""        
+	"""
         Claims an event for processing using a non-blocking lock.
-        
+
         Raises:
 	    AlreadyCompletedError: If the event was already completed.
 	    LockContentionError: If another process holds the lock.
@@ -284,7 +281,7 @@ class SQLAlchemyEventClaimManager:
 	if current_state is None:
 	    await self._insert_event(event_id=event_id)
 	log.info(f"Claim successfully established for Event '{event_id}'")
-    
+
     async def mark_as_completed(self, event_id: str) -> None:
 	"""Marks the event as completed in the database."""
 	stmt = (
