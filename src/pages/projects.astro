@@ -1,0 +1,55 @@
+---
+import Base from '@/layouts/Base.astro';
+import Section from '@/components/Section.astro';
+import Heading from '@/components/Heading.astro';
+
+const pageTitle = 'Projects';
+const pageDescription = "A collection of projects I've worked on";
+---
+
+<Base head={{ title: pageTitle, description: pageDescription }}>
+  <Section><Heading title="Projects" /></Section>
+  <Section>
+    <div class="flex flex-col gap-4">
+      <a
+        href="https://fernlabour.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="group"
+      >
+        <div
+          class="rounded-2xl bg-stone-200/50 p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] transition hover:bg-gradient-to-r hover:from-orange-900 hover:via-amber-700 hover:to-white dark:bg-gray-900"
+        >
+          <div
+            class="rounded-[1rem] bg-stone-300 p-5 text-gray-900 opacity-90 dark:bg-stone-800 dark:text-white"
+          >
+            <h3 class="mb-2 text-xl font-bold group-hover:underline">FernLabour.com</h3>
+            <p class="leading-relaxed text-gray-700 dark:text-gray-200">
+              FernLabour.com is a modern SaaS tool for labour tracking and real-time sharing. It combines a contraction timer with a private subscription system that lets loved ones follow along with updates via SMS, WhatsApp, or email.
+            </p>
+          </div>
+        </div>
+      </a>
+
+      <a
+        href="https://quest-lock.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="group"
+      >
+        <div
+          class="rounded-2xl bg-stone-200/50 p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] transition hover:bg-gradient-to-r hover:from-orange-900 hover:via-amber-700 hover:to-white dark:bg-gray-900"
+        >
+          <div
+            class="rounded-[1rem] bg-stone-300 p-5 text-gray-900 opacity-90 dark:bg-stone-800 dark:text-white"
+          >
+            <h3 class="mb-2 text-xl font-bold group-hover:underline">Quest-Lock.com</h3>
+            <p class="leading-relaxed text-gray-700 dark:text-gray-200">
+              Quest-Lock is a tool for digital detoxes that locks users out of their social media by splitting their password into shares that can only be recovered by completing real world quests.
+            </p>
+          </div>
+        </div>
+      </a>
+    </div>
+  </Section>
+</Base>

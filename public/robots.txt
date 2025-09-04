@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kgdev.me/sitemap-index.xml
