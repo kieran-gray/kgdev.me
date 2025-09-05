@@ -31,7 +31,7 @@ This event is published to the message bus and then consumed by the Notification
 
 We want to get as close to Exactly-Once delivery as possible because not sending the notification would mean that a user misses out on a service that they are paying for, and sending the notification multiple times would be annoying and result in poor user experience (and more operational cost).
 
-![RequestAnatomy](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/requestanatomy.webp)
+![RequestAnatomy](/images/posts/quest-exactly-once-p2/requestanatomy.webp)
 
 ### How did we improve the producer?
 
@@ -55,7 +55,7 @@ Most message bus implementations organise events into channels called topics. Ea
 
 In our case we are using GCP Pub/Sub, but you could use Kafka, RabbitMQ, or any of the many options in between. The core idea is the same: producers publish events to topics on the message bus and consumers pick them up when they can.
 
-![MessageBus](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/messagebus-1.webp)
+![MessageBus](/images/posts/quest-exactly-once-p2/messagebus-1.webp)
 See appendix A for a more in depth discussion of GCP Pub/Sub.
 
 ### Event Consumer
@@ -107,7 +107,7 @@ This means that if two consumers try to process the same event:
 - The other will not be blocked and will instead skip and move on to the next event.
 - The event should be nacked by the consumer that fails to acquire the lock. This tells the message bus to redeliver the event later, ensuring it gets another chance to be processed if the consumer that currently holds the lock happens to fail.
 
-![AdvisoryLock](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/advisorylock.webp)
+![AdvisoryLock](/images/posts/quest-exactly-once-p2/advisorylock.webp)
 
 Or, in code:
 
@@ -153,7 +153,7 @@ When we receive an event, in a transaction we will:
 
 If any step in the process fails (e.g. the event is already `COMPLETED`, the handling logic fails, or the database crashes) the entire transaction is rolled back. The `processed_events` record is never committed to the database, and the advisory lock is released automatically. Now another consumer can safely try to process the event.
 
-![FullFlow](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/fullflow.webp)
+![FullFlow](/images/posts/quest-exactly-once-p2/fullflow.webp)
 
 ## The Final Hurdle: External Side Effects
 
@@ -163,7 +163,7 @@ If our event processing consists of running some business logic and making chang
 
 But if there are external side effects, such as sending a text message notification, then there is the possibility that we will carry out the side effects but fail to mark the event as `COMPLETED`. This is exactly the same dual write issue that we ran into last time; it is not possible to do these external actions in a transaction.
 
-![FullFlowIssue](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/fullflowissue.webp)
+![FullFlowIssue](/images/posts/quest-exactly-once-p2/fullflowissue.webp)
 
 ## Conclusion
 
@@ -216,13 +216,13 @@ The first type is a **pull** subscription, this means the consumer is responsibl
 
 The first pull method available is **streaming pull**, this method has the consumer open up a persistent streaming connection with Pub/Sub. When new messages are available the Pub/Sub server sends them through the connection to the consumer. This method is the best for high throughput and low latency applications.
 
-![StreamingPull(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/streamingpull1.webp)
+![StreamingPull(1)](/images/posts/quest-exactly-once-p2/streamingpull1.webp)
 
 The other pull method available is unary pull, with this method the consumer requests a maximum number of messages and Pub/Sub responds with up to that maximum number of messages. Once the request is complete the connection is closed. This method is less efficient than streaming pull and is not recommended unless you have a strict requirement for the number of messages a consumer can consume at a time or a limit on consumer resources.
-![UnaryPull(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/unarypull1.webp)
+![UnaryPull(1)](/images/posts/quest-exactly-once-p2/unarypull1.webp)
 
 The other type of subscription available is **push**, with push subscriptions you define an endpoint for Pub/Sub to send messages to and they are automatically pushed to that endpoint as they are received. The tradeoff with this method is that the consumer must have a public HTTPS endpoint whereas the pull subscriptions just require access to Pub/Sub. For applications with low load it may be more cost effective to use a scale to 0 serverless endpoint for handling events instead of a persistently running consumer.
-![Push(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/push1.webp)
+![Push(1)](/images/posts/quest-exactly-once-p2/push1.webp)
 
 For pull subscriptions Pub/Sub offers an Exactly-Once option. With this option enabled we can be sure that a Pub/Sub message is only processed once if we process and acknowledge the message within the acknowledgement deadline. This reduces the likelihood of receiving a duplicate message, but comes with some additional work on our end.
 

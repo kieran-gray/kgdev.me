@@ -31,7 +31,7 @@ Exactly once delivery is one of the three important delivery semantics to be awa
   - Events can be lost and will not be retried.
   - Fine for use cases where minor data loss is acceptable, such as logging.
 
-![EventDeliverabilityAtMostOnce](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/eventdeliverabilityatmostonce-1.webp)
+![EventDeliverabilityAtMostOnce](/images/posts/quest-exactly-once-p1/eventdeliverabilityatmostonce-1.webp)
 
 - At-Least-Once
   - Events are guaranteed to be delivered at least once.
@@ -40,13 +40,13 @@ Exactly once delivery is one of the three important delivery semantics to be awa
   - For use cases where guaranteed delivery is necessary.
   - Consumers need to be idempotent so events with side-effects are not consumed multiple times.
 
-![EventDeliverabilityAtLeastOnce(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/eventdeliverabilityatleastonce1-1.webp)
+![EventDeliverabilityAtLeastOnce(1)](/images/posts/quest-exactly-once-p1/eventdeliverabilityatleastonce1-1.webp)
 
 - Exactly-Once
   - Events are guaranteed to only be produced and delivered once.
   - The most difficult to achieve.
 
-![EventDeliverabilityExactlyOnce](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/eventdeliverabilityexactlyonce-1.webp)
+![EventDeliverabilityExactlyOnce](/images/posts/quest-exactly-once-p1/eventdeliverabilityexactlyonce-1.webp)
 
 ## Example request
 
@@ -60,7 +60,7 @@ The request we are going to focus on is our complete labour request. At a high l
 4. Notification Service is subscribed to the topic and pulls the event from the message bus.
 5. Notification Service consumes the event, sending a “Welcome, baby! 🎉” notification to all interested parties.
 
-![HighLevel(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/highlevel1.webp)
+![HighLevel(1)](/images/posts/quest-exactly-once-p1/highlevel1.webp)
 
 Makes sense, Labour Service handles all labour related things like planning, starting, and completing labour.
 
@@ -74,7 +74,7 @@ OK, now we’ve seen the request at a high level, lets start to drill down into 
 
 The first three steps from above looks like this in the Labour Service (Backend):
 
-![ProducerExample](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/producerexample.webp)
+![ProducerExample](/images/posts/quest-exactly-once-p1/producerexample.webp)
 
 Or, in code as part of a CompleteLabourService application service:
 
@@ -116,7 +116,7 @@ Immediately we can see something that could be a problem. We are committing our 
 
 It wouldn't be a problem if the database failed, we would raise an exception, nothing would be persisted, and the user would be able to try again.
 
-![CompleteLabourRequestDBFailure](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/completelabourrequestdbfailure.webp)
+![CompleteLabourRequestDBFailure](/images/posts/quest-exactly-once-p1/completelabourrequestdbfailure.webp)
 
 On the other hand, if we fail to publish the event to the message bus then:
 
@@ -126,11 +126,11 @@ On the other hand, if we fail to publish the event to the message bus then:
 
 In this case the user would not be able to try again, from the perspective of the database the change has already taken place (you can’t complete a labour more than once), and since the event is not being persisted anywhere it would be lost.
 
-![CompleteLabourRequestMessageBusFailure(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/completelabourrequestmessagebusfailure1.webp)
+![CompleteLabourRequestMessageBusFailure(1)](/images/posts/quest-exactly-once-p1/completelabourrequestmessagebusfailure1.webp)
 
 We might naively think that we can just flip the order around so we produce an event first and then persist the changes to the database. However, this would simply reverse the problem, now if the database transaction fails we will have an inconsistency caused by the event being processed downstream wherever it is consumed.
 
-![CompleteLabourRequestReversed](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/completelabourrequestreversed.webp)
+![CompleteLabourRequestReversed](/images/posts/quest-exactly-once-p1/completelabourrequestreversed.webp)
 
 ### The Dual Write Problem
 
@@ -152,7 +152,7 @@ Instead of publishing the events to the message bus during our request, we will 
 
 These events can then be asynchronously published to our message bus.
 
-![CompleteLabourRequestOutbox](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/completelabourrequestoutbox.webp)
+![CompleteLabourRequestOutbox](/images/posts/quest-exactly-once-p1/completelabourrequestoutbox.webp)
 
 Or, in code as part of a CompleteLabourService application service:
 
@@ -200,7 +200,7 @@ Our asynchronous processing works by fetching a list of unpublished events from 
 
 (the green Backend box is intentionally off the line to illustrate that it is running as part of the backend but asynchronously, not blocking requests)
 
-![AsyncProcessing(1)](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/asyncprocessing1.webp)
+![AsyncProcessing(1)](/images/posts/quest-exactly-once-p1/asyncprocessing1.webp)
 
 Or, as code:
 
@@ -247,7 +247,7 @@ You may notice another potential dual write problem here, what if we fetch the u
 
 In this case the events would be published multiple times.
 
-![CompleteLabourRequestOutboxDBFailure](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/completelabourrequestoutboxdbfailure.webp)
+![CompleteLabourRequestOutboxDBFailure](/images/posts/quest-exactly-once-p1/completelabourrequestoutboxdbfailure.webp)
 
 ### Comparing Risk
 
@@ -257,13 +257,13 @@ We are using GCP Pub/Sub as our message bus and GCP Cloud SQL (PostgreSQL) as ou
 
 Under our original At-Most-Once configuration, any request received while Pub/Sub is down will result in changes persisted to the database but not emitted as events. These lost events create data inconsistencies and result in customers not getting the service that they are paying for.
 
-![AtMostOnceDowntime](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/atmostoncedowntime-1.webp)
+![AtMostOnceDowntime](/images/posts/quest-exactly-once-p1/atmostoncedowntime-1.webp)
 
 With our new At-Least-Once approach, we never lose events. We can now produce duplicate events, but only if Cloud SQL goes down during tiny window of time after a batch of events has been pulled but before they have been marked as published. Considering that publishing an event to Pub/Sub takes around 20ms on my production environment, this is an incredibly narrow window for potential duplicate events.
 
 Additionally, no more inconsistencies will be created while Cloud SQL is down, because all requests will fail. This massively reduces the number of potential states that the application can be in, making it easier to reason about and maintain the application.
 
-![AtLeastOnceDowntime](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/atleastoncedowntime.webp)
+![AtLeastOnceDowntime](/images/posts/quest-exactly-once-p1/atleastoncedowntime.webp)
 
 ## Conclusion
 
@@ -279,7 +279,7 @@ How can we safely run multiple event publishing jobs concurrently?
 
 We’re operating in a distributed system so we can have many instances of our Labour Service running concurrently across different machines. As a result, multiple publishers could unknowingly compete for the same events. If multiple producers pull and publish the same domain events then we would be creating duplicates on the message bus and potential downstream side effects if our consumers are not idempotent.
 
-![Duplicate](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/duplicate.webp)
+![Duplicate](/images/posts/quest-exactly-once-p1/duplicate.webp)
 
 ### FOR UPDATE SKIP LOCKED
 
@@ -289,12 +289,12 @@ By using `FOR UPDATE` in our `SELECT` query we can place a lock on the returned 
 
 If another worker queries the database for unpublished events, it will find the locked rows (the events are still unpublished), and will wait until the first worker commits it’s transaction, releasing the lock.
 
-![DBLock](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/dblock.webp)
+![DBLock](/images/posts/quest-exactly-once-p1/dblock.webp)
 
 We can improve this further using the `SKIP LOCKED` option.
 
 When combined with `FOR UPDATE`, it allows additional workers to skip over any rows that are locked, rather than waiting for them to become available. The result is that each worker only receives events that are not already being processed by another worker, improving throughput and eliminating the idle time of waiting for locks to release.
-![DBLockSkip](https://bear-images.sfo2.cdn.digitaloceanspaces.com/kg/dblockskip.webp)
+![DBLockSkip](/images/posts/quest-exactly-once-p1/dblockskip.webp)
 
 ### Code Example
 
