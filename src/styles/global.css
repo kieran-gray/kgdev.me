@@ -4,10 +4,207 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Tailwind doesn't fully support some of the complex CSS selectors needed for code highlighting,
-so we need to keep some custom CSS but applied through Tailwind's plugin system
-These styles are for code highlighting that can't be easily implemented with just Tailwind */
+@layer base {
+  :root {
+    --accent-700: #b45309;
+    --accent-500: #f59e0b;
+    --card-outer-bg: rgba(254, 243, 199, 0.5);
+    --card-inner-bg: #ffffff;
+    --text-color: #111827;
+    --link: var(--accent-700);
+    --link-hover: #92400e;
+    --page-bg: #f5f5f4;
+    --muted-text: #6b7280;
+    --border-color: #e5e7eb;
+    --tag-bg: #b45309;
+    --tag-bg-hover: #d97706;
+    --tag-text: #ffffff;
+    --badge-bg: #fef3c7;
+    --badge-text: #92400e;
+    --code-bg: #1f2937;
+    --code-inline-bg: #ebebeb;
+  }
+
+  :root.dark {
+    --accent-700: #eab308;
+    --accent-500: #facc15;
+    --page-bg: #0f1115;
+    --card-outer-bg: #151a1f;
+    --card-inner-bg: #1c2128;
+    --text-color: #e5e7eb;
+    --link: #facc15;
+    --link-hover: #fde68a;
+    --muted-text: #9ca3af;
+    --border-color: #2a2f36;
+    --tag-bg: #4a3410;
+    --tag-bg-hover: #5a3e12;
+    --tag-text: #ffffff;
+    --badge-bg: #2b1f08;
+    --badge-text: #f1d48a;
+    --code-bg: #11161c;
+    --code-inline-bg: #11161c;
+  }
+
+
+  :root[data-scheme='emerald'] {
+    --accent-700: #047857;
+    --accent-500: #10b981;
+    --card-outer-bg: rgba(209, 250, 229, 0.7);
+    --card-inner-bg: #ffffff;
+    --text-color: #111827;
+    --link: #047857;
+    --link-hover: #065f46;
+    --page-bg: #f5f5f4;
+    --muted-text: #6b7280;
+    --border-color: #e5e7eb;
+    --tag-bg: #047857;
+    --tag-bg-hover: #065f46;
+    --tag-text: #ffffff;
+    --badge-bg: #d1fae5;
+    --badge-text: #065f46;
+    --code-bg: #1f2937;
+  }
+
+  :root.dark[data-scheme='emerald'] {
+    --accent-700: #22a36b;
+    --accent-500: #34d399;
+    --page-bg: #0f1115;
+    --card-outer-bg: #151a1f;
+    --card-inner-bg: #1c2128;
+    --text-color: #e5e7eb;
+    --link: #34d399;
+    --link-hover: #86efac;
+    --muted-text: #9ca3af;
+    --border-color: #2a2f36;
+    --tag-bg: #0f3f2e;
+    --tag-bg-hover: #145a3a;
+    --tag-text: #ffffff;
+    --badge-bg: #0c2f24;
+    --badge-text: #a7f3d0;
+    --code-bg: #11161c;
+  }
+
+
+  :root[data-scheme='indigo'] {
+    --accent-700: #4338ca;
+    --accent-500: #6366f1;
+    --card-outer-bg: rgba(224, 231, 255, 0.7);
+    --card-inner-bg: #ffffff;
+    --text-color: #111827;
+    --link: #4338ca;
+    --link-hover: #3730a3;
+    --page-bg: #f5f5f4;
+    --muted-text: #6b7280;
+    --border-color: #e5e7eb;
+    --tag-bg: #4338ca;
+    --tag-bg-hover: #3730a3;
+    --tag-text: #ffffff;
+    --badge-bg: #e0e7ff;
+    --badge-text: #3730a3;
+    --code-bg: #1f2937;
+  }
+
+  :root.dark[data-scheme='indigo'] {
+    --accent-700: #6f76e4;
+    --accent-500: #a5b4fc;
+    --page-bg: #0f1115;
+    --card-outer-bg: #151a1f;
+    --card-inner-bg: #1c2128;
+    --text-color: #e5e7eb;
+    --link: #a5b4fc;
+    --link-hover: #c7d2fe;
+    --muted-text: #9ca3af;
+    --border-color: #2a2f36;
+    --tag-bg: #2c2f6b;
+    --tag-bg-hover: #3a3e8a;
+    --tag-text: #ffffff;
+    --badge-bg: #20244d;
+    --badge-text: #c7d2fe;
+    --code-bg: #11161c;
+  }
+
+  :root[data-scheme='rose'] {
+    --accent-700: #be123c;
+    --accent-500: #f43f5e;
+    --card-outer-bg: rgba(255, 228, 230, 0.7);
+    --card-inner-bg: #ffffff;
+    --text-color: #111827;
+    --link: #be123c;
+    --link-hover: #9f1239;
+    --page-bg: #f5f5f4;
+    --muted-text: #6b7280;
+    --border-color: #e5e7eb;
+    --tag-bg: #be123c;
+    --tag-bg-hover: #e11d48;
+    --tag-text: #ffffff;
+    --badge-bg: #ffe4e6;
+    --badge-text: #9f1239;
+    --code-bg: #1f2937;
+  }
+
+  :root.dark[data-scheme='rose'] {
+    --accent-700: #e25c72;
+    --accent-500: #fda4af;
+    --page-bg: #0f1115;
+    --card-outer-bg: #151a1f;
+    --card-inner-bg: #1c2128;
+    --text-color: #e5e7eb;
+    --link: #fda4af;
+    --link-hover: #fecdd3;
+    --muted-text: #9ca3af;
+    --border-color: #2a2f36;
+    --tag-bg: #5b1f2d;
+    --tag-bg-hover: #7a2537;
+    --tag-text: #ffffff;
+    --badge-bg: #4a1520;
+    --badge-text: #fecdd3;
+    --code-bg: #11161c;
+  }
+}
+
 @layer utilities {
+    .content :not(pre) > code {
+        background-color: var(--code-inline-bg);
+        color: var(--accent-700);
+        border-radius: 0.5rem;
+        padding: 0.125rem 0.25rem;
+    }
+    .prose {
+        --tw-prose-body: var(--text-color);
+        --tw-prose-headings: var(--text-color);
+        --tw-prose-links: var(--link);
+        --tw-prose-bold: var(--text-color);
+        --tw-prose-code: var(--accent-700);
+        --tw-prose-pre-code: var(--text-color);
+        --tw-prose-pre-bg: var(--code-bg);
+        --tw-prose-hr: var(--border-color);
+        --tw-prose-quotes: var(--text-color);
+        --tw-prose-quote-borders: var(--border-color);
+        --tw-prose-captions: var(--muted-text);
+        --tw-prose-bullets: var(--muted-text);
+        --tw-prose-counters: var(--muted-text);
+        --tw-prose-th-borders: var(--border-color);
+        --tw-prose-td-borders: var(--border-color);
+    }
+
+    :root.dark .prose,
+    .dark .prose {
+        --tw-prose-invert-body: var(--text-color);
+        --tw-prose-invert-headings: #f3f4f6;
+        --tw-prose-invert-links: var(--link);
+        --tw-prose-invert-bold: var(--text-color);
+        --tw-prose-invert-code: var(--accent-500);
+        --tw-prose-invert-pre-code: var(--text-color);
+        --tw-prose-invert-pre-bg: var(--code-bg);
+        --tw-prose-invert-hr: var(--border-color);
+        --tw-prose-invert-quotes: var(--text-color);
+        --tw-prose-invert-quote-borders: var(--border-color);
+        --tw-prose-invert-captions: var(--muted-text);
+        --tw-prose-invert-bullets: var(--muted-text);
+        --tw-prose-invert-counters: var(--muted-text);
+        --tw-prose-invert-th-borders: var(--border-color);
+        --tw-prose-invert-td-borders: var(--border-color);
+    }
     .content pre {
         @apply p-0;
     }

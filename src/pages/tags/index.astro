@@ -30,7 +30,7 @@ tagMap = Object.fromEntries(Object.entries(tagMap).sort((a, b) => b[1] - a[1]));
 		{
 			Object.entries(tagMap).map(([tag, count]) => (
 				<a
-					class="group row-span-1 flex justify-between py-2 hover:text-orange-600"
+					class="group row-span-1 flex justify-between py-2 hover:text-[var(--accent-500)]"
 					href={`/tags/${tag}`}
 				>
 					<Tag tag={tag} />

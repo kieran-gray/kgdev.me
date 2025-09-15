@@ -13,10 +13,10 @@ const isPinned = post.frontmatter.isPinned === true;
 
 <a href={post.url}>
 	<div
-		class="h-full rounded-2xl bg-stone-200/50 from-orange-900 via-amber-700 to-white p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] hover:bg-gradient-to-r dark:bg-gray-900"
+		class="h-full rounded-2xl bg-[var(--card-outer-bg)] p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.6)] hover:bg-[var(--accent-700)]"
 	>
 		<div
-			class="flex h-full w-full flex-col rounded-[1rem] bg-stone-300 p-4 text-gray-900 opacity-90 dark:bg-stone-800 dark:text-white"
+			class="flex h-full w-full flex-col rounded-[1rem] bg-[var(--card-inner-bg)] p-4 text-[var(--text-color)] opacity-95"
 		>
 			<div class="flex-auto">
 				<div class="flex flex-col justify-between gap-2 pb-4 text-xs">
@@ -34,7 +34,7 @@ const isPinned = post.frontmatter.isPinned === true;
 				<Tags tags={post.frontmatter.tags} />
 				<p class="line-clamp-6 pt-4">{post.frontmatter.excerpt}</p>
 			</div>
-			<p class="pt-4 underline">read more →</p>
+			<p class="pt-4 underline text-[var(--link)] hover:text-[var(--link-hover)]">read more →</p>
 		</div>
 	</div>
 </a>
