@@ -5,38 +5,51 @@ import Tag from '@/components/Tag.astro';
 import Base from '@/layouts/Base.astro';
 import { AppConfig } from '@/utils/AppConfig';
 import { MarkdownInstance } from 'astro';
+import { getCollection, type CollectionEntry } from 'astro:content';
 
 const { title } = AppConfig;
 const { description } = AppConfig;
 
 const allPosts = Object.values(
-	import.meta.glob('../posts/*.md', { eager: true })
+  import.meta.glob('../posts/*.md', { eager: true })
 ) as MarkdownInstance<any>[];
-const allTags = allPosts.map((post) => post.frontmatter.tags).flat();
-const uniqueTags: Set<string> = new Set(allTags);
-let tagMap: Record<string, number> = {};
+
+const projects: CollectionEntry<'projects'>[] = await getCollection('projects');
+
+const postTags = allPosts.flatMap((post) => post.frontmatter.tags || []);
+const projectTags = projects.flatMap((p) => p.data.tags || []);
+const uniqueTags: Set<string> = new Set([...postTags, ...projectTags]);
+
+type TagCounts = { posts: number; projects: number; total: number };
+let tagMap: Record<string, TagCounts> = {};
 
 [...uniqueTags].forEach((tag) => {
-	const count = allTags.filter((t) => t === tag).length;
-	tagMap[tag] = count;
+  const postsCount = postTags.filter((t) => t === tag).length;
+  const projectsCount = projectTags.filter((t) => t === tag).length;
+  tagMap[tag] = { posts: postsCount, projects: projectsCount, total: postsCount + projectsCount };
 });
 
-tagMap = Object.fromEntries(Object.entries(tagMap).sort((a, b) => b[1] - a[1]));
+tagMap = Object.fromEntries(
+  Object.entries(tagMap).sort((a, b) => (b[1].total - a[1].total) || a[0].localeCompare(b[0]))
+);
 ---
 
 <Base head={{ title, description }}>
-	<Section><Heading title="Posts by Tag" /></Section>
-	<div class="mx-auto grid w-full max-w-screen-md grid-cols-1 gap-x-6 px-4 md:grid-cols-2 md:px-0">
-		{
-			Object.entries(tagMap).map(([tag, count]) => (
-				<a
-					class="group row-span-1 flex justify-between py-2 hover:text-[var(--accent-500)]"
-					href={`/tags/${tag}`}
-				>
-					<Tag tag={tag} />
-					<p>{count}</p>
-				</a>
-			))
-		}
-	</div>
+  <Section><Heading title="Browse by Tag" /></Section>
+  <Section>
+    <div class="mx-auto grid w-full max-w-screen-lg grid-cols-1 gap-2 px-4 sm:grid-cols-2 lg:grid-cols-3 md:px-0">
+      {
+        Object.entries(tagMap).map(([tag, counts]) => (
+          <a href={`/tags/${tag}`} class="group">
+            <div class="rounded-2xl bg-[var(--card-outer-bg)] p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] transition hover:bg-[var(--accent-700)]">
+              <div class="flex items-center justify-between rounded-[1rem] bg-[var(--card-inner-bg)] px-4 py-3 text-[var(--text-color)] opacity-95">
+                <div class="flex items-center"><Tag tag={tag} /></div>
+                <p class="text-xs text-[var(--muted-text)]">{counts.posts} posts · {counts.projects} projects</p>
+              </div>
+            </div>
+          </a>
+        ))
+      }
+    </div>
+  </Section>
 </Base>

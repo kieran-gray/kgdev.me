@@ -1,0 +1,115 @@
+---
+import Base from '@/layouts/Base.astro';
+import Section from '@/components/Section.astro';
+import Heading from '@/components/Heading.astro';
+import Tag from '@/components/Tag.astro';
+import { getCollection, getEntry } from 'astro:content';
+
+export async function getStaticPaths() {
+  const items = await getCollection('projects');
+  return items.map((entry) => ({ params: { slug: entry.slug } }));
+}
+
+const { slug } = Astro.params as { slug: string };
+const project = await getEntry('projects', slug);
+if (!project) throw new Error('Project not found');
+const data = project.data;
+const pageTitle = `${data.name} – Project`;
+const pageDescription = data.summary;
+const { Content } = await project.render();
+---
+
+<Base head={{ title: pageTitle, description: pageDescription }}>
+  <Section>
+    <Heading title={data.name} />
+    <p class="mt-2 text-[var(--muted-text)]">{data.summary}</p>
+    {data.website && (
+      <p class="mt-4 text-sm"><a class="underline" href={data.website} target="_blank" rel="noopener noreferrer">{data.website}</a></p>
+    )}
+  </Section>
+
+  <Section>
+    <h3 class="mb-2 text-xl font-bold">Overview</h3>
+    <div class="mb-4 flex flex-wrap">
+      {data.tags?.map((t) => <Tag tag={t} />)}
+      {data.tech?.languages?.map((t) => <Tag tag={t} />)}
+      {data.tech?.frameworks?.map((t) => <Tag tag={t} />)}
+    </div>
+  </Section>
+
+  {data.components?.length ? (
+    <Section>
+      <h3 class="mb-3 text-xl font-bold">Components</h3>
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {data.components.map((c) => (
+          <div class="rounded-xl bg-[var(--card-inner-bg)] p-4">
+            <div class="mb-1 flex items-center justify-between">
+              <h4 class="text-base font-semibold">{c.name}</h4>
+              <span class="rounded-md bg-[var(--tag-bg)] px-2 py-0.5 text-xs uppercase font-bold text-[var(--tag-text)]">{c.type}</span>
+            </div>
+            <p class="mb-2 text-sm text-[var(--muted-text)]">{c.language}{c.framework ? ` · ${c.framework}` : ''}</p>
+            {c.hosting && (
+              <p class="mb-2 text-sm text-[var(--muted-text)]">Hosted on <span class="font-semibold">{c.hosting.provider}</span>{c.hosting.service ? ` – ${c.hosting.service}` : ''}</p>
+            )}
+
+            {(c.hosting?.url || c.github || c.repo) && (
+              <div class="mb-2 flex flex-wrap gap-2">
+                {c.hosting?.url && (
+                  <a
+                    class="rounded-md bg-[var(--tag-bg)] px-2 py-1 text-xs font-bold text-[var(--tag-text)] hover:underline"
+                    href={c.hosting.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >Live</a>
+                )}
+                {c.github && (
+                  <a
+                    class="rounded-md bg-[var(--tag-bg)] px-2 py-1 text-xs font-bold text-[var(--tag-text)] hover:underline"
+                    href={c.github}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >GitHub</a>
+                )}
+                {c.repo && (
+                  <a
+                    class="rounded-md bg-[var(--tag-bg)] px-2 py-1 text-xs font-bold text-[var(--tag-text)] hover:underline"
+                    href={c.repo}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >Repository</a>
+                )}
+              </div>
+            )}
+
+            {c.notes?.length ? (
+              <ul class="mt-2 list-disc pl-5 text-sm text-[var(--muted-text)]">
+                {c.notes.map((n) => <li>{n}</li>)}
+              </ul>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      </Section>
+    ) : null}
+
+  {data.repos?.length ? (
+    <Section>
+      <h3 class="mb-2 text-xl font-bold">Repositories</h3>
+      <ul class="list-disc pl-5">
+        {data.repos.map((r) => (
+          <li class="mb-1">
+            <a class="underline" href={r.url} target="_blank" rel="noopener noreferrer">{r.name}</a>
+            <span class="ml-2 text-sm text-[var(--muted-text)]">{r.role}{r.private ? ' · private' : ''}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  ) : null}
+
+  <Section>
+    <h3 class="mb-2 text-xl font-bold">Technical Notes</h3>
+    <article class="prose prose-invert max-w-none">
+      <Content />
+    </article>
+  </Section>
+</Base>

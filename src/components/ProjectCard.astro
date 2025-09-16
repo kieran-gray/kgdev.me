@@ -1,0 +1,50 @@
+---
+import Tag from './Tag.astro';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  project: CollectionEntry<'projects'>;
+}
+
+const { project } = Astro.props;
+const data = project.data;
+const href = `/projects/${project.slug}`;
+---
+
+<a href={href} class="group">
+  <div class="rounded-2xl bg-[var(--card-outer-bg)] p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] transition hover:bg-[var(--accent-700)]">
+    <div class="rounded-[1rem] bg-[var(--card-inner-bg)] p-5 text-[var(--text-color)] opacity-95">
+      <h3 class="mb-1 text-xl font-bold group-hover:underline">{data.name}</h3>
+      {data.website && (
+        <p class="mb-2 text-xs text-[var(--muted-text)] break-all">{data.website}</p>
+      )}
+      <p class="mb-3 leading-relaxed text-[var(--muted-text)]">{data.summary}</p>
+
+      {data.tech?.languages?.length ? (
+        <div class="mb-2 flex flex-wrap">
+          {data.tech.languages.map((lang) => (
+            <Tag tag={lang} />
+          ))}
+        </div>
+      ) : null}
+
+      {data.tech?.frameworks?.length ? (
+        <div class="mb-2 flex flex-wrap">
+          {data.tech.frameworks.map((fw) => (
+            <Tag tag={fw} />
+          ))}
+        </div>
+      ) : null}
+
+      {data.hosting?.length ? (
+        <div class="mt-2 flex flex-wrap">
+          {data.hosting.map((h) => (
+            <span class="mb-2 mr-2 rounded-xl bg-[var(--tag-bg)] px-3 py-1 text-xs font-bold text-[var(--tag-text)]">
+              {h.provider}{h.service ? ` · ${h.service}` : ''}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  </div>
+  </a>
