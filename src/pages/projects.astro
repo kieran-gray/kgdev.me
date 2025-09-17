@@ -8,13 +8,14 @@ import { getCollection, type CollectionEntry } from 'astro:content';
 const pageTitle = 'Projects';
 const pageDescription = "A collection of projects I've worked on";
 const projects: CollectionEntry<'projects'>[] = await getCollection('projects');
+const sorted = [...projects].sort((a, b) => Number(b.data.pinned === true) - Number(a.data.pinned === true));
 ---
 
 <Base head={{ title: pageTitle, description: pageDescription }}>
   <Section><Heading title="Projects" /></Section>
   <Section>
     <div class="flex flex-col gap-4">
-      {projects.map((p: CollectionEntry<'projects'>) => (
+      {sorted.map((p: CollectionEntry<'projects'>) => (
         <ProjectCard project={p} />
       ))}
     </div>

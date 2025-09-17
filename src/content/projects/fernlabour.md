@@ -3,6 +3,7 @@ name: Fern Labour
 summary: FernLabour.com is a modern SaaS tool for labour tracking and real-time sharing. It combines a contraction timer with a private subscription system that lets loved ones follow along with updates via SMS, WhatsApp, or email.
 website: https://fernlabour.com
 status: active
+pinned: true
 tags: ['saas', 'health']
 tech:
   languages: ['TypeScript', 'Python', 'SQL']
@@ -95,6 +96,20 @@ components:
       service: Cloud SQL
     notes:
       - Sensitive information is encrypted at rest.
+insights:
+  performance:
+    image: /images/projects/fernlabour-load-performance.webp
+    notes:
+      - Static Next.js marketing site exported and served via Cloudflare Pages for fast global edge delivery.
+      - React app built with Vite; optimized bundles and route-based code splitting keep the initial payload lean.
+      - Image assets optimized and lazy‑loaded; fonts preloaded; HTTP caching tuned for static assets.
+  security:
+    image: /images/projects/fernlabour-security.webp
+    notes:
+      - Authentication handled with Keycloak (OIDC); scoped tokens for services.
+      - All traffic over HTTPS; backend services isolated on GCP with least‑privilege service accounts.
+      - Data stored in Cloud SQL with encryption at rest.
+      - Security headers can be locked down because the app does not call any non-fernlabour domains.
 ---
 
-See repository documentation for full architecture. Key stacks include FastAPI-based services, React/Vite frontend, and a static Next.js marketing site. Messaging uses Twilio and SMTP with templated notifications. Authentication via Keycloak. Local development orchestrated with Docker Compose. Event messaging uses Google Pub/Sub (emulated in dev).
+See repository documentation for full architecture. Key stacks include FastAPI-based services, React/Vite frontend, and a static Next.js marketing site. Messaging uses Twilio and SMTP with templated notifications. Authentication via Keycloak. Local development orchestrated with Docker Compose. Event messaging uses Google Pub/Sub (emulated in dev) with custom Consumer and Producer implementations (which can be found at fern-labour-pub-sub linked above).

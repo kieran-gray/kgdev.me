@@ -3,6 +3,7 @@ name: Quest-Lock
 summary: Quest-Lock is a tool for digital detoxes that locks users out of their social media by splitting their password into shares that can only be recovered by completing real world quests.
 website: https://quest-lock.com
 status: active
+pinned: true
 tags: ['saas', 'security', 'encryption', 'maps']
 tech:
   languages: ['Rust', 'TypeScript', 'SQL']
@@ -39,6 +40,19 @@ components:
     hosting:
       provider: GCP
       service: Cloud SQL
+insights:
+  performance:
+    image: /images/projects/quest-lock-load-performance.webp
+    notes:
+      - Static assets served from Cloudflare Pages with global edge caching; fast TTFB and repeat visits.
+      - React app built with Vite; optimized bundles and route-based code splitting keep the initial payload lean.
+      - Not a separate marketing page, the landing page and app are all one app so a little harder to optimize.
+  security:
+    image: /images/projects/quest-lock-security.webp
+    notes:
+      - Zero‑knowledge model; client‑side encryption and Shamir’s Secret Sharing; server cannot reconstruct secrets.
+      - Auth0 JWT validation on the API; all endpoints require verified tokens.
+      - TLS enforced end‑to‑end.
 ---
 
 Backend runs on Google Cloud Run with containerized deployment via GitHub Actions. The frontend is a Vite/React application with Auth0 authentication and Mapbox for geospatial quests.

@@ -30,12 +30,27 @@ const { Content } = await project.render();
 
   <Section>
     <h3 class="mb-2 text-xl font-bold">Overview</h3>
-    <div class="mb-4 flex flex-wrap">
+    <div class="mb-2 flex flex-wrap">
       {data.tags?.map((t) => <Tag tag={t} />)}
       {data.tech?.languages?.map((t) => <Tag tag={t} />)}
       {data.tech?.frameworks?.map((t) => <Tag tag={t} />)}
     </div>
   </Section>
+
+  {data.repos?.length ? (
+    <Section>
+      <h3 class="mb-2 text-xl font-bold">Repositories</h3>
+      <ul class="list-disc pl-5">
+        {data.repos.map((r) => (
+          <li class="mb-1">
+            <a class="underline" href={r.url} target="_blank" rel="noopener noreferrer">{r.name}</a>
+            <span class="ml-2 text-sm text-[var(--muted-text)]">{r.role}{r.private ? ' · private' : ''}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  ) : null}
+
 
   {data.components?.length ? (
     <Section>
@@ -92,17 +107,48 @@ const { Content } = await project.render();
       </Section>
     ) : null}
 
-  {data.repos?.length ? (
+    {data.insights && (data.insights.performance?.image || data.insights.security?.image) ? (
     <Section>
-      <h3 class="mb-2 text-xl font-bold">Repositories</h3>
-      <ul class="list-disc pl-5">
-        {data.repos.map((r) => (
-          <li class="mb-1">
-            <a class="underline" href={r.url} target="_blank" rel="noopener noreferrer">{r.name}</a>
-            <span class="ml-2 text-sm text-[var(--muted-text)]">{r.role}{r.private ? ' · private' : ''}</span>
-          </li>
-        ))}
-      </ul>
+      <h3 class="mb-3 text-xl font-bold">Performance & Security</h3>
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {data.insights.performance && (
+          <div class="rounded-xl bg-[var(--card-inner-bg)] p-4">
+            <h4 class="mb-2 text-base font-semibold">Load Performance</h4>
+            {data.insights.performance.image && (
+              <img
+                src={data.insights.performance.image}
+                alt={`Load performance for ${data.name}`}
+                class="mb-3 w-full rounded-lg border border-[var(--border-color)]"
+                loading="lazy"
+              />
+            )}
+            {data.insights.performance.notes?.length ? (
+              <ul class="list-disc pl-5 text-sm text-[var(--muted-text)]">
+                {data.insights.performance.notes.map((n) => <li>{n}</li>)}
+              </ul>
+            ) : null}
+          </div>
+        )}
+
+        {data.insights.security && (
+          <div class="rounded-xl bg-[var(--card-inner-bg)] p-4">
+            <h4 class="mb-2 text-base font-semibold">Security</h4>
+            {data.insights.security.image && (
+              <img
+                src={data.insights.security.image}
+                alt={`Security overview for ${data.name}`}
+                class="mb-3 w-full rounded-lg border border-[var(--border-color)]"
+                loading="lazy"
+              />
+            )}
+            {data.insights.security.notes?.length ? (
+              <ul class="list-disc pl-5 text-sm text-[var(--muted-text)]">
+                {data.insights.security.notes.map((n) => <li>{n}</li>)}
+              </ul>
+            ) : null}
+          </div>
+        )}
+      </div>
     </Section>
   ) : null}
 

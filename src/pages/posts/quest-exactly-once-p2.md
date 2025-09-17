@@ -4,7 +4,7 @@ title: 'The Quest for Exactly-Once Event Delivery: Part 2'
 pubDate: 2025-07-13
 description: 'Attempting to achieve exactly-once event delivery semantics in my FernLabour.com codebase.'
 author: 'Kieran Gray'
-excerpt: The adventure continues. In our last post we started the quest for the holy grail of distributed systems - Exactly-Once delivery. We tackled the first half of the problem by building a reliable producer with a transactional outbox, guaranteeing that we will never lose an event. This is a big step forward, we’ve moved from At-Most-Once delivery to an At-Least-Once delivery guarantee.
+excerpt: The adventure continues. In our last post we started the quest for the holy grail of distributed systems - Exactly-Once delivery. We tackled the first half of the problem by building a reliable producer with a transactional outbox...
 image:
   src:
   alt:

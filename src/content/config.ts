@@ -32,6 +32,7 @@ const projects = defineCollection({
 		summary: z.string(),
 		website: z.string().url().optional(),
 		status: z.enum(['active', 'paused', 'archived']).default('active'),
+		pinned: z.boolean().default(false),
 		tags: z.array(z.string()).default([]),
 		tech: z
 			.object({
@@ -46,6 +47,22 @@ const projects = defineCollection({
 			.object({
 				logo: z.string().optional(),
 				architecture: z.string().optional()
+			})
+			.optional(),
+		insights: z
+			.object({
+				performance: z
+					.object({
+						image: z.string().optional(),
+						notes: z.array(z.string()).default([])
+					})
+					.default({ notes: [] }),
+				security: z
+					.object({
+						image: z.string().optional(),
+						notes: z.array(z.string()).default([])
+					})
+					.default({ notes: [] })
 			})
 			.optional()
 	})

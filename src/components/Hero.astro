@@ -1,22 +1,54 @@
 ---
 import Section from './Section.astro';
 import Social from './Social.astro';
+import { AppConfig } from '@/utils/AppConfig';
 ---
 
 <Section>
 	<br />
-	<p class="pb-2 pt-6 text-4xl font-bold">Hey, you found my blog</p>
-	<div class="text-sm">
-		<p class="py-2">
-			I'm Kieran, I build software for a living and also for fun. 
-		</p>
-		<p class="py-2">
-			I'll be sharing learnings and other interesting things from my adventures in software here.
-		</p>
-		<p class="py-2">
-			Check out my blog posts for technical insights, explore my projects to see what I've been building, or connect with me through any of the social links below.
+	<p class="pb-2 pt-6 text-4xl font-bold">Kieran Gray</p>
+	<div class="text-sm leading-6 text-[var(--muted-text)]">
+			<p class="py-2 text-[var(--text-color)]">I’m a software engineer with 5 years of industry experience.</p>
+			<p class="py-2 text-[var(--text-color)]">
+				I build scalable backend systems and full‑stack applications across
+				<span class="font-semibold text-[var(--accent-500)]"> telecom</span>,
+				<span class="font-semibold text-[var(--accent-500)]"> geospatial</span>,
+				<span class="font-semibold text-[var(--accent-500)]"> SaaS</span>, and
+				<span class="font-semibold text-[var(--accent-500)]"> insurance</span>.
+			</p>
+			<p class="py-2 text-[var(--text-color)]">
+				I’ve worked primarily with
+				<span class="font-semibold text-[var(--accent-500)]"> Python</span>,
+				<span class="font-semibold text-[var(--accent-500)]"> TypeScript</span>, and
+				<span class="font-semibold text-[var(--accent-500)]"> Rust</span>, 
+				with a strong focus on clean architecture, developer experience, and cloud infrastructure.
+			</p>
+		<p class="py-2 text-[var(--text-color)]">
+			Read recent posts for deep dives, browse projects to see what I’m building, or connect via the links below.
 		</p>
 	</div>
+
+	{AppConfig.currentRole?.title && (
+		<div class="mt-5 mb-5 rounded-xl border border-[var(--border-color)] bg-[var(--card-inner-bg)]/70 p-4 text-sm">
+			<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-text)]">Currently</p>
+			<p class="text-[var(--text-color)]">
+				<span class="font-semibold text-[var(--accent-700)]">{AppConfig.currentRole.title}</span>
+				{AppConfig.currentRole.org && (
+					<>
+						{' · '}
+						{AppConfig.currentRole.orgUrl ? (
+							<a href={AppConfig.currentRole.orgUrl} target="_blank" class="underline hover:text-[var(--accent-500)]" rel="noopener noreferrer">{AppConfig.currentRole.org}</a>
+						) : (
+							<span>{AppConfig.currentRole.org}</span>
+						)}
+					</>
+				)}
+			</p>
+			{AppConfig.currentRole.summary && (
+				<p class="mt-2 text-[var(--muted-text)]">{AppConfig.currentRole.summary}</p>
+			)}
+		</div>
+	)}
 	<div class="flex">
 		<Social href="https://github.com/kieran-gray" label='GitHub social link'>
 			<svg

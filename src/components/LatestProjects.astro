@@ -1,0 +1,24 @@
+---
+import Section from './Section.astro';
+import ProjectCard from './ProjectCard.astro';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  projects: CollectionEntry<'projects'>[];
+  title?: string;
+}
+
+const { projects, title = 'Latest Projects' } = Astro.props as Props;
+---
+
+<Section>
+  <div class="flex justify-between pb-4">
+    <p class="text-xl font-bold">{title}</p>
+    <a href="/projects" class="underline hover:text-[var(--accent-500)]">all projects →</a>
+  </div>
+  <div class="flex flex-col gap-4">
+    {projects.map((p) => (
+      <ProjectCard project={p} />
+    ))}
+  </div>
+</Section>
