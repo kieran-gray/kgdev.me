@@ -24,6 +24,22 @@ const {
 		<meta name="description" content={description} />
 		<meta name="author" content={AppConfig.author} />
 
+		<!-- Canonical URL -->
+		<link rel="canonical" href={Astro.url.href} />
+
+		<!-- Open Graph -->
+		<meta property="og:site_name" content={AppConfig.site_name} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={Astro.url.href} />
+		<meta property="og:locale" content={AppConfig.locale} />
+
+		<!-- Twitter -->
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:card" content='summary' />
+
 		<link rel="sitemap" href="/sitemap-index.xml" />
 		<link rel="alternate" type="application/rss+xml" href="/rss.xml" />
 		<link
