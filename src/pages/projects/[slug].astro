@@ -107,6 +107,13 @@ const { Content } = await project.render();
       </Section>
     ) : null}
 
+    <Section>
+      <h3 class="mb-2 text-xl font-bold">Technical Notes</h3>
+      <article class="prose prose-invert max-w-none">
+        <Content />
+      </article>
+    </Section>
+
     {data.insights && (data.insights.performance?.image || data.insights.security?.image) ? (
     <Section>
       <h3 class="mb-3 text-xl font-bold">Performance & Security</h3>
@@ -151,11 +158,4 @@ const { Content } = await project.render();
       </div>
     </Section>
   ) : null}
-
-  <Section>
-    <h3 class="mb-2 text-xl font-bold">Technical Notes</h3>
-    <article class="prose prose-invert max-w-none">
-      <Content />
-    </article>
-  </Section>
 </Base>
