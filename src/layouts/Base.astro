@@ -2,6 +2,7 @@
 import Footer from '@/components/Footer.astro';
 import Navbar from '@/components/Navbar.astro';
 import { AppConfig } from '@/utils/AppConfig';
+import { ClientRouter } from 'astro:transitions';
 import '@/styles/global.css';
 
 export interface Props {
@@ -23,6 +24,37 @@ const {
 		<title>{title}</title>
 		<meta name="description" content={description} />
 		<meta name="author" content={AppConfig.author} />
+
+		<script is:inline>
+			(function () {
+				try {
+					var theme = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
+					var scheme = localStorage.getItem('scheme') || 'amber';
+					var root = document.documentElement;
+					if (theme === 'dark') root.classList.add('dark');
+					else root.classList.remove('dark');
+					root.setAttribute('data-theme', theme);
+					root.setAttribute('data-scheme', scheme);
+				} catch (_) {}
+			})();
+			document.addEventListener('astro:before-swap', function (e) {
+				try {
+					var theme = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
+					var scheme = localStorage.getItem('scheme') || 'amber';
+					var incoming = e.newDocument.documentElement;
+					if (theme === 'dark') incoming.classList.add('dark');
+					else incoming.classList.remove('dark');
+					incoming.setAttribute('data-theme', theme);
+					incoming.setAttribute('data-scheme', scheme);
+					incoming.classList.add('is-transitioning');
+				} catch (_) {}
+			});
+			document.addEventListener('astro:after-swap', function () {
+				setTimeout(function () {
+					document.documentElement.classList.remove('is-transitioning');
+				}, 200);
+			});
+		</script>
 
 		<!-- Canonical URL -->
 		<link rel="canonical" href={Astro.url.href} />
@@ -46,12 +78,13 @@ const {
 			rel="icon"
 			href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👨‍💻</text></svg>"
 		/>
+		<ClientRouter />
 	</head>
 	<body class="flex min-h-screen flex-col bg-[var(--page-bg)] font-mono text-[var(--text-color)]">
-		<Navbar />
+		<Navbar/>
 		<div class="flex-1">
 			<slot />
 		</div>
-		<Footer />
+		<Footer/>
 	</body>
 </html>

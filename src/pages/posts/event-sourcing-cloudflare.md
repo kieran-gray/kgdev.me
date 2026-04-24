@@ -9,7 +9,7 @@ excerpt: I rebuilt the backend of FernLabour on Cloudflare Workers and Durable O
 image:
   src:
   alt:
-tags: ['cloudflare', 'architecture', 'rust']
+tags: ['cloudflare', 'architecture', 'Rust']
 ---
 
 I rebuilt the backend of FernLabour.com on Cloudflare Workers and Durable Objects in Rust. The result is an event-sourced system where each labour runs inside its own Durable Object with its own SQLite event store, projections, and WebSocket subscribers.

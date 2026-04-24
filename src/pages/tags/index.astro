@@ -17,7 +17,10 @@ const allPosts = Object.values(
 const projects: CollectionEntry<'projects'>[] = await getCollection('projects');
 
 const postTags = allPosts.flatMap((post) => post.frontmatter.tags || []);
-const projectTags = projects.flatMap((p) => p.data.tags || []);
+const projectTags = projects.flatMap((p) => [
+  ...(p.data.tags || []),
+  ...(p.data.tech?.languages || []),
+]);
 const uniqueTags: Set<string> = new Set([...postTags, ...projectTags]);
 
 type TagCounts = { posts: number; projects: number; total: number };
