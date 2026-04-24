@@ -8,13 +8,13 @@ const { href, label } = Astro.props;
 ---
 
 <div
-	class="mr-3 h-10 w-24 rounded-xl bg-[var(--card-outer-bg)] p-[1px] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] hover:bg-[var(--accent-700)]"
+	class="mr-3 h-10 w-24 bg-[var(--card-outer-bg)] p-[1px] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] hover:bg-[var(--accent-700)]"
 >
 	<a
 		href={href}
 		target="_blank"
 		aria-label={label}
-		class="flex h-full w-full items-center justify-center rounded-[0.7rem] bg-[var(--card-inner-bg)] p-4 text-[var(--text-color)] opacity-90"
+		class="flex h-full w-full items-center justify-center bg-[var(--card-inner-bg)] p-4 text-[var(--text-color)] opacity-90"
 	>
 		<slot />
 	</a>

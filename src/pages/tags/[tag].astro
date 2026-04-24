@@ -16,16 +16,21 @@ export async function getStaticPaths(): Promise<any> {
 
   const projects: CollectionEntry<'projects'>[] = await getCollection('projects');
 
+  const projectTagsFor = (p: CollectionEntry<'projects'>) => [
+    ...(p.data.tags || []),
+    ...(p.data.tech?.languages || []),
+  ];
+
   const allTags: Set<string> = new Set([
     ...allPosts.flatMap((post: MarkdownInstance<Record<string, any>>) => post.frontmatter.tags || []),
-    ...projects.flatMap((p) => p.data.tags || []),
+    ...projects.flatMap(projectTagsFor),
   ]);
 
   return [...allTags].map((tag) => {
     const filteredPosts = allPosts.filter((post: MarkdownInstance<Record<string, any>>) => (post.frontmatter.tags || []).includes(tag));
     filteredPosts.sort(sortPostsByDate);
 
-    const filteredProjects = projects.filter((p) => (p.data.tags || []).includes(tag));
+    const filteredProjects = projects.filter((p) => projectTagsFor(p).includes(tag));
 
     return {
       params: { tag },

@@ -1,12 +1,16 @@
 ---
 import Section from './Section.astro';
 import Social from './Social.astro';
+import AsciiHeader from './AsciiHeader.astro';
 import { AppConfig } from '@/utils/AppConfig';
 ---
 
 <Section>
 	<br />
-	<p class="pb-2 pt-6 text-4xl font-bold">Kieran Gray</p>
+	<h1 class="sr-only">Kieran Gray</h1>
+	<div class="pb-4 pt-4">
+		<AsciiHeader text="KIERAN GRAY" ariaLabel="Kieran Gray" />
+	</div>
 	<div class="text-sm leading-6 text-[var(--muted-text)]">
 			<p class="py-2 text-[var(--text-color)]">I’m a software engineer with 5 years of industry experience.</p>
 			<p class="py-2 text-[var(--text-color)]">
@@ -29,7 +33,7 @@ import { AppConfig } from '@/utils/AppConfig';
 	</div>
 
 	{AppConfig.currentRole?.title && (
-		<div class="mt-5 mb-5 rounded-xl border border-[var(--border-color)] bg-[var(--card-inner-bg)]/70 p-4 text-sm">
+		<div class="mt-5 mb-5 border border-[var(--border-color)] bg-[var(--card-inner-bg)]/70 p-4 text-sm">
 			<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-text)]">Currently</p>
 			<p class="text-[var(--text-color)]">
 				<span class="font-semibold text-[var(--accent-700)]">{AppConfig.currentRole.title}</span>

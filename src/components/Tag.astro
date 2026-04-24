@@ -8,7 +8,7 @@ const { tag, withHref } = Astro.props;
 ---
 
 <span
-	class={`mb-2 mr-2 rounded-xl bg-[var(--tag-bg)] px-3 py-1 text-xs font-bold uppercase text-[var(--tag-text)] group-hover:bg-[var(--tag-bg-hover)] ${
+	class={`mb-2 mr-2 bg-[var(--tag-bg)] px-3 py-1 text-xs font-bold uppercase text-[var(--tag-text)] group-hover:bg-[var(--tag-bg-hover)] ${
 		withHref ? 'hover:bg-[var(--tag-bg-hover)]' : ''
 	}`}
 >
