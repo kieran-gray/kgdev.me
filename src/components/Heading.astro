@@ -1,4 +1,6 @@
 ---
+import AsciiHeader from './AsciiHeader.astro';
+
 interface Props {
 	title: string;
 }
@@ -6,4 +8,7 @@ interface Props {
 const { title } = Astro.props;
 ---
 
-<p class="text-bold pt-6 text-center text-4xl">{title}</p>
+<p class="sr-only">{title}</p>
+<div>
+	<AsciiHeader text={title} ariaLabel={title} size="sm" />
+</div>
