@@ -41,8 +41,8 @@ tagMap = Object.fromEntries(
       {
         Object.entries(tagMap).map(([tag, counts]) => (
           <a href={`/tags/${tag}`} class="group">
-            <div class="rounded-2xl bg-[var(--card-outer-bg)] p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] transition hover:bg-[var(--accent-700)]">
-              <div class="flex items-center justify-between rounded-[1rem] bg-[var(--card-inner-bg)] px-4 py-3 text-[var(--text-color)] opacity-95">
+            <div class="bg-[var(--card-outer-bg)] p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] transition hover:bg-[var(--accent-700)]">
+              <div class="flex items-center justify-between bg-[var(--card-inner-bg)] px-4 py-3 text-[var(--text-color)] opacity-95">
                 <div class="flex items-center"><Tag tag={tag} /></div>
                 <p class="text-xs text-[var(--muted-text)]">{counts.posts} posts · {counts.projects} projects</p>
               </div>
