@@ -4,6 +4,8 @@ import rehypePrettyCode from 'rehype-pretty-code';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
+import mermaid from 'astro-mermaid';
+import cloudflare from "@astrojs/cloudflare";
 const options = {
 	// Specify the theme to use or a custom theme json, in our case
 	// it will be a moonlight-II theme from
@@ -30,18 +32,33 @@ const options = {
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://kgdev.me/',
+    site: 'https://kgdev.me/',
 
-	markdown: {
+    markdown: {
 		syntaxHighlight: false,
 		// Disable syntax built-in syntax hightlighting from astro
 		rehypePlugins: [[rehypePrettyCode, options]],
 		remarkPlugins: [remarkReadingTime]
 	},
 
-	integrations: [react(), sitemap()],
-	output: 'static',
-	vite: {
+    integrations: [
+		mermaid({
+			theme: 'neutral',
+			autoTheme: true,
+			enableLog: false,
+			mermaidConfig: {
+				flowchart: { curve: 'linear' },
+			},
+		}),
+		react(),
+		sitemap(),
+	],
+
+    output: 'static',
+
+    vite: {
 		plugins: [tailwindcss()]
-	}
+	},
+
+    adapter: cloudflare()
 });
