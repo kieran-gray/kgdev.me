@@ -22,7 +22,7 @@ const desktopTextClass =
 const mobileTextClass = size === 'sm' ? 'text-[0.4rem]' : 'text-[0.6rem]';
 ---
 
-<div class="font-mono font-bold text-[var(--accent-700)]" role="img" aria-label={ariaLabel ?? text}>
+<div class="ascii-art font-bold text-[var(--accent-700)]" role="img" aria-label={ariaLabel ?? text}>
   <div class="hidden sm:block overflow-x-auto">
     <pre class={`inline-block whitespace-pre leading-none [line-height:1] ${desktopTextClass}`}>{desktop}</pre>
   </div>
