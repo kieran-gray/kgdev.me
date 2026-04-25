@@ -7,12 +7,16 @@ import React from 'react';
 import { AppConfig } from '@/utils/AppConfig';
 
 const fontBuf = readFileSync(join(process.cwd(), 'src/assets/fonts/JetBrainsMono-Bold.ttf'));
-const fontData = fontBuf.buffer.slice(fontBuf.byteOffset, fontBuf.byteOffset + fontBuf.byteLength) as ArrayBuffer;
+const fontData = fontBuf.buffer.slice(
+	fontBuf.byteOffset,
+	fontBuf.byteOffset + fontBuf.byteLength
+) as ArrayBuffer;
 
 export const getStaticPaths: GetStaticPaths = async () => {
-	const posts = Object.entries(
-		import.meta.glob('../posts/*.md', { eager: true })
-	) as [string, MarkdownInstance<Record<string, unknown>>][];
+	const posts = Object.entries(import.meta.glob('../posts/*.md', { eager: true })) as [
+		string,
+		MarkdownInstance<Record<string, unknown>>
+	][];
 
 	return posts.map(([filePath, post]) => {
 		const slug = filePath.split('/').pop()!.replace('.md', '');
@@ -20,8 +24,8 @@ export const getStaticPaths: GetStaticPaths = async () => {
 			params: { slug },
 			props: {
 				title: post.frontmatter['title'] as string,
-				tags: (post.frontmatter['tags'] as string[] | undefined) ?? [],
-			},
+				tags: (post.frontmatter['tags'] as string[] | undefined) ?? []
+			}
 		};
 	});
 };
@@ -33,7 +37,7 @@ export const GET: APIRoute = async ({ props }) => {
 	const svg = await satori(buildCard(title, tags, fontSize), {
 		width: 1200,
 		height: 630,
-		fonts: [{ name: 'JetBrains Mono', data: fontData, weight: 700, style: 'normal' }],
+		fonts: [{ name: 'JetBrains Mono', data: fontData, weight: 700, style: 'normal' }]
 	});
 
 	const png = new Uint8Array(new Resvg(svg).render().asPng());
@@ -41,8 +45,8 @@ export const GET: APIRoute = async ({ props }) => {
 	return new Response(png, {
 		headers: {
 			'Content-Type': 'image/png',
-			'Cache-Control': 'public, max-age=31536000, immutable',
-		},
+			'Cache-Control': 'public, max-age=31536000, immutable'
+		}
 	});
 };
 
@@ -57,8 +61,8 @@ function buildCard(title: string, tags: string[], fontSize: number) {
 				backgroundColor: '#0f1115',
 				fontFamily: '"JetBrains Mono"',
 				position: 'relative',
-				overflow: 'hidden',
-			},
+				overflow: 'hidden'
+			}
 		},
 		React.createElement('div', {
 			style: {
@@ -67,8 +71,8 @@ function buildCard(title: string, tags: string[], fontSize: number) {
 				top: 0,
 				width: '6px',
 				height: '630px',
-				background: '#e25c72',
-			},
+				background: '#e25c72'
+			}
 		}),
 		React.createElement(
 			'div',
@@ -77,15 +81,23 @@ function buildCard(title: string, tags: string[], fontSize: number) {
 					display: 'flex',
 					flexDirection: 'column',
 					flex: 1,
-					padding: '56px 72px 56px 80px',
-				},
+					padding: '56px 72px 56px 80px'
+				}
 			},
 			React.createElement(
 				'div',
 				{ style: { display: 'flex', alignItems: 'center' } },
-				React.createElement('span', { style: { color: '#fda4af', fontSize: 20, letterSpacing: '0.1em' } }, 'KGDEV'),
+				React.createElement(
+					'span',
+					{ style: { color: '#fda4af', fontSize: 20, letterSpacing: '0.1em' } },
+					'KGDEV'
+				),
 				React.createElement('span', { style: { color: '#e25c72', fontSize: 20 } }, '.'),
-				React.createElement('span', { style: { color: '#fda4af', fontSize: 20, letterSpacing: '0.1em' } }, 'me')
+				React.createElement(
+					'span',
+					{ style: { color: '#fda4af', fontSize: 20, letterSpacing: '0.1em' } },
+					'me'
+				)
 			),
 			React.createElement(
 				'div',
@@ -96,9 +108,9 @@ function buildCard(title: string, tags: string[], fontSize: number) {
 						fontSize,
 						lineHeight: 1.2,
 						fontWeight: 700,
-						maxWidth: '1040px',
+						maxWidth: '1040px'
 					},
-					children: title,
+					children: title
 				})
 			),
 			React.createElement(
@@ -107,8 +119,8 @@ function buildCard(title: string, tags: string[], fontSize: number) {
 					style: {
 						display: 'flex',
 						justifyContent: 'space-between',
-						alignItems: 'center',
-					},
+						alignItems: 'center'
+					}
 				},
 				React.createElement(
 					'div',
@@ -124,18 +136,14 @@ function buildCard(title: string, tags: string[], fontSize: number) {
 									padding: '4px 14px',
 									borderRadius: '4px',
 									fontSize: 18,
-									letterSpacing: '0.03em',
-								},
+									letterSpacing: '0.03em'
+								}
 							},
 							tag
 						)
 					)
 				),
-				React.createElement(
-					'div',
-					{ style: { color: '#9ca3af', fontSize: 18 } },
-					AppConfig.author
-				)
+				React.createElement('div', { style: { color: '#9ca3af', fontSize: 18 } }, AppConfig.author)
 			)
 		)
 	);
