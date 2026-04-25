@@ -57,7 +57,10 @@ export default defineConfig({
     output: 'static',
 
     vite: {
-		plugins: [tailwindcss()]
+		plugins: [tailwindcss()],
+		ssr: {
+			external: ['@resvg/resvg-js', 'satori', 'node:fs', 'node:path']
+		}
 	},
 
     adapter: cloudflare()

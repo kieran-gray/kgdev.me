@@ -5,9 +5,8 @@ import PostContent from '@/components/PostContent.astro';
 
 const { frontmatter } = Astro.props;
 
-const imageUrl = frontmatter.image?.src
-	? new URL(frontmatter.image.src, Astro.site).toString()
-	: undefined;
+const slug = Astro.url.pathname.replace(/\/$/, '').split('/').pop()!;
+const ogImage = new URL(`/og/${slug}.png`, Astro.site).toString();
 ---
 
 <Base
@@ -15,7 +14,7 @@ const imageUrl = frontmatter.image?.src
 		title: frontmatter.title,
 		description: frontmatter.description,
 		type: 'article',
-		image: imageUrl,
+		image: ogImage,
 		article: {
 			publishedTime: new Date(frontmatter.pubDate).toISOString(),
 			author: frontmatter.author,
