@@ -9,11 +9,18 @@ export interface Props {
 	head: {
 		title: string;
 		description: string;
+		type?: 'website' | 'article';
+		image?: string;
+		article?: {
+			publishedTime: string;
+			author: string;
+			tags?: string[];
+		};
 	};
 }
 
 const {
-	head: { title, description }
+	head: { title, description, type = 'website', image, article }
 } = Astro.props as Props;
 ---
 
@@ -26,34 +33,35 @@ const {
 		<meta name="author" content={AppConfig.author} />
 
 		<script is:inline>
-			(function () {
-				try {
-					var theme = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
-					var scheme = localStorage.getItem('scheme') || 'amber';
-					var root = document.documentElement;
-					if (theme === 'dark') root.classList.add('dark');
-					else root.classList.remove('dark');
-					root.setAttribute('data-theme', theme);
-					root.setAttribute('data-scheme', scheme);
-				} catch (_) {}
-			})();
-			document.addEventListener('astro:before-swap', function (e) {
-				try {
-					var theme = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
-					var scheme = localStorage.getItem('scheme') || 'amber';
-					var incoming = e.newDocument.documentElement;
-					if (theme === 'dark') incoming.classList.add('dark');
-					else incoming.classList.remove('dark');
-					incoming.setAttribute('data-theme', theme);
-					incoming.setAttribute('data-scheme', scheme);
-					incoming.classList.add('is-transitioning');
-				} catch (_) {}
-			});
-			document.addEventListener('astro:after-swap', function () {
-				setTimeout(function () {
-					document.documentElement.classList.remove('is-transitioning');
-				}, 200);
-			});
+	const applyTheme = (doc = document.documentElement) => {
+		try {
+			const savedTheme = localStorage.getItem('theme');
+			const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+			const theme = savedTheme || systemTheme;
+
+			const scheme = localStorage.getItem('scheme') || 'rose';
+
+			const isDark = theme === 'dark';
+			doc.classList.toggle('dark', isDark);
+			doc.setAttribute('data-theme', theme);
+			doc.setAttribute('data-scheme', scheme);
+		} catch (e) {
+			console.error('Theme initialization failed', e);
+		}
+	};
+
+	applyTheme();
+
+	document.addEventListener('astro:before-swap', (e) => {
+		applyTheme(e.newDocument.documentElement);
+		e.newDocument.documentElement.classList.add('is-transitioning');
+	});
+
+	document.addEventListener('astro:after-swap', () => {
+		requestAnimationFrame(() => {
+			document.documentElement.classList.remove('is-transitioning');
+		});
+	});
 		</script>
 
 		<!-- Canonical URL -->
@@ -63,14 +71,26 @@ const {
 		<meta property="og:site_name" content={AppConfig.site_name} />
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={description} />
-		<meta property="og:type" content="website" />
+		<meta property="og:type" content={type} />
 		<meta property="og:url" content={Astro.url.href} />
 		<meta property="og:locale" content={AppConfig.locale} />
+		{image && <meta property="og:image" content={image} />}
+		{image && <meta property="og:image:alt" content={title} />}
+
+		<!-- Article meta (blog posts) -->
+		{type === 'article' && article && (
+			<>
+				<meta property="article:published_time" content={article.publishedTime} />
+				<meta property="article:author" content={article.author} />
+				{article.tags?.map((tag) => <meta property="article:tag" content={tag} />)}
+			</>
+		)}
 
 		<!-- Twitter -->
 		<meta name="twitter:title" content={title} />
 		<meta name="twitter:description" content={description} />
-		<meta name="twitter:card" content='summary' />
+		<meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
+		{image && <meta name="twitter:image" content={image} />}
 
 		<link rel="sitemap" href="/sitemap-index.xml" />
 		<link rel="alternate" type="application/rss+xml" href="/rss.xml" />

@@ -1,15 +1,28 @@
 ---
-import { AppConfig } from '@/utils/AppConfig';
 import Base from '@/layouts/Base.astro';
 import PostHeader from '@/components/PostHeader.astro';
 import PostContent from '@/components/PostContent.astro';
 
-const { description } = AppConfig;
-
 const { frontmatter } = Astro.props;
+
+const imageUrl = frontmatter.image?.src
+	? new URL(frontmatter.image.src, Astro.site).toString()
+	: undefined;
 ---
 
-<Base head={{ title: frontmatter.title, description }}>
+<Base
+	head={{
+		title: frontmatter.title,
+		description: frontmatter.description,
+		type: 'article',
+		image: imageUrl,
+		article: {
+			publishedTime: new Date(frontmatter.pubDate).toISOString(),
+			author: frontmatter.author,
+			tags: frontmatter.tags,
+		},
+	}}
+>
 	<div class="mx-auto w-full max-w-screen-md">
 		<PostHeader
 			title={frontmatter.title}

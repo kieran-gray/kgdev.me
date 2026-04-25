@@ -2,7 +2,7 @@
 layout: ../../layouts/post.astro
 title: 'Event sourcing on Cloudflare Workers and Durable Objects'
 pubDate: 2026-04-24
-description: 'A walkthrough of the labour backend for FernLabour.com: one Durable Object per labour, CQRS with event sourcing, a process manager for policies, and a mix of sync and async projectors.'
+description: 'A walkthrough of the backend for FernLabour.com on Cloudflare Workers and Durable Objects in Rust'
 author: 'Kieran Gray'
 isPinned: false
 excerpt: I rebuilt the backend of FernLabour on Cloudflare Workers and Durable Objects in Rust. The result is an event-sourced system where each labour runs inside its own Durable Object with its own SQLite event store, projections, and WebSocket subscribers.

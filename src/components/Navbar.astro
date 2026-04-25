@@ -288,7 +288,7 @@ import Section from './Section.astro';
 	function setupNavbar() {
 		// Sync UI to the theme state the inline head script already applied.
 		const isDarkTheme = document.documentElement.classList.contains('dark');
-		const initialScheme = (document.documentElement.getAttribute('data-scheme') as Scheme) || 'amber';
+		const initialScheme = (document.documentElement.getAttribute('data-scheme') as Scheme) || 'rose';
 
 		document.querySelectorAll<HTMLInputElement>('.light-switch').forEach((sw) => {
 			sw.checked = isDarkTheme;
