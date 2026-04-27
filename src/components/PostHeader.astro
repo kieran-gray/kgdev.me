@@ -3,6 +3,7 @@ import { formatDate } from '@/utils/data.util';
 import Section from './Section.astro';
 import Tags from './Tags.astro';
 import PinnedBadge from './PinnedBadge.astro';
+import ViewCounter from './ViewCounter.astro';
 
 interface Props {
 	title: string;
@@ -10,6 +11,7 @@ interface Props {
 	tags: string[];
 	minutesRead: string;
 	pubDate: string;
+	slug: string;
 	isPinned?: boolean;
 	img: {
 		src: string;
@@ -17,7 +19,7 @@ interface Props {
 	};
 }
 
-const { title, pubDate, tags, minutesRead, img, isPinned = false } = Astro.props;
+const { title, pubDate, tags, minutesRead, img, slug, isPinned = false } = Astro.props;
 
 const formattedDate = formatDate(pubDate);
 ---
@@ -31,8 +33,9 @@ const formattedDate = formatDate(pubDate);
 		<div class="pb-4">
 			<Tags tags={tags} withHref={true} />
 		</div>
-		<div class="text-sm">
-			<span>{formattedDate}</span> - <span>{minutesRead}</span>
+		<div class="flex flex-col items-center gap-1 text-sm">
+			<span><span>{formattedDate}</span> - <span>{minutesRead}</span></span>
+			<ViewCounter slug={slug} />
 		</div>
 
 		{img.src ? <img src={img.src} alt={img.alt} /> : null}

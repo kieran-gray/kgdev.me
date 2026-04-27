@@ -29,6 +29,7 @@ const ogImage = new URL(`/og/${slug}.png`, Astro.site).toString();
 			tags={frontmatter.tags}
 			minutesRead={frontmatter.minutesRead}
 			pubDate={frontmatter.pubDate}
+			slug={slug}
 			isPinned={frontmatter.isPinned}
 			img={{ src: frontmatter.image.src, alt: frontmatter.image.alt }}
 		/>
