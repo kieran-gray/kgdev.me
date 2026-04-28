@@ -27,4 +27,10 @@ pnpm-debug.log*
 !.dev.vars.example
 !.env.example
 
+# rust
 target/
+
+# npm workspace
+services/*/package-lock.json
+services/*/node_modules/
+web/node_modules/

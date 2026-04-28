@@ -1,48 +1,17 @@
-# KGDEV.me — Personal Blog
+# kgdev.me
 
-This is my personal blog. The stack is straightforward: Astro for the site generator and Tailwind CSS for styling. Deployed in CI/CD to Cloudflare pages.
+Source for [kgdev.me](https://kgdev.me) — a personal blog and portfolio. Everything runs on Cloudflare: the site is a static Astro build served via Workers, and the backend features are small Rust workers compiled to WebAssembly.
 
-## Features
+## Projects
 
-- Astro v5 with static site output
-- Tailwind CSS with Typography plugin
-- Light/Dark mode toggle with persistent state
-- Color scheme selector using CSS variables
-- Markdown content with code syntax highlighting (rehype-pretty-code)
-- SEO basics: RSS feed and sitemap
+**[web](./web)** — The Astro blog. Static site generation.
 
-## Integrations
+**[services/contact-service](./services/contact-service)** — Handles contact form submissions. Validates Cloudflare Turnstile tokens and forwards messages via the Cloudflare Email Routing API.
 
-- @astrojs/tailwind — https://docs.astro.build/en/guides/integrations-guide/tailwind/
-- @astrojs/react — https://docs.astro.build/en/guides/integrations-guide/react/
-- @astrojs/sitemap — https://docs.astro.build/en/guides/integrations-guide/sitemap/
-- @astrojs/rss — https://docs.astro.build/en/guides/rss/
-- rehype-pretty-code — https://rehype-pretty-code.netlify.app/
+**[services/view-counter](./services/view-counter)** — Tracks live view counts on blog posts using Cloudflare Durable Objects.
 
-## Project Structure
+## Workspaces
 
-```
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
-```
+This is a monorepo with an npm workspace (for the JS/TS tooling across all projects) and a Cargo workspace (for the shared Rust build profile and unified `Cargo.lock`).
 
-- Pages live in `src/pages/` as `.astro` or `.md` files and map to routes by filename.
-- Components are in `src/components/`.
-- Static assets (images, etc.) go in `public/`.
-
-## Developing
-
-All commands run from the project root:
-
-| Command                | Action                                           |
-| :--------------------- | :----------------------------------------------- |
-| `npm install`          | Install dependencies                             |
-| `npm run dev`          | Start local dev server at `localhost:4321`       |
-| `npm run build`        | Build the production site to `./dist/`           |
-| `npm run preview`      | Preview the production build locally             |
-| `npm run astro ...`    | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro --help` | Get help using the Astro CLI                     |
+Running `npm install` at the root installs dependencies for all projects. Each project retains its own scripts and can be worked on independently.

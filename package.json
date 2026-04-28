@@ -1,47 +1,32 @@
 {
-	"name": "kgdev.me",
-	"type": "module",
-	"version": "0.0.1",
-	"scripts": {
-		"dev": "astro dev",
-		"start": "astro dev",
-		"build": "astro check && astro build",
-		"preview": "npm run build && wrangler dev",
-		"astro": "astro",
-		"typecheck": "tsc --project tsconfig.json --noEmit",
-		"format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-		"format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
-		"deploy": "npm run build && wrangler deploy",
-		"cf-typegen": "wrangler types"
-	},
-	"dependencies": {
-		"@astrojs/check": "0.9.4",
-		"@astrojs/cloudflare": "12",
-		"@astrojs/react": "4.2.7",
-		"@astrojs/rss": "4.0.11",
-		"@astrojs/sitemap": "3.4.0",
-		"@resvg/resvg-js": "^2.6.2",
-		"@tailwindcss/vite": "4.1.12",
-		"@types/react": "19.1.12",
-		"@types/react-dom": "19.1.9",
-		"astro": "5.13.5",
-		"astro-mermaid": "^2.0.1",
-		"canvas-confetti": "1.9.3",
-		"mdast-util-to-string": "4.0.0",
-		"mermaid": "^11.14.0",
-		"react": "19.1.1",
-		"react-dom": "19.1.1",
-		"reading-time": "1.5.0",
-		"rehype-pretty-code": "0.14.1",
-		"satori": "^0.26.0",
-		"tailwindcss": "4.1.12",
-		"typescript": "5.9.2"
-	},
-	"devDependencies": {
-		"@tailwindcss/typography": "0.5.16",
-		"prettier": "3.6.2",
-		"prettier-plugin-astro": "0.14.1",
-		"prettier-plugin-tailwindcss": "0.6.14",
-		"wrangler": "^4.85.0"
-	}
+    "name": "kgdev.me",
+    "private": true,
+    "workspaces": [
+        "web",
+        "services/contact-service",
+        "services/view-counter"
+    ],
+    "devDependencies": {
+        "concurrently": "^8.2.2",
+        "@cloudflare/vitest-pool-workers": "^0.5.24",
+        "prettier": "3.6.2",
+        "prettier-plugin-astro": "0.14.1",
+        "prettier-plugin-tailwindcss": "0.6.14",
+        "wrangler": "^4.85.0"
+    },
+    "scripts": {
+        "dev": "concurrently -n web,contact,counter \"npm run dev:web\" \"npm run dev:contact\" \"npm run dev:counter\"",
+        "dev:web": "npm run dev --workspace=web",
+        "dev:contact": "npm run dev --workspace=services/contact-service",
+        "dev:counter": "npm run dev --workspace=services/view-counter",
+        "format": "npm run format --workspaces --if-present",
+        "build": "npm run build --workspaces --if-present",
+        "build:web": "npm run build --workspace=web",
+        "build:contact": "npm run build --workspace=services/contact-service",
+        "build:counter": "npm run build --workspace=services/view-counter",
+        "test": "npm run test --workspaces --if-present",
+        "test:contact": "npm run test --workspace=services/contact-service",
+        "test:counter": "npm run test --workspace=services/view-counter",
+        "deploy": "npm run deploy --workspaces --if-present"
+    }
 }

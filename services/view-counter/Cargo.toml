@@ -1,5 +1,5 @@
 [package]
-name = "kgdev_me_contact_us"
+name = "blog_live_view_counter"
 version = "0.1.0"
 edition = "2024"
 authors = ["Kieran Gray <gray.kieran@protonmail.com>"]
@@ -8,8 +8,7 @@ authors = ["Kieran Gray <gray.kieran@protonmail.com>"]
 crate-type = ["cdylib"]
 
 [dependencies]
-async-trait = { workspace = true }
-chrono = { workspace = true }
+anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 time = { workspace = true }

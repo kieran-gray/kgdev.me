@@ -1,12 +1,18 @@
-name: CI/CD
+name: Web CI/CD
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci-cd.yaml'
   pull_request:
     branches:
       - main
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci-cd.yaml'
   workflow_dispatch:
 
 concurrency:
@@ -36,12 +42,15 @@ jobs:
         run: npm ci
 
       - name: Check code formatting
+        working-directory: web
         run: npm run format:check
 
       - name: Run type checking
+        working-directory: web
         run: npm run typecheck
 
       - name: Build project
+        working-directory: web
         run: npm run build
 
   deploy:
@@ -67,6 +76,7 @@ jobs:
         run: npm ci
 
       - name: Build project
+        working-directory: web
         run: npm run build
 
       - name: Deploy Worker
@@ -74,3 +84,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web
