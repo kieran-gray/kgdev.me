@@ -83,7 +83,7 @@ describe('Contact Us Worker', () => {
 		console.log('Response status:', response.status);
 		console.log('Response data:', data);
 		expect(response.status).toBe(200);
-		expect(data).toBe(true);
+		expect(data).toStrictEqual({ success: true });
 	});
 
 	it('blocks requests from disallowed origins', async () => {
