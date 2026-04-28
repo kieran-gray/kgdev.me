@@ -41,20 +41,22 @@ graph LR
 
     subgraph DO["ViewCounter Durable Object (per post)"]
         direction TB
-        Sockets["open sockets"]
-        Count[("in-memory\nlive + total")]
-        Alarm["5s alarm"]
+        Handler["upgrade handler"]
+        Sockets["live sockets"]
+        Total["in-memory total"]
+        Alarm(["5s alarm"])
         SQL[("SQLite")]
 
-        Sockets -- "WS upgrade" --> Count
-        Count -- "broadcast {live, total}" --> Sockets
-        Count -. "set" .-> Alarm
+        Handler -- "attach" --> Sockets
+        Handler -- "increment" --> Total
+        Total -- "broadcast {live, total}" --> Sockets
+        Handler -. "schedule" .-> Alarm
         Alarm -- "upsert total" --> SQL
-        SQL -. "lazy load on wake" .-> Count
+        SQL -. "load on wake" .-> Total
     end
 
     R -- "WS connect" --> API
-    API -- "/connect/<slug>" --> DO
+    API -- "/connect/<slug>" --> Handler
 ```
 
 When someone opens a post, the Astro frontend connects to `/connect/<slug>` on the API Worker. The Worker resolves the Durable Object instance for that slug and forwards the WebSocket upgrade.
@@ -89,9 +91,7 @@ The `ViewCounter` component renders two spans and runs a client-side script.
 
 On `astro:page-load` it opens a socket to:
 
-```
-wss://counter.kgdev.me/api/v1/connect/<slug>
-```
+`wss://counter.kgdev.me/api/v1/connect/<slug>`
 
 It updates the spans whenever a message arrives. Because the backend broadcasts the initial state immediately after the connection is established, the frontend remains completely passive.
 
@@ -111,7 +111,7 @@ The `Origin` header is set by the browser, so anyone running curl or a raw WebSo
 
 ### Validated slugs
 
-The slug is validated against a whitelist of real posts before it ever hits the Durable Object. This prevents junk keys being used to fill the DO memory or SQLite storage.
+The slug is validated against a whitelist of known blog posts before the request reaches the Durable Object. This prevents arbitrary or invalid slugs from creating new Durable Objects.
 
 ### Rate limiting
 
