@@ -1,0 +1,54 @@
+---
+import { formatDate } from '@/lib/format/date';
+import { siteConfig } from '@/config/site.config';
+import Section from '../layout/Section.astro';
+import Tags from '../content/Tags.astro';
+import PinnedBadge from '../ui/PinnedBadge.astro';
+import ViewCounter from '../feature/ViewCounter.astro';
+
+interface Props {
+	title: string;
+	author: string;
+	tags: string[];
+	minutesRead?: string;
+	pubDate: string | Date;
+	slug: string;
+	isPinned?: boolean;
+	img?: {
+		src?: string;
+		alt?: string;
+	};
+}
+
+const { title, pubDate, tags, minutesRead, img, slug, isPinned = false } = Astro.props;
+
+const formattedDate = formatDate(pubDate);
+const showImg = !!img?.src;
+---
+
+<Section>
+	<div class="flex flex-col items-center">
+		<div class="relative px-14 pt-6 pb-4 text-center">
+			{isPinned && <PinnedBadge size="md" class="absolute top-6 left-10 -translate-y-1/2" />}
+			<h1 class="text-4xl font-bold">{title}</h1>
+		</div>
+		<div class="pb-4">
+			<Tags tags={tags} withHref={true} />
+		</div>
+		<div class="flex flex-col items-center gap-1 text-sm">
+			<span
+				><span>{formattedDate}</span>{
+					minutesRead ? (
+						<>
+							{' '}
+							- <span>{minutesRead}</span>
+						</>
+					) : null
+				}</span
+			>
+			{siteConfig.features.viewCounter.enabled && <ViewCounter slug={slug} />}
+		</div>
+
+		{showImg && <img src={img!.src} alt={img!.alt ?? ''} />}
+	</div>
+</Section>

@@ -1,0 +1,32 @@
+---
+import { generateAsciiArtText } from '@/lib/render/asciiArt';
+
+interface Props {
+  text: string;
+  desktopMaxWidth?: number;
+  mobileMaxWidth?: number;
+  ariaLabel?: string;
+  size?: 'lg' | 'sm';
+}
+
+const { text, desktopMaxWidth = 16, mobileMaxWidth = 7, ariaLabel, size = 'lg' } = Astro.props;
+
+const desktop = generateAsciiArtText(text, { maxWidth: desktopMaxWidth });
+const mobile = generateAsciiArtText(text, { maxWidth: mobileMaxWidth });
+
+const desktopTextClass =
+  size === 'sm'
+    ? 'text-[0.4rem] md:text-[0.5rem] lg:text-[0.55rem]'
+    : 'text-[0.65rem] md:text-[0.75rem] lg:text-xs';
+
+const mobileTextClass = size === 'sm' ? 'text-[0.4rem]' : 'text-[0.6rem]';
+---
+
+<div class="ascii-art font-bold text-[var(--accent-700)]" role="img" aria-label={ariaLabel ?? text}>
+  <div class="hidden sm:block overflow-x-auto">
+    <pre class={`inline-block whitespace-pre leading-none [line-height:1] ${desktopTextClass}`}>{desktop}</pre>
+  </div>
+  <div class="block sm:hidden overflow-x-auto">
+    <pre class={`inline-block whitespace-pre leading-none [line-height:1] ${mobileTextClass}`}>{mobile}</pre>
+  </div>
+</div>

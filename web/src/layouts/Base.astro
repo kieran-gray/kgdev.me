@@ -1,8 +1,9 @@
 ---
-import Footer from '@/components/Footer.astro';
-import Navbar from '@/components/Navbar.astro';
-import Search from '@/components/Search.astro';
-import { AppConfig } from '@/utils/AppConfig';
+import Footer from '@/components/layout/Footer.astro';
+import Navbar from '@/components/layout/Navbar.astro';
+import Search from '@/components/feature/Search.astro';
+import ThemeStyles from '@/components/layout/ThemeStyles.astro';
+import { siteConfig } from '@/config/site.config';
 import { ClientRouter } from 'astro:transitions';
 import '@/styles/global.css';
 
@@ -24,25 +25,30 @@ const {
 	head: { title, description, type = 'website', image, article }
 } = Astro.props as Props;
 
-const ogImage = image ?? new URL('/og/default.png', Astro.site).toString();
+const ogImage = siteConfig.features.og.enabled
+	? image ?? new URL('/og/default.png', Astro.site).toString()
+	: image ?? siteConfig.og.fallbackImage;
+const defaultScheme = siteConfig.schemes.default;
 ---
 
-<html lang="en">
+<html lang={siteConfig.meta.locale}>
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>{title}</title>
 		<meta name="description" content={description} />
-		<meta name="author" content={AppConfig.author} />
+		<meta name="author" content={siteConfig.author.name} />
 
-		<script is:inline>
+		<ThemeStyles />
+
+		<script is:inline define:vars={{ defaultScheme }}>
 	const applyTheme = (doc = document.documentElement) => {
 		try {
 			const savedTheme = localStorage.getItem('theme');
 			const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 			const theme = savedTheme || systemTheme;
 
-			const scheme = localStorage.getItem('scheme') || 'rose';
+			const scheme = localStorage.getItem('scheme') || defaultScheme;
 
 			const isDark = theme === 'dark';
 			doc.classList.toggle('dark', isDark);
@@ -73,16 +79,16 @@ const ogImage = image ?? new URL('/og/default.png', Astro.site).toString();
 		<link rel="canonical" href={Astro.url.href} />
 
 		<!-- Open Graph -->
-		<meta property="og:site_name" content={AppConfig.site_name} />
+		<meta property="og:site_name" content={`${siteConfig.brand.name}${siteConfig.brand.tld ? '.' + siteConfig.brand.tld : ''}`} />
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={description} />
 		<meta property="og:type" content={type} />
 		<meta property="og:url" content={Astro.url.href} />
-		<meta property="og:locale" content={AppConfig.locale} />
-		<meta property="og:image" content={ogImage} />
-		<meta property="og:image:alt" content={title} />
-		<meta property="og:image:width" content="1200" />
-		<meta property="og:image:height" content="630" />
+		<meta property="og:locale" content={siteConfig.meta.locale} />
+		{ogImage && <meta property="og:image" content={ogImage} />}
+		{ogImage && <meta property="og:image:alt" content={title} />}
+		{ogImage && <meta property="og:image:width" content="1200" />}
+		{ogImage && <meta property="og:image:height" content="630" />}
 
 		<!-- Article meta (blog posts) -->
 		{type === 'article' && article && (
@@ -97,11 +103,13 @@ const ogImage = image ?? new URL('/og/default.png', Astro.site).toString();
 		<meta name="twitter:title" content={title} />
 		<meta name="twitter:description" content={description} />
 		<meta name="twitter:card" content="summary_large_image" />
-		<meta name="twitter:image" content={ogImage} />
+		{ogImage && <meta name="twitter:image" content={ogImage} />}
 
 		<slot name="head" />
 		<link rel="sitemap" href="/sitemap-index.xml" />
-		<link rel="alternate" type="application/rss+xml" href="/rss.xml" />
+		{siteConfig.features.rss.enabled && (
+			<link rel="alternate" type="application/rss+xml" href="/rss.xml" />
+		)}
 		<link
 			rel="icon"
 			href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👨‍💻</text></svg>"
@@ -110,10 +118,10 @@ const ogImage = image ?? new URL('/og/default.png', Astro.site).toString();
 	</head>
 	<body class="flex min-h-screen flex-col bg-[var(--page-bg)] font-mono text-[var(--text-color)]">
 		<Navbar/>
-		<div class="flex-1" data-pagefind-body>
+		<div class="flex-1" data-pagefind-body={siteConfig.features.search.enabled ? true : undefined}>
 			<slot />
 		</div>
 		<Footer/>
-		<Search />
+		{siteConfig.features.search.enabled && <Search />}
 	</body>
 </html>

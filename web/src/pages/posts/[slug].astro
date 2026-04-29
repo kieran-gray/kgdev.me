@@ -1,0 +1,78 @@
+---
+import Base from '@/layouts/Base.astro';
+import PostHeader from '@/components/post/PostHeader.astro';
+import PostContent from '@/components/post/PostContent.astro';
+import TableOfContents from '@/components/post/TableOfContents.astro';
+import { buildBlogPostingSchema } from '@/lib/seo/jsonLd';
+import { getCollection, type CollectionEntry } from 'astro:content';
+import { siteConfig } from '@/config/site.config';
+
+export async function getStaticPaths() {
+	const posts = await getCollection('posts');
+	return posts.map((entry) => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+
+interface Props {
+	entry: CollectionEntry<'posts'>;
+}
+
+const { entry } = Astro.props as Props;
+const { Content, headings, remarkPluginFrontmatter } = await entry.render();
+const minutesRead = remarkPluginFrontmatter?.minutesRead as string | undefined;
+const data = entry.data;
+const slug = entry.slug;
+const ogImage = siteConfig.features.og.enabled
+	? new URL(`/og/${slug}.png`, Astro.site).toString()
+	: data.image?.src || siteConfig.og.fallbackImage || '';
+
+const tocHeadings = headings.filter((h) => h.depth === 2 || h.depth === 3);
+const showToc = tocHeadings.length >= 2;
+
+const blogPostingSchema = buildBlogPostingSchema({
+	title: data.title,
+	description: data.description,
+	pubDate: data.pubDate,
+	author: data.author,
+	tags: data.tags,
+	url: Astro.url.href,
+	image: ogImage
+});
+---
+
+<Base
+	head={{
+		title: data.title,
+		description: data.description,
+		type: 'article',
+		image: ogImage,
+		article: {
+			publishedTime: data.pubDate.toISOString(),
+			author: data.author,
+			tags: data.tags
+		}
+	}}
+>
+	<Fragment slot="head">
+		<script is:inline type="application/ld+json" set:html={JSON.stringify(blogPostingSchema)} />
+	</Fragment>
+	<div class={showToc ? 'post-outer post-has-toc' : 'post-outer'}>
+		<div class="post-main">
+			<PostHeader
+				title={data.title}
+				author={data.author}
+				tags={data.tags}
+				minutesRead={minutesRead}
+				pubDate={data.pubDate}
+				slug={slug}
+				isPinned={data.isPinned}
+				img={{ src: data.image?.src, alt: data.image?.alt }}
+			/>
+			<PostContent><Content /></PostContent>
+		</div>
+		{showToc && (
+			<aside class="post-toc" aria-label="Table of contents">
+				<TableOfContents headings={tocHeadings} />
+			</aside>
+		)}
+	</div>
+</Base>

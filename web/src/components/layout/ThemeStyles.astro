@@ -1,0 +1,8 @@
+---
+import { siteConfig } from '@/config/site.config';
+import { generateSchemeCss } from '@/styles/schemes';
+
+const css = generateSchemeCss(siteConfig.schemes.default);
+---
+
+<style is:global set:html={css}></style>

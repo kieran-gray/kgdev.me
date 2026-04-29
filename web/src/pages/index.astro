@@ -1,44 +1,32 @@
 ---
-import { AppConfig } from '@/utils/AppConfig';
+import { siteConfig } from '@/config/site.config';
 import Base from '@/layouts/Base.astro';
-import Hero from '@/components/Hero.astro';
-import LatestPosts from '@/components/LatestPosts.astro';
-import LatestProjects from '@/components/LatestProjects.astro';
+import Hero from '@/components/content/Hero.astro';
+import LatestPosts from '@/components/content/LatestPosts.astro';
+import LatestProjects from '@/components/content/LatestProjects.astro';
 import { getCollection, type CollectionEntry } from 'astro:content';
-import { sortPostsByDate } from '@/utils/data.util';
-import { MarkdownInstance } from 'astro';
+import { getAllPosts } from '@/lib/content/posts';
+import { buildPersonSchema } from '@/lib/seo/jsonLd';
 
-const { title } = AppConfig;
-const { description } = AppConfig;
+const { title } = siteConfig.meta;
+const { description } = siteConfig.meta;
 
-const allPosts = Object.values(
-	import.meta.glob('./posts/*.md', { eager: true })
-) as MarkdownInstance<any>[];
-allPosts.sort(sortPostsByDate);
+const allPosts = await getAllPosts();
 const latestPosts = allPosts.slice(0, 3);
 
 const allProjects: CollectionEntry<'projects'>[] = await getCollection('projects');
 const pinnedProjects = allProjects.filter((p) => p.data.pinned === true);
 const homepageProjects = (pinnedProjects.length ? pinnedProjects : allProjects).slice(0, 2);
 const projectsTitle = pinnedProjects.length ? 'Pinned Projects' : 'Latest Projects';
+
+const personSchema = buildPersonSchema();
 ---
 
 <Base head={{ title, description }}>
 	<Fragment slot="head">
-		<script is:inline type="application/ld+json" set:html={JSON.stringify({
-			'@context': 'https://schema.org',
-			'@type': 'Person',
-			name: AppConfig.author,
-			url: 'https://kgdev.me',
-			sameAs: [
-				'https://github.com/kieran-gray',
-				'https://www.linkedin.com/in/kieran-g',
-			],
-			jobTitle: AppConfig.currentRole.title,
-			description: 'Software engineer with 5 years of industry experience building scalable backend systems and full-stack applications.',
-		})} />
+		<script is:inline type="application/ld+json" set:html={JSON.stringify(personSchema)} />
 	</Fragment>
 	<Hero />
 	<LatestPosts posts={latestPosts} />
-  <LatestProjects projects={homepageProjects} title={projectsTitle} />
+	<LatestProjects projects={homepageProjects} title={projectsTitle} />
 </Base>

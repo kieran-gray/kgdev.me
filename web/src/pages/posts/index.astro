@@ -1,26 +1,23 @@
 ---
-import { AppConfig } from '@/utils/AppConfig';
+import { siteConfig } from '@/config/site.config';
 import Base from '@/layouts/Base.astro';
-import Section from '@/components/Section.astro';
-import Card from '@/components/Card.astro';
-import Heading from '@/components/Heading.astro';
-import { sortPostsByDate } from '@/utils/data.util';
-import { MarkdownInstance } from 'astro';
+import Section from '@/components/layout/Section.astro';
+import Card from '@/components/ui/Card.astro';
+import Heading from '@/components/ui/Heading.astro';
+import { getAllPosts } from '@/lib/content/posts';
 
-const title = `Posts | ${AppConfig.title}`;
-const description = 'Technical blog posts on distributed systems, Rust, TypeScript, event sourcing, and Cloudflare Workers.';
+const title = `Posts | ${siteConfig.meta.title}`;
+const description =
+	'Technical blog posts on distributed systems, Rust, TypeScript, event sourcing, and Cloudflare Workers.';
 
-const allPosts = Object.values(
-	import.meta.glob('./*.md', { eager: true })
-) as MarkdownInstance<any>[];
-allPosts.sort(sortPostsByDate);
+const allPosts = await getAllPosts();
 ---
 
 <Base head={{ title, description }}>
 	<Section><Heading title="Posts" /></Section>
 	<Section>
 		{
-			allPosts.map((post: any) => (
+			allPosts.map((post) => (
 				<div class="mb-4 basis-1 last:mb-0">
 					<Card post={post} />
 				</div>

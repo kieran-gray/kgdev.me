@@ -1,88 +1,99 @@
 ---
-import Section from '@/components/Section.astro';
-import Card from '@/components/Card.astro';
+import Section from '@/components/layout/Section.astro';
+import Card from '@/components/ui/Card.astro';
 import Base from '@/layouts/Base.astro';
-import Heading from '@/components/Heading.astro';
-import { AppConfig } from '@/utils/AppConfig';
-import { MarkdownInstance } from 'astro';
-import { sortPostsByDate } from '@/utils/data.util';
-import ProjectCard from '@/components/ProjectCard.astro';
+import Heading from '@/components/ui/Heading.astro';
+import { siteConfig } from '@/config/site.config';
+import { sortPostsByDate } from '@/lib/format/date';
+import ProjectCard from '@/components/project/ProjectCard.astro';
 import { getCollection, type CollectionEntry } from 'astro:content';
+import type { PostEntry } from '@/lib/content/posts';
 
-export async function getStaticPaths(): Promise<any> {
-  const allPosts = Object.values(
-    import.meta.glob('../posts/*.md', { eager: true })
-  ) as MarkdownInstance<any>[];
+export async function getStaticPaths() {
+	const allPosts = await getCollection('posts');
 
-  const projects: CollectionEntry<'projects'>[] = await getCollection('projects');
+	const allPostsWithMeta: PostEntry[] = await Promise.all(
+		allPosts.map(async (entry) => {
+			const { remarkPluginFrontmatter } = await entry.render();
+			return Object.assign(entry, {
+				minutesRead: remarkPluginFrontmatter?.minutesRead as string | undefined
+			});
+		})
+	);
 
-  const projectTagsFor = (p: CollectionEntry<'projects'>) => [
-    ...(p.data.tags || []),
-    ...(p.data.tech?.languages || []),
-  ];
+	const projects: CollectionEntry<'projects'>[] = await getCollection('projects');
 
-  const allTags: Set<string> = new Set([
-    ...allPosts.flatMap((post: MarkdownInstance<Record<string, any>>) => post.frontmatter.tags || []),
-    ...projects.flatMap(projectTagsFor),
-  ]);
+	const projectTagsFor = (p: CollectionEntry<'projects'>) => [
+		...(p.data.tags || []),
+		...(p.data.tech?.languages || [])
+	];
 
-  return [...allTags].map((tag) => {
-    const filteredPosts = allPosts.filter((post: MarkdownInstance<Record<string, any>>) => (post.frontmatter.tags || []).includes(tag));
-    filteredPosts.sort(sortPostsByDate);
+	const allTags: Set<string> = new Set([
+		...allPostsWithMeta.flatMap((post) => post.data.tags || []),
+		...projects.flatMap(projectTagsFor)
+	]);
 
-    const filteredProjects = projects.filter((p) => projectTagsFor(p).includes(tag));
+	return [...allTags].map((tag) => {
+		const filteredPosts = allPostsWithMeta.filter((post) =>
+			(post.data.tags || []).includes(tag)
+		);
+		filteredPosts.sort(sortPostsByDate);
 
-    return {
-      params: { tag },
-      props: {
-        posts: filteredPosts,
-        projects: filteredProjects,
-      },
-    };
-  });
+		const filteredProjects = projects.filter((p) => projectTagsFor(p).includes(tag));
+
+		return {
+			params: { tag },
+			props: {
+				posts: filteredPosts,
+				projects: filteredProjects
+			}
+		};
+	});
 }
 
 interface Props {
-  posts: MarkdownInstance<Record<string, any>>[];
-  projects: CollectionEntry<'projects'>[];
+	posts: PostEntry[];
+	projects: CollectionEntry<'projects'>[];
 }
 
 const { tag } = Astro.params;
-const title = `#${tag} | ${AppConfig.title}`;
-const description = `All posts and projects tagged "${tag}" on kgdev.me.`;
+const title = `#${tag} | ${siteConfig.meta.title}`;
+const description = `All posts and projects tagged "${tag}".`;
 
 const { posts, projects } = Astro.props as Props;
 ---
 
 <Base head={{ title, description }}>
-  <Section>
-    <Heading title={`#${tag}`} />
-    <div class="pt-2 text-center">
-      <a href="/tags" class="underline hover:text-[var(--accent-500)]">all tags →</a>
-    </div>
-  </Section>
+	<Section>
+		<Heading title={`#${tag}`} />
+		<div class="pt-2 text-center">
+			<a href="/tags" class="underline hover:text-[var(--accent-500)]">all tags →</a>
+		</div>
+	</Section>
 
-  {projects?.length ? (
-    <Section>
-      <h2 class="mb-3 text-lg font-bold">Projects</h2>
-      <div class="flex flex-col gap-4">
-        {projects.map((p) => (
-          <ProjectCard project={p} />
-        ))}
-      </div>
-    </Section>
-  ) : null}
+	{
+		projects?.length ? (
+			<Section>
+				<h2 class="mb-3 text-lg font-bold">Projects</h2>
+				<div class="flex flex-col gap-4">
+					{projects.map((p) => (
+						<ProjectCard project={p} />
+					))}
+				</div>
+			</Section>
+		) : null
+	}
 
-  {posts?.length ? (
-    <Section>
-      <h2 class="mb-3 text-lg font-bold">Posts</h2>
-      {
-        posts.map((post: any) => (
-          <div class="mb-4 basis-1 last:mb-0">
-            <Card post={post} />
-          </div>
-        ))
-      }
-    </Section>
-  ) : null}
+	{
+		posts?.length ? (
+			<Section>
+				<h2 class="mb-3 text-lg font-bold">Posts</h2>
+				{posts.map((post) => (
+					<div class="mb-4 basis-1 last:mb-0">
+						<Card post={post} />
+					</div>
+				))}
+			</Section>
+		) : null
+	}
 </Base>

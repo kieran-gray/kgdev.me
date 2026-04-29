@@ -1,0 +1,31 @@
+---
+import Base from '@/layouts/Base.astro';
+import Section from '@/components/layout/Section.astro';
+
+import ContactHeader from '@/components/contact/ContactHeader.astro';
+import ContactForm from '@/components/contact/ContactForm.astro';
+
+import { siteConfig } from '@/config/site.config';
+import contactFormScript from '@/scripts/contactForm.ts?url';
+
+const title = `Contact | ${siteConfig.meta.title}`;
+const description = 'Get in touch for professional inquiries or just to say hi.';
+
+const contact = siteConfig.features.contact;
+---
+
+<Base head={{ title, description }}>
+	<Section>
+		<ContactHeader />
+
+		<div class="relative mx-auto mt-12 max-w-2xl">
+			<ContactForm
+				endpoint={contact.endpoint}
+				turnstileSiteKey={contact.turnstileSiteKey}
+			/>
+		</div>
+	</Section>
+
+	<script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"></script>
+	<script is:inline type="module" src={contactFormScript}></script>
+</Base>

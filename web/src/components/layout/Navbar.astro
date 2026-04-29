@@ -1,0 +1,237 @@
+---
+import Section from './Section.astro';
+import { siteConfig } from '@/config/site.config';
+import SchemePicker from './SchemePicker.astro';
+import ThemeSwitch from './ThemeSwitch.astro';
+import MobileMenu from './MobileMenu.astro';
+
+const { brand, nav, schemes } = siteConfig;
+const schemeNames = schemes.list.join('|');
+const searchEnabled = siteConfig.features.search.enabled;
+---
+
+<Section>
+	<div class="flex items-center justify-between">
+		<div class="text-3xl font-bold">
+			<a href="/">
+				{brand.name}{brand.accentDot && <span class="text-[var(--accent-500)]">.</span>}{brand.tld}
+			</a>
+		</div>
+		<div class="flex items-center">
+			<!-- Desktop Navigation -->
+			<nav>
+				<ul class="hidden flex-row sm:flex">
+					{nav.map((item) => (
+						<li><a href={item.href} class="mr-3 hover:text-[var(--accent-500)]">{item.label}</a></li>
+					))}
+				</ul>
+			</nav>
+			{searchEnabled && (
+				<button
+					class="search-trigger ml-4 hidden sm:flex"
+					aria-label="Open search (Ctrl+P)"
+					onclick="document.dispatchEvent(new CustomEvent('search:open'))"
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<circle cx="11" cy="11" r="8"></circle>
+						<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+					</svg>
+					<span class="search-trigger-hint hidden lg:flex">
+						<kbd>⌘</kbd><kbd>P</kbd>
+					</span>
+				</button>
+			)}
+
+			<!-- Desktop Theme + Scheme -->
+			<div class="ml-3 hidden items-center gap-2 sm:flex">
+				<SchemePicker id="scheme-button-desktop" menuId="scheme-menu-desktop" />
+				<ThemeSwitch id="light-switch-desktop" />
+			</div>
+
+			<!-- Mobile Menu Button -->
+			<button id="mobile-menu-button" class="p-2 sm:hidden" aria-label="Toggle mobile menu" aria-expanded="false" aria-controls="mobile-menu">
+				<svg id="mobile-menu-icon-open" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path>
+				</svg>
+				<svg id="mobile-menu-icon-close" xmlns="http://www.w3.org/2000/svg" class="hidden h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+				</svg>
+			</button>
+		</div>
+	</div>
+</Section>
+
+<MobileMenu />
+
+<script is:inline define:vars={{ schemeNames }}>
+	const SCHEME_PATTERN = new RegExp('^(' + schemeNames + ')$');
+
+	function applyTheme(isDark) {
+		if (isDark) {
+			document.documentElement.classList.add('dark');
+			document.documentElement.setAttribute('data-theme', 'dark');
+			localStorage.setItem('theme', 'dark');
+		} else {
+			document.documentElement.classList.remove('dark');
+			document.documentElement.setAttribute('data-theme', 'light');
+			localStorage.setItem('theme', 'light');
+		}
+	}
+
+	function applyScheme(scheme) {
+		if (!SCHEME_PATTERN.test(scheme)) return;
+		document.documentElement.setAttribute('data-scheme', scheme);
+		localStorage.setItem('scheme', scheme);
+		updateSchemeUI(scheme);
+	}
+
+	function updateSchemeUI(scheme) {
+		document.querySelectorAll('.scheme-menu').forEach((menu) => {
+			menu.querySelectorAll('.scheme-option').forEach((btn) => {
+				const isActive = btn.dataset.scheme === scheme;
+				btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+				const check = btn.querySelector('svg');
+				if (check) {
+					if (isActive) check.classList.remove('hidden');
+					else check.classList.add('hidden');
+				}
+			});
+		});
+	}
+
+	function closeAllSchemeMenus() {
+		document
+			.querySelectorAll('#scheme-button-desktop, #scheme-button-mobile')
+			.forEach((b) => b.setAttribute('aria-expanded', 'false'));
+		document.querySelectorAll('.scheme-menu').forEach((m) => m.classList.add('hidden'));
+	}
+
+	function closeMobileMenu() {
+		const btn = document.getElementById('mobile-menu-button');
+		const menu = document.getElementById('mobile-menu');
+		const backdrop = document.getElementById('mobile-menu-backdrop');
+		const openIcon = document.getElementById('mobile-menu-icon-open');
+		const closeIcon = document.getElementById('mobile-menu-icon-close');
+		if (!btn || !menu || !backdrop) return;
+		btn.setAttribute('aria-expanded', 'false');
+		menu.classList.add('scale-95', 'opacity-0', 'pointer-events-none');
+		menu.classList.remove('scale-100', 'opacity-100');
+		backdrop.classList.add('opacity-0', 'pointer-events-none');
+		backdrop.classList.remove('opacity-100');
+		openIcon?.classList.remove('hidden');
+		closeIcon?.classList.add('hidden');
+		window.setTimeout(() => {
+			if (btn.getAttribute('aria-expanded') === 'false') {
+				menu.classList.add('hidden');
+				backdrop.classList.add('hidden');
+			}
+		}, 200);
+	}
+
+	function openMobileMenu() {
+		const btn = document.getElementById('mobile-menu-button');
+		const menu = document.getElementById('mobile-menu');
+		const backdrop = document.getElementById('mobile-menu-backdrop');
+		const openIcon = document.getElementById('mobile-menu-icon-open');
+		const closeIcon = document.getElementById('mobile-menu-icon-close');
+		if (!btn || !menu || !backdrop) return;
+		btn.setAttribute('aria-expanded', 'true');
+		menu.classList.remove('hidden');
+		backdrop.classList.remove('hidden');
+		requestAnimationFrame(() => {
+			menu.classList.remove('scale-95', 'opacity-0', 'pointer-events-none');
+			menu.classList.add('scale-100', 'opacity-100');
+			backdrop.classList.remove('opacity-0', 'pointer-events-none');
+			backdrop.classList.add('opacity-100');
+		});
+		openIcon?.classList.add('hidden');
+		closeIcon?.classList.remove('hidden');
+	}
+
+	function toggleMobileMenu() {
+		const btn = document.getElementById('mobile-menu-button');
+		if (!btn) return;
+		if (btn.getAttribute('aria-expanded') === 'true') closeMobileMenu();
+		else openMobileMenu();
+	}
+
+	function setupNavbar() {
+		const isDarkTheme = document.documentElement.classList.contains('dark');
+		const initialScheme = document.documentElement.getAttribute('data-scheme') || '';
+
+		document.querySelectorAll('.light-switch').forEach((sw) => {
+			sw.checked = isDarkTheme;
+		});
+		updateSchemeUI(initialScheme);
+		closeMobileMenu();
+	}
+
+	let delegatedWired = false;
+	function wireDelegation() {
+		if (delegatedWired) return;
+		delegatedWired = true;
+
+		document.addEventListener('click', (e) => {
+			const target = e.target;
+			if (!target) return;
+
+			const schemeBtn = target.closest('#scheme-button-desktop, #scheme-button-mobile');
+			if (schemeBtn) {
+				e.stopPropagation();
+				const menuId = schemeBtn.getAttribute('aria-controls');
+				const menu = menuId ? document.getElementById(menuId) : null;
+				if (!menu) return;
+				const expanded = schemeBtn.getAttribute('aria-expanded') === 'true';
+				closeAllSchemeMenus();
+				if (!expanded) {
+					schemeBtn.setAttribute('aria-expanded', 'true');
+					menu.classList.remove('hidden');
+				}
+				return;
+			}
+
+			const schemeOption = target.closest('.scheme-option');
+			if (schemeOption) {
+				e.stopPropagation();
+				const scheme = schemeOption.dataset.scheme;
+				if (scheme) applyScheme(scheme);
+				closeAllSchemeMenus();
+				return;
+			}
+
+			if (target.closest('#mobile-menu-button')) {
+				e.stopPropagation();
+				toggleMobileMenu();
+				return;
+			}
+
+			if (target.closest('#mobile-menu-backdrop')) {
+				closeMobileMenu();
+				return;
+			}
+
+			if (!target.closest('.scheme-menu')) closeAllSchemeMenus();
+		});
+
+		document.addEventListener('change', (e) => {
+			const target = e.target;
+			if (target && target.classList && target.classList.contains('light-switch')) {
+				applyTheme(target.checked);
+				document.querySelectorAll('.light-switch').forEach((sw) => {
+					sw.checked = target.checked;
+				});
+			}
+		});
+
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') {
+				closeAllSchemeMenus();
+				closeMobileMenu();
+			}
+		});
+	}
+
+	wireDelegation();
+	setupNavbar();
+	document.addEventListener('astro:page-load', setupNavbar);
+</script>

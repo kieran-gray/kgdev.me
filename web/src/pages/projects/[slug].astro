@@ -1,8 +1,8 @@
 ---
 import Base from '@/layouts/Base.astro';
-import Section from '@/components/Section.astro';
-import Heading from '@/components/Heading.astro';
-import Tag from '@/components/Tag.astro';
+import Section from '@/components/layout/Section.astro';
+import Heading from '@/components/ui/Heading.astro';
+import Tag from '@/components/ui/Tag.astro';
 import { getCollection, getEntry } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
 type ProjectData = CollectionEntry<'projects'>['data'];

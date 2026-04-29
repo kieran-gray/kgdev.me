@@ -1,25 +1,21 @@
 ---
-import Heading from '@/components/Heading.astro';
-import Section from '@/components/Section.astro';
-import Tag from '@/components/Tag.astro';
+import Heading from '@/components/ui/Heading.astro';
+import Section from '@/components/layout/Section.astro';
+import Tag from '@/components/ui/Tag.astro';
 import Base from '@/layouts/Base.astro';
-import { AppConfig } from '@/utils/AppConfig';
-import { MarkdownInstance } from 'astro';
+import { siteConfig } from '@/config/site.config';
 import { getCollection, type CollectionEntry } from 'astro:content';
 
-const title = `Tags | ${AppConfig.title}`;
-const description = 'Browse all posts and projects by tag on kgdev.me.';
+const title = `Tags | ${siteConfig.meta.title}`;
+const description = `Browse all posts and projects by tag.`;
 
-const allPosts = Object.values(
-  import.meta.glob('../posts/*.md', { eager: true })
-) as MarkdownInstance<any>[];
-
+const allPosts = await getCollection('posts');
 const projects: CollectionEntry<'projects'>[] = await getCollection('projects');
 
-const postTags = allPosts.flatMap((post) => post.frontmatter.tags || []);
+const postTags = allPosts.flatMap((post) => post.data.tags || []);
 const projectTags = projects.flatMap((p) => [
-  ...(p.data.tags || []),
-  ...(p.data.tech?.languages || []),
+	...(p.data.tags || []),
+	...(p.data.tech?.languages || [])
 ]);
 const uniqueTags: Set<string> = new Set([...postTags, ...projectTags]);
 
@@ -27,32 +23,32 @@ type TagCounts = { posts: number; projects: number; total: number };
 let tagMap: Record<string, TagCounts> = {};
 
 [...uniqueTags].forEach((tag) => {
-  const postsCount = postTags.filter((t) => t === tag).length;
-  const projectsCount = projectTags.filter((t) => t === tag).length;
-  tagMap[tag] = { posts: postsCount, projects: projectsCount, total: postsCount + projectsCount };
+	const postsCount = postTags.filter((t) => t === tag).length;
+	const projectsCount = projectTags.filter((t) => t === tag).length;
+	tagMap[tag] = { posts: postsCount, projects: projectsCount, total: postsCount + projectsCount };
 });
 
 tagMap = Object.fromEntries(
-  Object.entries(tagMap).sort((a, b) => (b[1].total - a[1].total) || a[0].localeCompare(b[0]))
+	Object.entries(tagMap).sort((a, b) => (b[1].total - a[1].total) || a[0].localeCompare(b[0]))
 );
 ---
 
 <Base head={{ title, description }}>
-  <Section><Heading title="Browse by Tag" /></Section>
-  <Section>
-    <div class="mx-auto grid w-full max-w-screen-lg grid-cols-1 gap-2 px-4 sm:grid-cols-2 lg:grid-cols-3 md:px-0">
-      {
-        Object.entries(tagMap).map(([tag, counts]) => (
-          <a href={`/tags/${tag}`} class="group">
-            <div class="bg-[var(--card-outer-bg)] p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] transition hover:bg-[var(--accent-700)]">
-              <div class="flex items-center justify-between bg-[var(--card-inner-bg)] px-4 py-3 text-[var(--text-color)] opacity-95">
-                <div class="flex items-center"><Tag tag={tag} /></div>
-                <p class="text-xs text-[var(--muted-text)]">{counts.posts} posts · {counts.projects} projects</p>
-              </div>
-            </div>
-          </a>
-        ))
-      }
-    </div>
-  </Section>
+	<Section><Heading title="Browse by Tag" /></Section>
+	<Section>
+		<div class="mx-auto grid w-full max-w-screen-lg grid-cols-1 gap-2 px-4 sm:grid-cols-2 lg:grid-cols-3 md:px-0">
+			{
+				Object.entries(tagMap).map(([tag, counts]) => (
+					<a href={`/tags/${tag}`} class="group">
+						<div class="bg-[var(--card-outer-bg)] p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] transition hover:bg-[var(--accent-700)]">
+							<div class="flex items-center justify-between bg-[var(--card-inner-bg)] px-4 py-3 text-[var(--text-color)] opacity-95">
+								<div class="flex items-center"><Tag tag={tag} /></div>
+								<p class="text-xs text-[var(--muted-text)]">{counts.posts} posts · {counts.projects} projects</p>
+							</div>
+						</div>
+					</a>
+				))
+			}
+		</div>
+	</Section>
 </Base>

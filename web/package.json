@@ -6,10 +6,11 @@
 	"scripts": {
 		"dev": "astro dev",
 		"start": "astro dev",
-		"build": "astro check && astro build && pagefind --site dist",
+		"build": "astro check && astro build && node scripts/postbuild.mjs",
 		"preview": "npm run build && wrangler dev",
 		"astro": "astro",
 		"typecheck": "tsc --project tsconfig.json --noEmit",
+		"test:features": "node scripts/test-feature-flags.mjs",
 		"format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
 		"format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
 		"deploy": "npm run build && wrangler deploy",

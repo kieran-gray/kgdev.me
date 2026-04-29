@@ -1,0 +1,58 @@
+@layer utilities {
+	pre.mermaid {
+		background: transparent !important;
+		padding: 1.5rem 1rem;
+		margin: 1.5rem 0;
+		text-align: center;
+		--mermaid-font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	}
+
+	pre.mermaid svg {
+		display: block;
+		margin: 0 auto;
+		max-width: 100%;
+		background: transparent !important;
+	}
+
+	pre.mermaid svg .node rect,
+	pre.mermaid svg .node circle,
+	pre.mermaid svg .node ellipse,
+	pre.mermaid svg .node polygon {
+		fill: var(--badge-bg) !important;
+		stroke: var(--accent-700) !important;
+		stroke-width: 1.5px !important;
+	}
+
+	pre.mermaid svg .cluster rect {
+		fill: var(--card-inner-bg) !important;
+		stroke: var(--border-color) !important;
+		stroke-width: 1px !important;
+		stroke-dasharray: 5, 3 !important;
+	}
+
+	pre.mermaid svg .flowchart-link,
+	pre.mermaid svg path.flowchart-link,
+	pre.mermaid svg .edgePaths path {
+		stroke: var(--muted-text) !important;
+		stroke-width: 1.5px !important;
+	}
+
+	pre.mermaid svg path.flowchart-link[stroke-dasharray],
+	pre.mermaid svg .edgePaths path[stroke-dasharray] {
+		stroke: var(--muted-text) !important;
+		opacity: 0.6;
+	}
+
+	pre.mermaid svg marker path,
+	pre.mermaid svg marker polygon {
+		fill: var(--muted-text) !important;
+		stroke: none !important;
+	}
+
+	pre.mermaid svg .cluster-label div,
+	pre.mermaid svg .cluster-label span {
+		font-size: 0.72rem !important;
+		font-weight: 500 !important;
+		text-transform: uppercase !important;
+	}
+}
