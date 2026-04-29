@@ -33,7 +33,6 @@ Feature flag docs: [`docs/features.md`](./docs/features.md)
 ## Integrations
 
 - @astrojs/tailwind — https://docs.astro.build/en/guides/integrations-guide/tailwind/
-- @astrojs/react — https://docs.astro.build/en/guides/integrations-guide/react/
 - @astrojs/sitemap — https://docs.astro.build/en/guides/integrations-guide/sitemap/
 - @astrojs/rss — https://docs.astro.build/en/guides/rss/
 - rehype-pretty-code — https://rehype-pretty-code.netlify.app/

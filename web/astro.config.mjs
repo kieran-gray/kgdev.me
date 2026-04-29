@@ -2,7 +2,6 @@ import { defineConfig } from 'astro/config';
 import { remarkReadingTime } from './src/lib/markdown/readingTime';
 import rehypePrettyCode from 'rehype-pretty-code';
 import tailwindcss from '@tailwindcss/vite';
-import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 import mermaid from 'astro-mermaid';
 import cloudflare from '@astrojs/cloudflare';
@@ -108,7 +107,6 @@ export default defineConfig({
 					flowchart: { curve: 'linear' }
 				}
 			}),
-		react(),
 		sitemap({
 			filter(page) {
 				const pathname = typeof page === 'string' ? new URL(page).pathname : '';
