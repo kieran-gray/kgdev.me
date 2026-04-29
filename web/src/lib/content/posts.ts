@@ -8,7 +8,7 @@ export type PostEntry = CollectionEntry<'posts'> & { minutesRead?: string };
  * plugin) as a sidecar field. Sorted by pinned + pubDate desc.
  */
 export async function getAllPosts(): Promise<PostEntry[]> {
-	const entries = await getCollection('posts');
+	const entries: CollectionEntry<'posts'>[] = await getCollection('posts');
 	const withMeta: PostEntry[] = await Promise.all(
 		entries.map(async (entry) => {
 			const { remarkPluginFrontmatter } = await entry.render();

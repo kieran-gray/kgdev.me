@@ -4,7 +4,7 @@ import { Resvg } from '@resvg/resvg-js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import React from 'react';
-import { getCollection } from 'astro:content';
+import { getCollection, type CollectionEntry } from 'astro:content';
 import { siteConfig } from '@/config/site.config';
 import { getTagDisplay } from '@/lib/format/tagDisplay';
 
@@ -15,7 +15,7 @@ const fontData = fontBuf.buffer.slice(
 ) as ArrayBuffer;
 
 export const getStaticPaths: GetStaticPaths = async () => {
-	const posts = await getCollection('posts');
+	const posts: CollectionEntry<'posts'>[] = await getCollection('posts');
 	return posts.map((entry) => ({
 		params: { slug: entry.slug },
 		props: {
