@@ -11,6 +11,25 @@ This is my personal blog. The stack is straightforward: Astro for the site gener
 - Markdown content with code syntax highlighting (rehype-pretty-code)
 - SEO basics: RSS feed and sitemap
 
+## Configuration
+
+Application-level configuration lives in `src/config/site.config.ts`.
+
+Use this file to configure:
+
+- Site metadata (`url`, title, description, locale)
+- Brand and navigation (`brand`, `nav`)
+- Author/social info (`author`, `social`)
+- Homepage hero content (`hero`)
+- OG styling defaults (`og`)
+- Feature runtime settings (for example `viewCounter.wsUrl`, contact endpoint and Turnstile site key)
+
+`site.config.ts` is the main template customization point for content and behavior.
+
+Feature on/off state comes from `src/config/features.mjs` (consumed by `site.config.ts`, `astro.config.mjs`, and postbuild scripts) so flags work consistently at render-time and build-time.
+
+Feature flag docs: [`docs/features.md`](./docs/features.md)
+
 ## Integrations
 
 - @astrojs/tailwind — https://docs.astro.build/en/guides/integrations-guide/tailwind/
