@@ -6,7 +6,7 @@ status: active
 pinned: true
 tags: ['saas', 'security', 'encryption', 'maps']
 tech:
-  languages: ['Rust', 'TypeScript', 'SQL']
+  languages: ['rust', 'typescript', 'sql']
   frameworks: ['Axum', 'React', 'Vite', 'SQLx']
 repos:
   - name: quest-lock

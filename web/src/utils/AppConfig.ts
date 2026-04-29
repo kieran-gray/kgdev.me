@@ -1,7 +1,8 @@
 export const AppConfig = {
 	site_name: 'KGDEV.me',
 	title: 'Kieran Gray',
-	description: 'Kieran Gray dev blog',
+	description:
+		'Software engineer writing about things that interest me. Deep dives into distributed systems and real-world architecture.',
 	author: 'Kieran Gray',
 	locale: 'en',
 	currentRole: {

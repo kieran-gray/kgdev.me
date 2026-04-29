@@ -6,6 +6,30 @@ import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 import mermaid from 'astro-mermaid';
 import cloudflare from "@astrojs/cloudflare";
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function buildPostDateMap() {
+	const postsDir = join(__dirname, 'src/pages/posts');
+	const map = {};
+	try {
+		const files = readdirSync(postsDir).filter(f => f.endsWith('.md'));
+		for (const file of files) {
+			const content = readFileSync(join(postsDir, file), 'utf-8');
+			const match = content.match(/pubDate:\s*(\d{4}-\d{2}-\d{2})/);
+			if (match) {
+				const slug = file.replace('.md', '');
+				map[`https://kgdev.me/posts/${slug}/`] = new Date(match[1]);
+			}
+		}
+	} catch {}
+	return map;
+}
+
+const postDateMap = buildPostDateMap();
 const options = {
 	// Specify the theme to use or a custom theme json, in our case
 	// it will be a moonlight-II theme from
@@ -51,7 +75,14 @@ export default defineConfig({
 			},
 		}),
 		react(),
-		sitemap(),
+		sitemap({
+			serialize(item) {
+				return {
+					...item,
+					lastmod: postDateMap[item.url] ?? new Date(),
+				};
+			},
+		}),
 	],
 
     output: 'static',

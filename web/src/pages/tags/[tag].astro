@@ -48,8 +48,8 @@ interface Props {
 }
 
 const { tag } = Astro.params;
-const title = AppConfig.title;
-const description = AppConfig.description;
+const title = `#${tag} | ${AppConfig.title}`;
+const description = `All posts and projects tagged "${tag}" on kgdev.me.`;
 
 const { posts, projects } = Astro.props as Props;
 ---
@@ -64,7 +64,7 @@ const { posts, projects } = Astro.props as Props;
 
   {projects?.length ? (
     <Section>
-      <h3 class="mb-3 text-lg font-bold">Projects</h3>
+      <h2 class="mb-3 text-lg font-bold">Projects</h2>
       <div class="flex flex-col gap-4">
         {projects.map((p) => (
           <ProjectCard project={p} />
@@ -75,7 +75,7 @@ const { posts, projects } = Astro.props as Props;
 
   {posts?.length ? (
     <Section>
-      <h3 class="mb-3 text-lg font-bold">Posts</h3>
+      <h2 class="mb-3 text-lg font-bold">Posts</h2>
       {
         posts.map((post: any) => (
           <div class="mb-4 basis-1 last:mb-0">

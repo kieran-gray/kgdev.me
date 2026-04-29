@@ -2,7 +2,7 @@
 layout: ../../layouts/post.astro
 title: 'The Quest for Exactly-Once Event Delivery: Part 2'
 pubDate: 2025-07-13
-description: 'Attempting to achieve exactly-once event delivery semantics in my FernLabour.com codebase.'
+description: 'Building an idempotent event consumer in Python to eliminate duplicate processing and complete the exactly-once delivery guarantee in a distributed system.'
 author: 'Kieran Gray'
 excerpt: The adventure continues. In our last post we started the quest for the holy grail of distributed systems - Exactly-Once delivery. We tackled the first half of the problem by building a reliable producer with a transactional outbox...
 image:

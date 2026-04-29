@@ -6,7 +6,7 @@ status: active
 pinned: true
 tags: ['saas', 'health', 'event-sourcing', 'cloudflare', 'cqrs']
 tech:
-  languages: ['Rust', 'TypeScript', 'SQL']
+  languages: ['rust', 'typescript', 'sql']
   frameworks: ['workers-rs', 'React', 'Vite', 'Next.js', 'Tailwind']
 repos:
   - name: fern-labour-cloudflare

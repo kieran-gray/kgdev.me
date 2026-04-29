@@ -7,8 +7,8 @@ import Heading from '@/components/Heading.astro';
 import { sortPostsByDate } from '@/utils/data.util';
 import { MarkdownInstance } from 'astro';
 
-const { title } = AppConfig;
-const { description } = AppConfig;
+const title = `Posts | ${AppConfig.title}`;
+const description = 'Technical blog posts on distributed systems, Rust, TypeScript, event sourcing, and Cloudflare Workers.';
 
 const allPosts = Object.values(
 	import.meta.glob('./*.md', { eager: true })

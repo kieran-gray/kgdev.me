@@ -8,6 +8,7 @@ interface Props {
 
 const { project } = Astro.props;
 const data = project.data;
+type HostingItem = CollectionEntry<'projects'>['data']['hosting'][number];
 const href = `/projects/${project.slug}`;
 ---
 
@@ -22,7 +23,7 @@ const href = `/projects/${project.slug}`;
 
       {data.tech?.languages?.length ? (
         <div class="mb-2 flex flex-wrap">
-          {data.tech.languages.map((lang) => (
+          {data.tech.languages.map((lang: string) => (
             <Tag tag={lang} />
           ))}
         </div>
@@ -30,7 +31,7 @@ const href = `/projects/${project.slug}`;
 
       {data.tech?.frameworks?.length ? (
         <div class="mb-2 flex flex-wrap">
-          {data.tech.frameworks.map((fw) => (
+          {data.tech.frameworks.map((fw: string) => (
             <Tag tag={fw} />
           ))}
         </div>
@@ -38,7 +39,7 @@ const href = `/projects/${project.slug}`;
 
       {data.hosting?.length ? (
         <div class="mt-2 flex flex-wrap">
-          {data.hosting.map((h) => (
+          {data.hosting.map((h: HostingItem) => (
             <span class="mb-2 mr-2 bg-[var(--tag-bg)] px-3 py-1 text-xs font-bold text-[var(--tag-text)]">
               {h.provider}{h.service ? ` · ${h.service}` : ''}
             </span>

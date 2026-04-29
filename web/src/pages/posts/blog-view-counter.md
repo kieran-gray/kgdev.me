@@ -9,7 +9,7 @@ excerpt: I want a live view counter on each of my blog posts. Up when someone jo
 image:
   src:
   alt:
-tags: ['cloudflare', 'Rust']
+tags: ['cloudflare', 'rust']
 ---
 
 I want a live view counter on each of my blog posts.

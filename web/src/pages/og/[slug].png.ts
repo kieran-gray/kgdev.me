@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import React from 'react';
 import { AppConfig } from '@/utils/AppConfig';
+import { getTagDisplay } from '@/utils/tagDisplay';
 
 const fontBuf = readFileSync(join(process.cwd(), 'src/assets/fonts/JetBrainsMono-Bold.ttf'));
 const fontData = fontBuf.buffer.slice(
@@ -139,7 +140,7 @@ function buildCard(title: string, tags: string[], fontSize: number) {
 									letterSpacing: '0.03em'
 								}
 							},
-							tag
+							getTagDisplay(tag)
 						)
 					)
 				),

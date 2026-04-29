@@ -4,6 +4,10 @@ import Section from '@/components/Section.astro';
 import Heading from '@/components/Heading.astro';
 import Tag from '@/components/Tag.astro';
 import { getCollection, getEntry } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+type ProjectData = CollectionEntry<'projects'>['data'];
+type RepoItem = ProjectData['repos'][number];
+type ComponentItem = ProjectData['components'][number];
 
 export async function getStaticPaths() {
   const items = await getCollection('projects');
@@ -29,19 +33,19 @@ const { Content } = await project.render();
   </Section>
 
   <Section>
-    <h3 class="mb-2 text-xl font-bold">Overview</h3>
+    <h2 class="mb-2 text-xl font-bold">Overview</h2>
     <div class="mb-2 flex flex-wrap">
-      {data.tags?.map((t) => <Tag tag={t} />)}
-      {data.tech?.languages?.map((t) => <Tag tag={t} />)}
-      {data.tech?.frameworks?.map((t) => <Tag tag={t} />)}
+      {data.tags?.map((t: string) => <Tag tag={t} />)}
+      {data.tech?.languages?.map((t: string) => <Tag tag={t} />)}
+      {data.tech?.frameworks?.map((t: string) => <Tag tag={t} />)}
     </div>
   </Section>
 
   {data.repos?.length ? (
     <Section>
-      <h3 class="mb-2 text-xl font-bold">Repositories</h3>
+      <h2 class="mb-2 text-xl font-bold">Repositories</h2>
       <ul class="list-disc pl-5">
-        {data.repos.map((r) => (
+        {data.repos.map((r: RepoItem) => (
           <li class="mb-1">
             <a class="underline" href={r.url} target="_blank" rel="noopener noreferrer">{r.name}</a>
             <span class="ml-2 text-sm text-[var(--muted-text)]">{r.role}{r.private ? ' · private' : ''}</span>
@@ -54,12 +58,12 @@ const { Content } = await project.render();
 
   {data.components?.length ? (
     <Section>
-      <h3 class="mb-3 text-xl font-bold">Components</h3>
+      <h2 class="mb-3 text-xl font-bold">Components</h2>
       <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {data.components.map((c) => (
+        {data.components.map((c: ComponentItem) => (
           <div class="bg-[var(--card-inner-bg)] p-4">
             <div class="mb-1 flex items-center justify-between">
-              <h4 class="text-base font-semibold">{c.name}</h4>
+              <h3 class="text-base font-semibold">{c.name}</h3>
               <span class="bg-[var(--tag-bg)] px-2 py-0.5 text-xs uppercase font-bold text-[var(--tag-text)]">{c.type}</span>
             </div>
             <p class="mb-2 text-sm text-[var(--muted-text)]">{c.language}{c.framework ? ` · ${c.framework}` : ''}</p>
@@ -98,7 +102,7 @@ const { Content } = await project.render();
 
             {c.notes?.length ? (
               <ul class="mt-2 list-disc pl-5 text-sm text-[var(--muted-text)]">
-                {c.notes.map((n) => <li>{n}</li>)}
+                {c.notes.map((n: string) => <li>{n}</li>)}
               </ul>
             ) : null}
           </div>
@@ -108,7 +112,7 @@ const { Content } = await project.render();
     ) : null}
 
     <Section>
-      <h3 class="mb-2 text-xl font-bold">Technical Notes</h3>
+      <h2 class="mb-2 text-xl font-bold">Technical Notes</h2>
       <article class="prose prose-invert max-w-none">
         <Content />
       </article>
@@ -116,11 +120,11 @@ const { Content } = await project.render();
 
     {data.insights && (data.insights.performance?.image || data.insights.security?.image) ? (
     <Section>
-      <h3 class="mb-3 text-xl font-bold">Performance & Security</h3>
+      <h2 class="mb-3 text-xl font-bold">Performance & Security</h2>
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         {data.insights.performance && (
           <div class="bg-[var(--card-inner-bg)] p-4">
-            <h4 class="mb-2 text-base font-semibold">Load Performance</h4>
+            <h3 class="mb-2 text-base font-semibold">Load Performance</h3>
             {data.insights.performance.image && (
               <img
                 src={data.insights.performance.image}
@@ -131,7 +135,7 @@ const { Content } = await project.render();
             )}
             {data.insights.performance.notes?.length ? (
               <ul class="list-disc pl-5 text-sm text-[var(--muted-text)]">
-                {data.insights.performance.notes.map((n) => <li>{n}</li>)}
+                {data.insights.performance.notes.map((n: string) => <li>{n}</li>)}
               </ul>
             ) : null}
           </div>
@@ -139,7 +143,7 @@ const { Content } = await project.render();
 
         {data.insights.security && (
           <div class="bg-[var(--card-inner-bg)] p-4">
-            <h4 class="mb-2 text-base font-semibold">Security</h4>
+            <h3 class="mb-2 text-base font-semibold">Security</h3>
             {data.insights.security.image && (
               <img
                 src={data.insights.security.image}
@@ -150,7 +154,7 @@ const { Content } = await project.render();
             )}
             {data.insights.security.notes?.length ? (
               <ul class="list-disc pl-5 text-sm text-[var(--muted-text)]">
-                {data.insights.security.notes.map((n) => <li>{n}</li>)}
+                {data.insights.security.notes.map((n: string) => <li>{n}</li>)}
               </ul>
             ) : null}
           </div>

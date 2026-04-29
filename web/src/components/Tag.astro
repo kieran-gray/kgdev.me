@@ -1,10 +1,13 @@
 ---
+import { getTagDisplay } from '@/utils/tagDisplay';
+
 interface Props {
 	tag: string;
 	withHref?: boolean;
 }
 
 const { tag, withHref } = Astro.props;
+const displayTag = getTagDisplay(tag);
 ---
 
 <span
@@ -12,5 +15,5 @@ const { tag, withHref } = Astro.props;
 		withHref ? 'hover:bg-[var(--tag-bg-hover)]' : ''
 	}`}
 >
-	#{tag}
+	#{displayTag}
 </span>

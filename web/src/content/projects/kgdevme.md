@@ -5,7 +5,7 @@ website: https://kgdev.me
 status: active
 tags: ['blog']
 tech:
-  languages: ['TypeScript']
+  languages: ['typescript']
   frameworks: ['Astro', 'Tailwind']
 repos:
   - name: kgdev.me

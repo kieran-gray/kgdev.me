@@ -24,6 +24,20 @@ const projectsTitle = pinnedProjects.length ? 'Pinned Projects' : 'Latest Projec
 ---
 
 <Base head={{ title, description }}>
+	<Fragment slot="head">
+		<script is:inline type="application/ld+json" set:html={JSON.stringify({
+			'@context': 'https://schema.org',
+			'@type': 'Person',
+			name: AppConfig.author,
+			url: 'https://kgdev.me',
+			sameAs: [
+				'https://github.com/kieran-gray',
+				'https://www.linkedin.com/in/kieran-g',
+			],
+			jobTitle: AppConfig.currentRole.title,
+			description: 'Software engineer with 5 years of industry experience building scalable backend systems and full-stack applications.',
+		})} />
+	</Fragment>
 	<Hero />
 	<LatestPosts posts={latestPosts} />
   <LatestProjects projects={homepageProjects} title={projectsTitle} />

@@ -76,7 +76,7 @@ const description = 'Get in touch for professional inquiries or just to say hi.'
         class="absolute inset-[-20px] z-50 flex hidden items-center justify-center bg-[var(--page-bg)]/80 backdrop-blur-sm transition-opacity duration-300"
       >
         <div class="text-center w-full overflow-hidden px-4">
-          <pre id="status-ascii" class="inline-block text-left text-[0.35rem] font-bold leading-[1] text-[var(--accent-700)] sm:text-[0.45rem] md:text-[0.6rem] lg:text-[0.7rem]"></pre>
+          <pre id="status-ascii" class="ascii-art inline-block text-left text-[0.35rem] font-bold leading-[1] text-[var(--accent-700)] sm:text-[0.45rem] md:text-[0.6rem] lg:text-[0.7rem]"></pre>
         </div>
       </div>
     </div>
@@ -108,6 +108,7 @@ const description = 'Get in touch for professional inquiries or just to say hi.'
           callback: (token: string) => {
             turnstileToken = token;
           },
+          appearance: 'interaction-only'
         });
       }
 
@@ -189,11 +190,4 @@ const description = 'Get in touch for professional inquiries or just to say hi.'
     }
     document.addEventListener('astro:page-load', initContactForm);
   </script>
-
-  <style>
-    #status-ascii {
-      white-space: pre;
-      line-height: 1;
-    }
-  </style>
 </Base>

@@ -7,8 +7,8 @@ import { AppConfig } from '@/utils/AppConfig';
 import { MarkdownInstance } from 'astro';
 import { getCollection, type CollectionEntry } from 'astro:content';
 
-const { title } = AppConfig;
-const { description } = AppConfig;
+const title = `Tags | ${AppConfig.title}`;
+const description = 'Browse all posts and projects by tag on kgdev.me.';
 
 const allPosts = Object.values(
   import.meta.glob('../posts/*.md', { eager: true })

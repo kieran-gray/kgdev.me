@@ -2,7 +2,7 @@
 layout: ../../layouts/post.astro
 title: 'The Quest for Exactly-Once Event Delivery: Part 1'
 pubDate: 2025-06-07
-description: 'Attempting to achieve exactly-once event delivery semantics in my FernLabour.com codebase.'
+description: 'Building a reliable event producer in Python using the transactional outbox pattern to guarantee at-least-once delivery in a distributed system.'
 author: 'Kieran Gray'
 isPinned: false
 excerpt: We’re about to go on a bit of an adventure, I’m not sure how difficult it’s going to be (or if it’s possible), but I’m going to learn some things, and maybe you can learn some things too...

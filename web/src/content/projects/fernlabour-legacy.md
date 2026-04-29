@@ -6,7 +6,7 @@ status: archived
 pinned: false
 tags: ['saas', 'health', 'legacy']
 tech:
-  languages: ['TypeScript', 'Python', 'SQL']
+  languages: ['typescript', 'python', 'sql']
   frameworks: ['React', 'Next.js', 'FastAPI', 'SQLAlchemy']
 repos:
   - name: fern-labour-monorepo
