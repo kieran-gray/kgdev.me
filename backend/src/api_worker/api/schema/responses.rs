@@ -4,6 +4,7 @@ use serde_json::json;
 const HTTP_STATUS_BAD_REQUEST: u16 = 400;
 const HTTP_STATUS_UNAUTHORISED: u16 = 401;
 const HTTP_STATUS_NOT_FOUND: u16 = 404;
+const HTTP_STATUS_TOO_MANY_REQUESTS: u16 = 429;
 const HTTP_STATUS_INTERNAL_ERROR: u16 = 500;
 
 impl From<AppError> for worker::Response {
@@ -13,6 +14,7 @@ impl From<AppError> for worker::Response {
             AppError::Unauthorised(msg) => (HTTP_STATUS_UNAUTHORISED, msg.as_str()),
             AppError::InternalError(_) => (HTTP_STATUS_INTERNAL_ERROR, "Internal server error"),
             AppError::ValidationError(msg) => (HTTP_STATUS_BAD_REQUEST, msg.as_str()),
+            AppError::RateLimited(msg) => (HTTP_STATUS_TOO_MANY_REQUESTS, msg.as_str()),
         };
 
         let body = json!({ "success": false, "error": message });

@@ -7,3 +7,8 @@ pub struct CreateContactMessageRequest {
     pub name: String,
     pub message: String,
 }
+
+#[derive(PartialEq, Debug, Deserialize, Serialize)]
+pub struct AskQuestionRequest {
+    pub question: String,
+}

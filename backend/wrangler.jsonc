@@ -1,5 +1,5 @@
 {
-  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "kgdev-me-backend",
   "main": "build/worker/shim.mjs",
   "compatibility_date": "2026-04-28",
@@ -33,6 +33,10 @@
       {
         "name": "VIEW_COUNTER",
         "class_name": "ViewCounter"
+      },
+      {
+        "name": "BLOG_POST_QA",
+        "class_name": "BlogPostQA"
       }
     ]
   },
@@ -42,17 +46,41 @@
       "new_sqlite_classes": [
         "ViewCounter"
       ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "BlogPostQA"
+      ]
     }
   ],
+  "kv_namespaces": [
+    {
+      "binding": "BLOG_POST_QA_CACHE",
+      "id": "ebdcf95e4fbe46719801f4de598840a7"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
   "vars": {
     "ENVIRONMENT": "production",
     "CLOUDFLARE_SITEVERIFY_URL": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
     "DESTINATION_EMAIL": "gray.kieran@protonmail.com",
     "ALLOWED_ORIGINS": "https://kgdev.me",
-    "ALLOWED_BLOG_PATHS": "blog-view-counter,event-sourcing-cloudflare,quest-exactly-once-p1,quest-exactly-once-p2"
+    "ALLOWED_BLOG_PATHS": "blog-view-counter,event-sourcing-cloudflare,quest-exactly-once-p1,quest-exactly-once-p2",
+    "VECTORIZE_INDEX_NAME": "blog-chunks",
+    "EMBEDDING_MODEL": "@cf/baai/bge-base-en-v1.5",
+    "GENERATION_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+    "QA_DAILY_CAP": "200"
   },
   "secrets": {
-    "required": ["CLOUDFLARE_TURNSTILE_SECRET_KEY", "CLOUDFLARE_EMAIL_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]
+    "required": [
+      "CLOUDFLARE_TURNSTILE_SECRET_KEY",
+      "CLOUDFLARE_EMAIL_API_TOKEN",
+      "CLOUDFLARE_ACCOUNT_ID",
+      "CLOUDFLARE_VECTORIZE_API_TOKEN"
+    ]
   },
   "env": {
     "dev": {
@@ -61,12 +89,21 @@
         "CLOUDFLARE_SITEVERIFY_URL": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
         "DESTINATION_EMAIL": "gray.kieran@protonmail.com",
         "ALLOWED_ORIGINS": "",
-        "ALLOWED_BLOG_PATHS": "blog-view-counter,event-sourcing-cloudflare,quest-exactly-once-p1,quest-exactly-once-p2"
+        "ALLOWED_BLOG_PATHS": "blog-view-counter,event-sourcing-cloudflare,quest-exactly-once-p1,quest-exactly-once-p2",
+        "VECTORIZE_INDEX_NAME": "blog-chunks",
+        "EMBEDDING_MODEL": "@cf/baai/bge-base-en-v1.5",
+        "GENERATION_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+        "QA_DAILY_CAP": "50"
       },
       "secrets": {
-        "required": ["CLOUDFLARE_TURNSTILE_SECRET_KEY", "CLOUDFLARE_EMAIL_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]
+        "required": [
+          "CLOUDFLARE_TURNSTILE_SECRET_KEY",
+          "CLOUDFLARE_EMAIL_API_TOKEN",
+          "CLOUDFLARE_ACCOUNT_ID",
+          "CLOUDFLARE_VECTORIZE_API_TOKEN"
+        ]
       },
-        "durable_objects": {
+      "durable_objects": {
         "bindings": [
           {
             "name": "VIEW_COUNTER",
@@ -81,7 +118,16 @@
             "ViewCounter"
           ]
         }
-      ]
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "BLOG_POST_QA_CACHE",
+          "id": "123"
+        }
+      ],
+      "ai": {
+        "binding": "AI"
+      }
     }
   }
 }

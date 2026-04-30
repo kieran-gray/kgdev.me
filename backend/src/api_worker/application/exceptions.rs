@@ -4,6 +4,7 @@ pub enum AppError {
     Unauthorised(String),
     InternalError(String),
     ValidationError(String),
+    RateLimited(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -13,6 +14,7 @@ impl std::fmt::Display for AppError {
             AppError::Unauthorised(msg) => write!(f, "Unauthorised: {msg}"),
             AppError::InternalError(msg) => write!(f, "Internal server error: {msg}"),
             AppError::ValidationError(msg) => write!(f, "Validation error: {msg}"),
+            AppError::RateLimited(msg) => write!(f, "Rate limited: {msg}"),
         }
     }
 }

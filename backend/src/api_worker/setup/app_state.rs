@@ -4,16 +4,23 @@ use worker::Env;
 
 use crate::api_worker::{
     api::client::DurableObjectClient,
-    application::{ContactMessageService, ContactMessageServiceTrait},
+    application::{
+        BlogQaService, BlogQaServiceTrait, ContactMessageService, ContactMessageServiceTrait,
+        QaCacheService,
+    },
     infrastructure::{
-        CloudflareEmailService, CloudflareRequestValidationService, WorkerHttpClient,
+        CloudflareEmailService, CloudflareRequestValidationService, KVCache, VectorizeRestService,
+        WorkerHttpClient, WorkersAiService,
     },
     setup::{Config, exceptions::SetupError},
 };
 
+const QA_CACHE_TTL_SECONDS: u64 = 60 * 60 * 24 * 30;
+
 pub struct AppState {
     pub config: Config,
     pub contact_message_service: Arc<dyn ContactMessageServiceTrait>,
+    pub blog_qa_service: Arc<dyn BlogQaServiceTrait>,
     pub do_client: DurableObjectClient,
 }
 
@@ -37,6 +44,36 @@ impl AppState {
         let contact_message_service =
             ContactMessageService::create(request_validation_service, email_service);
 
+        let ai_binding = env
+            .ai("AI")
+            .map_err(|_| SetupError::MissingVariable("AI".to_string()))?;
+        let ai_service = WorkersAiService::create(
+            ai_binding,
+            config.embedding_model.clone(),
+            config.generation_model.clone(),
+        );
+
+        let vectorize_service = VectorizeRestService::create(
+            config.cloudflare_account_id.clone(),
+            config.cloudflare_vectorize_api_token.clone(),
+            config.vectorize_index_name.clone(),
+            http_client.clone(),
+        );
+
+        let kv = env
+            .kv("BLOG_POST_QA_CACHE")
+            .map_err(|_| SetupError::MissingVariable("BLOG_POST_QA_CACHE".to_string()))?;
+        let kv_cache = Arc::new(KVCache::create(kv, QA_CACHE_TTL_SECONDS));
+        let qa_cache_service = QaCacheService::create(kv_cache);
+
+        let blog_qa_service = BlogQaService::create(
+            ai_service,
+            vectorize_service,
+            qa_cache_service,
+            config.generation_model.clone(),
+            config.qa_daily_cap,
+        );
+
         let do_client = DurableObjectClient::new(
             env.durable_object("VIEW_COUNTER")
                 .map_err(|_| SetupError::MissingVariable("VIEW_COUNTER".to_string()))?,
@@ -45,6 +82,7 @@ impl AppState {
         Ok(Self {
             config,
             contact_message_service,
+            blog_qa_service,
             do_client,
         })
     }
