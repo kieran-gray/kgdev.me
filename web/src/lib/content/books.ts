@@ -7,7 +7,7 @@ export type Book = BookEntry['data'];
 export async function getAllBooks(): Promise<Book[]> {
 	if (!features.books.enabled) return [];
 	const entries = await getCollection('books');
-	return entries.map((entry) => entry.data);
+	return entries.map((entry: BookEntry) => entry.data);
 }
 
 export function getCurrentlyReading(books: Book[]): Book[] {
