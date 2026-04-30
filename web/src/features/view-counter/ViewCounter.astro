@@ -1,6 +1,5 @@
 ---
 import { featureRuntime } from '@/config/features';
-import viewCounterScript from './script.ts?url';
 
 interface Props {
 	slug: string;
@@ -20,4 +19,6 @@ const wsUrl = featureRuntime.viewCounter.wsUrl;
 	<span id="vc-total"></span>
 </div>
 
-<script is:inline type="module" src={viewCounterScript}></script>
+<script>
+	import './script.ts';
+</script>

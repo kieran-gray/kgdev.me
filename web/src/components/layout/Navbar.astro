@@ -5,7 +5,6 @@ import { features } from '@/config/features';
 import SchemePicker from './SchemePicker.astro';
 import ThemeSwitch from './ThemeSwitch.astro';
 import MobileMenu from './MobileMenu.astro';
-import navbarScript from './navbar.script.ts?url';
 
 const { brand, nav } = siteConfig;
 const searchEnabled = features.search.enabled;
@@ -69,4 +68,6 @@ const navItems = nav.filter((item) => {
 
 <MobileMenu />
 
-<script is:inline type="module" src={navbarScript}></script>
+<script>
+	import './navbar.script.ts';
+</script>

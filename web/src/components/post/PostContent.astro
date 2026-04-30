@@ -1,6 +1,5 @@
 ---
 import Section from '../layout/Section.astro';
-import copyButtonsScript from './copy-buttons.script.ts?url';
 ---
 
 <Section>
@@ -11,4 +10,6 @@ import copyButtonsScript from './copy-buttons.script.ts?url';
 	</div>
 </Section>
 
-<script is:inline type="module" src={copyButtonsScript}></script>
+<script>
+	import './copy-buttons.script.ts';
+</script>

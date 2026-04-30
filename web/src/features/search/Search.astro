@@ -1,5 +1,4 @@
 ---
-import searchScript from './script.ts?url';
 import { features } from '@/config/features';
 
 const searchTargets = features.projects.enabled ? 'posts and projects' : 'posts';
@@ -49,4 +48,6 @@ const searchTargets = features.projects.enabled ? 'posts and projects' : 'posts'
 </dialog>
 
 
-<script is:inline type="module" src={searchScript}></script>
+<script>
+	import './script.ts';
+</script>
