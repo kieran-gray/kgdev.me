@@ -1,0 +1,38 @@
+---
+import { siteConfig } from '@/config/site';
+import { features } from '@/config/features';
+import SchemePicker from './SchemePicker.astro';
+import ThemeSwitch from './ThemeSwitch.astro';
+
+const navItems = siteConfig.nav.filter((item) => {
+	if (item.href === '/projects') return features.projects.enabled;
+	if (item.href === '/books') return features.books.enabled;
+	return true;
+});
+---
+
+<div
+	id="mobile-menu-backdrop"
+	class="fixed inset-0 z-40 hidden bg-black/30 backdrop-blur-sm opacity-0 transition-opacity duration-200 sm:hidden"
+	aria-hidden="true"
+></div>
+<div
+	id="mobile-menu"
+	class="fixed inset-x-3 top-20 z-50 hidden origin-top scale-95 opacity-0 rounded-xl border border-[var(--border-color)] bg-[var(--card-inner-bg)]/95 shadow-2xl backdrop-blur-sm transition-[opacity,transform] duration-200 ease-out sm:hidden"
+	role="dialog"
+	aria-modal="true"
+	aria-label="Navigation menu"
+>
+	<nav class="flex flex-col p-3">
+		{navItems.map((item) => (
+			<a href={item.href} class="border-b border-[var(--border-color)] py-3 hover:text-[var(--accent-500)]">
+				{item.label}
+			</a>
+		))}
+
+		<div class="flex items-center justify-between gap-2 py-2">
+			<SchemePicker id="scheme-button-mobile" menuId="scheme-menu-mobile" align="left" width="wide" />
+			<ThemeSwitch id="light-switch-mobile" />
+		</div>
+	</nav>
+</div>

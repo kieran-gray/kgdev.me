@@ -1,0 +1,21 @@
+---
+import PageLayout from '@/layouts/PageLayout.astro';
+import Section from '@/components/layout/Section.astro';
+import ProjectCard from '../ProjectCard.astro';
+import { siteConfig } from '@/config/site';
+import { getAllProjects } from '@/lib/content/projects';
+
+const pageTitle = `Projects | ${siteConfig.meta.title}`;
+const pageDescription = "Projects I've built: backends, full-stack apps, and infrastructure.";
+const projects = await getAllProjects();
+---
+
+<PageLayout head={{ title: pageTitle, description: pageDescription }} heading="Projects">
+	<Section>
+		<div class="flex flex-col gap-4">
+			{projects.map((p) => (
+				<ProjectCard project={p} />
+			))}
+		</div>
+	</Section>
+</PageLayout>

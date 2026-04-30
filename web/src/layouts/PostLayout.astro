@@ -1,0 +1,69 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import PostHeader from '@/components/post/PostHeader.astro';
+import PostContent from '@/components/post/PostContent.astro';
+import TableOfContents from '@/components/post/TableOfContents.astro';
+
+interface HeadProps {
+	title: string;
+	description: string;
+	type?: 'website' | 'article';
+	image?: string;
+	article?: {
+		publishedTime: string;
+		author: string;
+		tags?: string[];
+	};
+}
+
+interface TocHeading {
+	depth: number;
+	slug: string;
+	text: string;
+}
+
+interface Props {
+	head: HeadProps;
+	post: {
+		title: string;
+		author: string;
+		tags?: string[];
+		minutesRead?: string;
+		pubDate: Date;
+		slug: string;
+		isPinned?: boolean;
+		image?: {
+			src?: string;
+			alt?: string;
+		};
+	};
+	tocHeadings?: TocHeading[];
+}
+
+const { head, post, tocHeadings = [] } = Astro.props as Props;
+const showToc = tocHeadings.length >= 2;
+---
+
+<BaseLayout head={head}>
+	<slot name="head" slot="head" />
+	<div class={showToc ? 'post-outer post-has-toc' : 'post-outer'}>
+		<div class="post-main">
+			<PostHeader
+				title={post.title}
+				author={post.author}
+				tags={post.tags ?? []}
+				minutesRead={post.minutesRead}
+				pubDate={post.pubDate}
+				slug={post.slug}
+				isPinned={post.isPinned}
+				img={post.image}
+			/>
+			<PostContent><slot /></PostContent>
+		</div>
+		{showToc && (
+			<aside class="post-toc" aria-label="Table of contents">
+				<TableOfContents headings={tocHeadings} />
+			</aside>
+		)}
+	</div>
+</BaseLayout>

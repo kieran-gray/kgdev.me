@@ -1,0 +1,61 @@
+---
+import Section from '../layout/Section.astro';
+import Social from '../ui/Social.astro';
+import AsciiHeader from '../ui/AsciiHeader.astro';
+import { siteConfig } from '@/config/site';
+import { socialIcons } from '@/config/theme';
+
+interface Props {
+	headline: string;
+	currentRole?: {
+		title: string;
+		org?: string;
+		orgUrl?: string;
+		summary?: string;
+	};
+}
+
+const { author, social } = siteConfig;
+const { headline, currentRole } = Astro.props as Props;
+
+---
+
+<Section>
+	<br />
+	<h1 class="sr-only">{author.name}</h1>
+	<div class="pb-4 pt-4">
+		<AsciiHeader text={headline} ariaLabel={author.name} />
+	</div>
+	<div class="text-sm leading-6 text-[var(--muted-text)] [&_a]:underline [&_a]:transition [&_a:hover]:text-[var(--accent-500)] [&_p]:py-2 [&_strong]:font-semibold [&_strong]:text-[var(--accent-500)]">
+		<slot />
+	</div>
+
+	{currentRole?.title && (
+		<div class="mt-5 mb-5 border border-[var(--border-color)] bg-[var(--card-inner-bg)]/70 p-4 text-sm">
+			<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-text)]">Currently</p>
+			<p class="text-[var(--text-color)]">
+				<span class="font-semibold text-[var(--accent-700)]">{currentRole.title}</span>
+				{currentRole.org && (
+					<>
+						{' · '}
+						{currentRole.orgUrl ? (
+							<a href={currentRole.orgUrl} target="_blank" class="underline hover:text-[var(--accent-500)]" rel="noopener noreferrer">{currentRole.org}</a>
+						) : (
+							<span>{currentRole.org}</span>
+						)}
+					</>
+				)}
+			</p>
+			{currentRole.summary && (
+				<p class="mt-2 text-[var(--muted-text)]">{currentRole.summary}</p>
+			)}
+		</div>
+	)}
+	<div class="flex">
+		{social.map((link) => (
+			<Social href={link.href} label={link.label}>
+				<Fragment set:html={socialIcons[link.kind]} />
+			</Social>
+		))}
+	</div>
+</Section>

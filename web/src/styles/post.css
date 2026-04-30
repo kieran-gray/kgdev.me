@@ -1,0 +1,38 @@
+.post-outer {
+	width: 100%;
+	max-width: 768px;
+	margin: 0 auto;
+}
+
+.post-toc {
+	display: none;
+}
+
+@media (min-width: 1280px) {
+	.post-outer.post-has-toc {
+		display: grid;
+		grid-template-columns: 1fr minmax(0, 768px) 1fr;
+		grid-template-areas: '. main toc';
+		column-gap: 3rem;
+		max-width: 100%;
+		align-items: start;
+		padding: 0 2rem;
+	}
+
+	.post-has-toc .post-main {
+		grid-area: main;
+		min-width: 0;
+	}
+
+	.post-has-toc .post-toc {
+		display: block;
+		grid-area: toc;
+		position: sticky;
+		top: 2rem;
+		max-height: calc(100vh - 4rem);
+		overflow-y: auto;
+		padding-top: 1.5rem;
+		width: 220px;
+		max-width: 100%;
+	}
+}

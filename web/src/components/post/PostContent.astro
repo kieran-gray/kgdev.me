@@ -1,0 +1,15 @@
+---
+import Section from '../layout/Section.astro';
+---
+
+<Section>
+    <div
+		class="content prose prose-img:rounded-lg prose-img:shadow-xl mt-8 max-w-none text-base leading-8 text-[var(--text-color)]"
+	>
+		<slot />
+	</div>
+</Section>
+
+<script>
+	import './copy-buttons.script.ts';
+</script>

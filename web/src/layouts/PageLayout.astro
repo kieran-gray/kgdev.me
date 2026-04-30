@@ -1,0 +1,39 @@
+---
+import Section from '@/components/layout/Section.astro';
+import Heading from '@/components/ui/Heading.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+
+interface HeadProps {
+	title: string;
+	description: string;
+	type?: 'website' | 'article';
+	image?: string;
+	article?: {
+		publishedTime: string;
+		author: string;
+		tags?: string[];
+	};
+}
+
+interface Props {
+	head: HeadProps;
+	heading: string;
+	intro?: string;
+}
+
+const { head, heading, intro } = Astro.props as Props;
+---
+
+<BaseLayout head={head}>
+	<slot name="head" slot="head" />
+	<Section>
+		<Heading title={heading} />
+		{intro && <p class="mt-2 text-[var(--muted-text)]">{intro}</p>}
+		{Astro.slots.has('after-heading') && (
+			<div class="pt-2 text-center">
+				<slot name="after-heading" />
+			</div>
+		)}
+	</Section>
+	<slot />
+</BaseLayout>

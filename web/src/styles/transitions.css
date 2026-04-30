@@ -1,0 +1,49 @@
+@keyframes kg-fade-out {
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes kg-fade-in {
+	from {
+		opacity: 0;
+	}
+}
+
+@keyframes kg-dots-pulse {
+	0% {
+		opacity: 0;
+	}
+	40% {
+		opacity: 0.1;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	::view-transition-old(root) {
+		animation: 140ms ease-out both kg-fade-out;
+	}
+	::view-transition-new(root) {
+		animation: 140ms ease-in both kg-fade-in;
+	}
+}
+
+html.is-transitioning::after {
+	content: '';
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	z-index: 9999;
+	background-image: radial-gradient(var(--accent-500) 1px, transparent 1px);
+	background-size: 20px 20px;
+	animation: kg-dots-pulse 180ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html.is-transitioning::after {
+		display: none;
+	}
+}

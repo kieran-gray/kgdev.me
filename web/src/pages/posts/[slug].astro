@@ -1,0 +1,67 @@
+---
+import PostLayout from '@/layouts/PostLayout.astro';
+import { buildBlogPostingSchema } from '@/lib/seo/jsonLd';
+import { getCollection, type CollectionEntry } from 'astro:content';
+import { siteConfig } from '@/config/site';
+import { features } from '@/config/features';
+
+export async function getStaticPaths() {
+	const posts = await getCollection('posts');
+	return posts.map((entry) => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+
+interface Props {
+	entry: CollectionEntry<'posts'>;
+}
+
+const { entry } = Astro.props as Props;
+const { Content, headings, remarkPluginFrontmatter } = await entry.render();
+const minutesRead = remarkPluginFrontmatter?.minutesRead as string | undefined;
+const data = entry.data;
+const slug = entry.slug;
+const ogImage = features.og.enabled
+	? new URL(`/og/${slug}.png`, Astro.site).toString()
+	: data.image?.src || siteConfig.ogFallbackImage || '';
+
+const tocHeadings = headings.filter((h) => h.depth === 2 || h.depth === 3);
+
+const blogPostingSchema = buildBlogPostingSchema({
+	title: data.title,
+	description: data.description,
+	pubDate: data.pubDate,
+	author: data.author,
+	tags: data.tags,
+	url: Astro.url.href,
+	image: ogImage
+});
+---
+
+<PostLayout
+	head={{
+		title: data.title,
+		description: data.description,
+		type: 'article',
+		image: ogImage,
+		article: {
+			publishedTime: data.pubDate.toISOString(),
+			author: data.author,
+			tags: data.tags
+		}
+	}}
+	post={{
+		title: data.title,
+		author: data.author,
+		tags: data.tags,
+		minutesRead,
+		pubDate: data.pubDate,
+		slug,
+		isPinned: data.isPinned,
+		image: { src: data.image?.src, alt: data.image?.alt }
+	}}
+	tocHeadings={tocHeadings}
+>
+	<Fragment slot="head">
+		<script is:inline type="application/ld+json" set:html={JSON.stringify(blogPostingSchema)} />
+	</Fragment>
+	<Content />
+</PostLayout>

@@ -1,0 +1,50 @@
+---
+import { formatDate } from '@/lib/format/date';
+import Tags from '../content/Tags.astro';
+import PinnedBadge from './PinnedBadge.astro';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+	post: CollectionEntry<'posts'> & { minutesRead?: string };
+	showExcerpt?: boolean;
+}
+
+const { post, showExcerpt = true } = Astro.props;
+const { data, slug } = post;
+const minutesRead = post.minutesRead;
+const isPinned = data.isPinned === true;
+const href = `/posts/${slug}/`;
+---
+<a href={href} class="group">
+	<div 
+		class="h-full bg-[var(--card-outer-bg)] p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] transition hover:bg-[var(--accent-700)]"
+	>
+		<div
+			class="flex h-full w-full flex-col bg-[var(--card-inner-bg)] p-4 text-[var(--text-color)] opacity-95"
+		>
+			<div class="flex-auto">
+				<div class="flex flex-col justify-between gap-2 pb-4 text-xs">
+					<div class="flex items-center gap-2">
+						{isPinned && <PinnedBadge size="sm" />}
+						<p>{formatDate(data.pubDate)}</p>
+					</div>
+					{
+						minutesRead && (
+							<div>
+								<p class="font-bold">{minutesRead}</p>
+							</div>
+						)
+					}
+				</div>
+
+				<h2 class="pb-4 text-lg font-bold">{data.title}</h2>
+
+				<Tags tags={data.tags} />
+				{showExcerpt && <p class="line-clamp-6 pt-4 text-[var(--muted-text)] ">{data.excerpt}</p>}
+			</div>
+			<p class="pt-4 text-[var(--link)] underline hover:text-[var(--link-hover)]">
+				read more →
+			</p>
+		</div>
+	</div>
+</a>

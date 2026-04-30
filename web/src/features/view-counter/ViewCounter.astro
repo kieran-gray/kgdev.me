@@ -1,0 +1,24 @@
+---
+import { featureRuntime } from '@/config/features';
+
+interface Props {
+	slug: string;
+}
+const { slug } = Astro.props;
+const wsUrl = featureRuntime.viewCounter.wsUrl;
+---
+
+<div
+	id="view-counter"
+	data-slug={slug}
+	data-ws-url={wsUrl}
+	class="flex items-center gap-2 text-sm text-[var(--muted-text)]"
+>
+	<span id="vc-live"></span>
+	<span id="vc-sep" class="hidden">·</span>
+	<span id="vc-total"></span>
+</div>
+
+<script>
+	import './script.ts';
+</script>

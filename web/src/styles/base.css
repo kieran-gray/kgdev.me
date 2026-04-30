@@ -1,0 +1,14 @@
+@font-face {
+	font-family: 'JetBrains Mono';
+	src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff2');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+.ascii-art,
+.ascii-art pre {
+	font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}

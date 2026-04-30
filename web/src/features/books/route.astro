@@ -1,0 +1,21 @@
+---
+import PageLayout from '@/layouts/PageLayout.astro';
+import CurrentlyReading from './CurrentlyReading.astro';
+import BookList from './BookList.astro';
+
+import { getAllBooks, getCurrentlyReading, getReadHistory } from '@/lib/content/books';
+
+const books = await getAllBooks();
+const currentlyReading = getCurrentlyReading(books);
+const readHistory = getReadHistory(books);
+const years = Object.keys(readHistory).sort((a, b) => b.localeCompare(a));
+
+const pageTitle = 'Books';
+const pageDescription = 'A list of books I am currently reading and have read in the past.';
+---
+
+<PageLayout head={{ title: pageTitle, description: pageDescription }} heading="Books">
+	<CurrentlyReading books={currentlyReading} />
+
+	<BookList readHistory={readHistory} years={years} />
+</PageLayout>

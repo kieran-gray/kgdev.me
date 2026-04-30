@@ -1,0 +1,3449 @@
+[
+	{
+		"id": "34640861",
+		"title": "The Reactionary Mind: Conservatism from Edmund Burke to Donald Trump",
+		"author": "Robin",
+		"rating": 4,
+		"dateRead": "2021-03-25",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "256008",
+		"title": "Lonesome Dove",
+		"author": "Larry McMurtry",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "currently-reading",
+		"readCount": 1
+	},
+	{
+		"id": "139069",
+		"title": "Endurance: Shackleton's Incredible Voyage",
+		"author": "Alfred Lansing",
+		"rating": 5,
+		"dateRead": "2026-03-10",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "2823",
+		"title": "The Birth of Tragedy",
+		"author": "Friedrich Nietzsche",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 1
+	},
+	{
+		"id": "135479",
+		"title": "Cat’s Cradle",
+		"author": "Kurt Vonnegut Jr.",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "8146619",
+		"title": "The Right Stuff",
+		"author": "Tom Wolfe",
+		"rating": 5,
+		"dateRead": "2026-03-05",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "12370085",
+		"title": "All the Lights",
+		"author": "Clemens Meyer",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "325785",
+		"title": "Capital: A Critique of Political Economy, Volume 1",
+		"author": "Karl Marx",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1105434",
+		"title": "Essays on Thomas Mann",
+		"author": "György Lukács",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "985519",
+		"title": "The Masks of God, Volume 4: Creative Mythology",
+		"author": "Joseph Campbell",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "219197668",
+		"title": "Residues: Time, Change, and Uncertainty in Software Architecture",
+		"author": "Barry    O'Reilly",
+		"rating": 4,
+		"dateRead": "2025-05-20",
+		"shelf": "read",
+		"readCount": 2
+	},
+	{
+		"id": "59516353",
+		"title": "Catafalque: Carl Jung and the End of Humanity",
+		"author": "Peter Kingsley",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 1
+	},
+	{
+		"id": "204316857",
+		"title": "The Empusium",
+		"author": "Olga Tokarczuk",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 1
+	},
+	{
+		"id": "332613",
+		"title": "One Flew Over the Cuckoo’s Nest",
+		"author": "Ken Kesey",
+		"rating": 5,
+		"dateRead": "2021-01-03",
+		"shelf": "read",
+		"readCount": 2
+	},
+	{
+		"id": "88076",
+		"title": "Joseph and His Brothers",
+		"author": "Thomas Mann",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 1
+	},
+	{
+		"id": "28602719",
+		"title": "Domain-Driven Design Distilled",
+		"author": "Vaughn Vernon",
+		"rating": 3,
+		"dateRead": "2024-12-14",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "209000061",
+		"title": "The Essential Harlem Detectives: A Rage in Harlem, The Real Cool Killers, The Crazy Kill, Cotton Comes to Harlem",
+		"author": "Chester Himes",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "35167685",
+		"title": "\"Surely You're Joking, Mr. Feynman!\": Adventures of a Curious Character",
+		"author": "Richard P. Feynman",
+		"rating": 3,
+		"dateRead": "2024-12-04",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "357641",
+		"title": "The Hero Within: Six Archetypes We Live By",
+		"author": "Carol S. Pearson",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "1573375",
+		"title": "Mario and the Magician and Other Stories",
+		"author": "Thomas Mann",
+		"rating": 4,
+		"dateRead": "2024-11-29",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "137328",
+		"title": "The Black Swan",
+		"author": "Thomas Mann",
+		"rating": 4,
+		"dateRead": "2024-11-29",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6831877",
+		"title": "The Tables of the Law",
+		"author": "Thomas Mann",
+		"rating": 4,
+		"dateRead": "2024-11-23",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "56337680",
+		"title": "Herscht 07769",
+		"author": "László Krasznahorkai",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "324172",
+		"title": "Re-Visioning Psychology",
+		"author": "James Hillman",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "88081",
+		"title": "The Transposed Heads: A Legend of India",
+		"author": "Thomas Mann",
+		"rating": 5,
+		"dateRead": "2024-11-19",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "13793398",
+		"title": "Disorder and Early Sorrow",
+		"author": "Thomas Mann",
+		"rating": 3,
+		"dateRead": "2024-11-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "625050",
+		"title": "Bashan and I",
+		"author": "Thomas Mann",
+		"rating": 3,
+		"dateRead": "2024-11-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "539128",
+		"title": "Mario and the Magician",
+		"author": "Thomas Mann",
+		"rating": 4,
+		"dateRead": "2024-11-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "49766169",
+		"title": "Good Old Neon",
+		"author": "David Foster Wallace",
+		"rating": 5,
+		"dateRead": "2024-11-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "34440",
+		"title": "Doctor Faustus",
+		"author": "Thomas Mann",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "40489681",
+		"title": "What's Right For Me?: Making decisions in pregnancy and childbirth",
+		"author": "Sara Wickham",
+		"rating": 5,
+		"dateRead": "2024-11-14",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "144937",
+		"title": "The Idea of the Holy",
+		"author": "Rudolf Otto",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "59697228",
+		"title": "In Your Own Time: How western medicine controls the start of labour and why this needs to stop",
+		"author": "Sara   Wickham",
+		"rating": 4,
+		"dateRead": "2024-11-10",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "36302721",
+		"title": "Technic and Magic: The Reconstruction of Reality",
+		"author": "Federico Campagna",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "886104",
+		"title": "The Steep Approach to Garbadale",
+		"author": "Iain Banks",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 1
+	},
+	{
+		"id": "175145",
+		"title": "The New Being",
+		"author": "Paul Tillich",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 1
+	},
+	{
+		"id": "122600",
+		"title": "Iron John: A Book About Men",
+		"author": "Robert  Bly",
+		"rating": 5,
+		"dateRead": "2024-10-27",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "17934648",
+		"title": "Ask Me: 100 Essential Poems of William Stafford",
+		"author": "William Stafford",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "9460810",
+		"title": "Fate and Destiny, The Two Agreements of the Soul",
+		"author": "Michael Meade",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "10260",
+		"title": "The Pleasure of Finding Things Out: The Best Short Works of Richard P. Feynman",
+		"author": "Richard P. Feynman",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "35167718",
+		"title": "\"What Do You Care What Other People Think?\": Further Adventures of a Curious Character",
+		"author": "Richard P. Feynman",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "210943364",
+		"title": "The Message",
+		"author": "Ta-Nehisi Coates",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "274827",
+		"title": "The Technological Society",
+		"author": "Jacques Ellul",
+		"rating": 5,
+		"dateRead": "2024-10-12",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1182422",
+		"title": "Morality and Beyond",
+		"author": "Paul Tillich",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "162759",
+		"title": "The Birth and Death of Meaning: An Interdisciplinary Perspective on the Problem of Man",
+		"author": "Ernest Becker",
+		"rating": 5,
+		"dateRead": "2024-10-10",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "77920745",
+		"title": "A Day in the Life of Abed Salama: Anatomy of a Jerusalem Tragedy",
+		"author": "Nathan Thrall",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "61812417",
+		"title": "Knowing What We Know: The Transmission of Knowledge: From Ancient Wisdom to Modern Magic",
+		"author": "Simon Winchester",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "34459",
+		"title": "Metaphors We Live By",
+		"author": "George Lakoff",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "114230",
+		"title": "Bartleby the Scrivener",
+		"author": "Herman Melville",
+		"rating": 4,
+		"dateRead": "2024-10-05",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "479669",
+		"title": "The Fall",
+		"author": "Simon Mawer",
+		"rating": 3,
+		"dateRead": "2024-10-04",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "156188",
+		"title": "Omensetter's Luck",
+		"author": "William H. Gass",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "25845273",
+		"title": "The Great Divorce",
+		"author": "C.S. Lewis",
+		"rating": 5,
+		"dateRead": "2024-10-01",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "29430725",
+		"title": "How to Talk So Little Kids Will Listen: A Survival Guide to Life with Children Ages 2-7",
+		"author": "Joanna Faber",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "82660",
+		"title": "Tonio Kröger",
+		"author": "Thomas Mann",
+		"rating": 5,
+		"dateRead": "2024-09-29",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "53061",
+		"title": "Death in Venice",
+		"author": "Thomas Mann",
+		"rating": 4,
+		"dateRead": "2024-09-28",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6088007",
+		"title": "Neuromancer",
+		"author": "William Gibson",
+		"rating": 4,
+		"dateRead": "2024-09-28",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "25825420",
+		"title": "The Abolition of Man",
+		"author": "C.S. Lewis",
+		"rating": 4,
+		"dateRead": "2024-09-23",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "9544",
+		"title": "Owning Your Own Shadow: Understanding the Dark Side of the Psyche",
+		"author": "Robert A. Johnson",
+		"rating": 3,
+		"dateRead": "2024-09-21",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "62874229",
+		"title": "The Nurture Revolution: Grow Your Baby’s Brain and Transform Their Mental Health through the Art of Nurtured Parenting",
+		"author": "Greer Kirshenbaum",
+		"rating": 3,
+		"dateRead": "2024-09-19",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1051768",
+		"title": "The Magic Mountain",
+		"author": "Thomas Mann",
+		"rating": 5,
+		"dateRead": "2024-09-14",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "5304",
+		"title": "De Profundis and Other Writings",
+		"author": "Oscar Wilde",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "730139",
+		"title": "Gravity and Grace",
+		"author": "Simone Weil",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "35511",
+		"title": "Pathways to Bliss: Mythology and Personal Transformation",
+		"author": "Joseph Campbell",
+		"rating": 5,
+		"dateRead": "2024-08-20",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "46201",
+		"title": "The Selected Poetry of Rainer Maria Rilke",
+		"author": "Rainer Maria Rilke",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "331705",
+		"title": "She: Understanding Feminine Psychology",
+		"author": "Robert A. Johnson",
+		"rating": 4,
+		"dateRead": "2024-08-14",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "482105",
+		"title": "Transformation: Understanding the Three Levels of Masculine Consciousness",
+		"author": "Robert A. Johnson",
+		"rating": 4,
+		"dateRead": "2024-08-07",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "129272",
+		"title": "Leaving My Father's House: A Journey to Conscious Femininity",
+		"author": "Marion Woodman",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "362413",
+		"title": "The Road to Mecca",
+		"author": "Muhammad Asad",
+		"rating": 5,
+		"dateRead": "2024-08-05",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "61661",
+		"title": "The Varieties of Scientific Experience: A Personal View of the Search for God",
+		"author": "Carl Sagan",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "53981",
+		"title": "The Great Transformation: The Political and Economic Origins of Our Time",
+		"author": "Karl Polanyi",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "11138",
+		"title": "Mere Christianity",
+		"author": "C.S. Lewis",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "7063431",
+		"title": "Islamic Mystical Poetry: Sufi Verse from the Early Mystics to Rumi",
+		"author": "Mahmood Jamal",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "424896",
+		"title": "Balancing Heaven and Earth: A Memoir of Visions, Dreams, and Realizations",
+		"author": "Robert A. Johnson",
+		"rating": 5,
+		"dateRead": "2024-07-23",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "29100335",
+		"title": "Essential Bukowski: Poetry",
+		"author": "Charles Bukowski",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "856602",
+		"title": "Zen and the Psychology of Transformation: The Supreme Doctrine",
+		"author": "Hubert Benoît",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "588138",
+		"title": "The Hero with a Thousand Faces",
+		"author": "Joseph Campbell",
+		"rating": 5,
+		"dateRead": "2024-07-19",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "28448694",
+		"title": "The Journey of the Heroic Parent: Your Child's Struggle & The Road Home",
+		"author": "Brad M. Reedy",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "74886356",
+		"title": "A Life of Meaning: Relocating Your Center of Spiritual Gravity",
+		"author": "James Hollis",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "153605",
+		"title": "The Pentagon of Power",
+		"author": "Lewis Mumford",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "274826",
+		"title": "Propaganda: The Formation of Men's Attitudes",
+		"author": "Jacques Ellul",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "99944",
+		"title": "The Bhagavad Gita",
+		"author": "Krishna-Dwaipayana Vyasa",
+		"rating": 5,
+		"dateRead": "2024-07-02",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "605684",
+		"title": "War & War",
+		"author": "László Krasznahorkai",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "35513",
+		"title": "A Joseph Campbell Companion: Reflections on the Art of Living",
+		"author": "Joseph Campbell",
+		"rating": 5,
+		"dateRead": "2024-06-28",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6553843",
+		"title": "Hard Rain Falling",
+		"author": "Don Carpenter",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "11650",
+		"title": "American Pastoral",
+		"author": "Philip Roth",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "124034693",
+		"title": "White Holes",
+		"author": "Carlo Rovelli",
+		"rating": 3,
+		"dateRead": "2024-06-23",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "110050",
+		"title": "We: Understanding the Psychology of Romantic Love",
+		"author": "Robert A. Johnson",
+		"rating": 5,
+		"dateRead": "2024-06-23",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "77265004",
+		"title": "The Iliad",
+		"author": "Homer",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "1381",
+		"title": "The Odyssey",
+		"author": "Homer",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "27308",
+		"title": "The Spiral Staircase: My Climb Out of Darkness",
+		"author": "Karen Armstrong",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "28025",
+		"title": "The Myth of the Eternal Return or, Cosmos and History",
+		"author": "Mircea Eliade",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "4950018",
+		"title": "What Matters Most: Living a More Considered Life",
+		"author": "James Hollis",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "75665931",
+		"title": "The Maniac",
+		"author": "Benjamín Labatut",
+		"rating": 4,
+		"dateRead": "2024-06-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "768148",
+		"title": "The Water of Life: Initiation and the Tempering of the Soul",
+		"author": "Michael Meade",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "162332",
+		"title": "The Sailor Who Fell from Grace with the Sea",
+		"author": "Yukio Mishima",
+		"rating": 5,
+		"dateRead": "2024-06-10",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "17961",
+		"title": "Collected Fictions",
+		"author": "Jorge Luis Borges",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "180671",
+		"title": "Ego and Archetype: Individuation and the Religious Function of the Psyche",
+		"author": "Edward F. Edinger",
+		"rating": 3,
+		"dateRead": "2024-06-07",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6476509",
+		"title": "The Invention of the Jewish People",
+		"author": "Shlomo Sand",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "823733",
+		"title": "The Creation of Consciousness: Jung's Myth for Modern Man",
+		"author": "Edward F. Edinger",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "669028",
+		"title": "The Trickster and the Paranormal",
+		"author": "George P. Hansen",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "62069739",
+		"title": "When We Cease to Understand the World",
+		"author": "Benjamín Labatut",
+		"rating": 5,
+		"dateRead": "2024-06-01",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "53000876",
+		"title": "Contact",
+		"author": "Carl Sagan",
+		"rating": 5,
+		"dateRead": "2024-05-30",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "27317",
+		"title": "Confucian Analects, The Great Learning & The Doctrine of the Mean",
+		"author": "Confucius",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "15820216",
+		"title": "The Study Quran: A New Translation and Commentary",
+		"author": "Seyyed Hossein Nasr",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 1
+	},
+	{
+		"id": "23252362",
+		"title": "Quran in English: Modern English Translation. Clear and Easy to Understand.",
+		"author": "Talal Itani",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 1
+	},
+	{
+		"id": "612188",
+		"title": "Memories, Dreams, Reflections",
+		"author": "C.G. Jung",
+		"rating": 4,
+		"dateRead": "2024-05-22",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "10638",
+		"title": "The Road to Reality: A Complete Guide to the Laws of the Universe",
+		"author": "Roger Penrose",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "70535",
+		"title": "2001: A Space Odyssey",
+		"author": "Arthur C. Clarke",
+		"rating": 5,
+		"dateRead": "2024-05-20",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "15916",
+		"title": "The True Believer: Thoughts on the Nature of Mass Movements",
+		"author": "Eric Hoffer",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "589278",
+		"title": "He: Understanding Masculine Psychology",
+		"author": "Robert A. Johnson",
+		"rating": 4,
+		"dateRead": "2024-04-29",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "204773",
+		"title": "Under Saturn's Shadow: The Wounding and Healing of Men",
+		"author": "James Hollis",
+		"rating": 5,
+		"dateRead": "2024-05-07",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1404609",
+		"title": "The Problem of the Puer Aeternus",
+		"author": "Marie-Louise von Franz",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "123632",
+		"title": "Man and His Symbols",
+		"author": "C.G. Jung",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "22478",
+		"title": "The Origin of Consciousness in the Breakdown of the Bicameral Mind",
+		"author": "Julian Jaynes",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "22545857",
+		"title": "The Worm at the Core: On the Role of Death in Life",
+		"author": "Sheldon Solomon",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "162757",
+		"title": "Escape from Evil",
+		"author": "Ernest Becker",
+		"rating": 5,
+		"dateRead": "2024-04-28",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "5131",
+		"title": "The Perennial Philosophy",
+		"author": "Aldous Huxley",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "821380",
+		"title": "Myths to Live By",
+		"author": "Joseph Campbell",
+		"rating": 4,
+		"dateRead": "2024-04-25",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "5907",
+		"title": "The Hobbit, or There and Back Again",
+		"author": "J.R.R. Tolkien",
+		"rating": 4,
+		"dateRead": "2024-04-23",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "34272476",
+		"title": "Devotions: The Selected Poems of Mary Oliver",
+		"author": "Mary Oliver",
+		"rating": 4,
+		"dateRead": "2024-04-19",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "175141",
+		"title": "The Courage to Be",
+		"author": "Paul Tillich",
+		"rating": 3,
+		"dateRead": "2024-04-16",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "530114",
+		"title": "\"Believing Women\" in Islam: Unreading Patriarchal Interpretations of the Qur'an",
+		"author": "Asma Barlas",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "35519",
+		"title": "The Power of Myth",
+		"author": "Joseph Campbell",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "579455",
+		"title": "Inner Work: Using Dreams and Active Imagination for Personal Growth",
+		"author": "Robert A. Johnson",
+		"rating": 5,
+		"dateRead": "2024-04-13",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "2761",
+		"title": "The Denial of Death",
+		"author": "Ernest Becker",
+		"rating": 5,
+		"dateRead": "2024-04-07",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "166997",
+		"title": "Stoner",
+		"author": "John  Williams",
+		"rating": 5,
+		"dateRead": "2024-04-05",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "182733784",
+		"title": "Nuclear War: A Scenario",
+		"author": "Annie Jacobsen",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "665852",
+		"title": "Man's Search for Himself",
+		"author": "Rollo May",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "144925",
+		"title": "Muhammad: His Life Based on the Earliest Sources",
+		"author": "Martin Lings",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "495614",
+		"title": "Four Archetypes",
+		"author": "C.G. Jung",
+		"rating": 3,
+		"dateRead": "2024-03-29",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "21182",
+		"title": "The Wisdom of Life",
+		"author": "Arthur Schopenhauer",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "646175",
+		"title": "Modern Man in Search of a Soul",
+		"author": "C.G. Jung",
+		"rating": 4,
+		"dateRead": "2024-03-27",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "55964507",
+		"title": "Reflecting on the Names of Allah",
+		"author": "Jinan Yousef",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "5506283",
+		"title": "We Become What We Worship: A Biblical Theology of Idolatry",
+		"author": "Gregory K. Beale",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "59112558",
+		"title": "Veteranhood: Rage and Hope in British Ex-Military Life",
+		"author": "Joe Glenton",
+		"rating": 3,
+		"dateRead": "2024-03-22",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "44492285",
+		"title": "Dune Messiah",
+		"author": "Frank Patrick Herbert",
+		"rating": 3,
+		"dateRead": "2024-03-21",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "25772375",
+		"title": "Dune",
+		"author": "Frank Patrick Herbert",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 2
+	},
+	{
+		"id": "432223",
+		"title": "This is It and Other Essays on Zen and Spiritual Experience",
+		"author": "Alan W. Watts",
+		"rating": 3,
+		"dateRead": "2024-03-16",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "41069",
+		"title": "Stand on Zanzibar",
+		"author": "John Brunner",
+		"rating": 3,
+		"dateRead": "2024-03-14",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "331256",
+		"title": "Roadside Picnic",
+		"author": "Arkady Strugatsky",
+		"rating": 5,
+		"dateRead": "2024-03-09",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "15958503",
+		"title": "Reflections",
+		"author": "Charles Le Gai Eaton",
+		"rating": 4,
+		"dateRead": "2024-03-08",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "88432",
+		"title": "Life and Fate",
+		"author": "Vasily Grossman",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "683887",
+		"title": "King of the Castle: Choice and Responsibility in the Modern World",
+		"author": "Charles Le Gai Eaton",
+		"rating": 4,
+		"dateRead": "2024-03-05",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "205218",
+		"title": "Ethics",
+		"author": "Baruch Spinoza",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "717107",
+		"title": "Remembering God : Reflections on Islam",
+		"author": "Charles Le Gai Eaton",
+		"rating": 4,
+		"dateRead": "2024-02-19",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "79325",
+		"title": "Islam and the Destiny of Man",
+		"author": "Charles Le Gai Eaton",
+		"rating": 5,
+		"dateRead": "2024-02-12",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "12051",
+		"title": "Their Heads are Green and Their Hands are Blue: Scenes from the Non-Christian World",
+		"author": "Paul Bowles",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "123845",
+		"title": "Self-Reliance and Other Essays",
+		"author": "Ralph Waldo Emerson",
+		"rating": 4,
+		"dateRead": "2024-01-29",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1772910",
+		"title": "White Nights",
+		"author": "Fyodor Dostoyevsky",
+		"rating": 4,
+		"dateRead": "2024-01-20",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "16640",
+		"title": "The Sorrows of Young Werther",
+		"author": "Johann Wolfgang von Goethe",
+		"rating": 4,
+		"dateRead": "2024-01-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "48635408",
+		"title": "Men Who Hate Women: The Extremism Nobody is Talking About",
+		"author": "Laura Bates",
+		"rating": 4,
+		"dateRead": "2024-01-14",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "415816",
+		"title": "Above the River: The Complete Poems",
+		"author": "James Wright",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "1547992",
+		"title": "Selected Poems",
+		"author": "Pablo Neruda",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "54304028",
+		"title": "Hunt, Gather, Parent: What Ancient Cultures Can Teach Us About the Lost Art of Raising Happy, Helpful Little Humans",
+		"author": "Michaeleen Doucleff",
+		"rating": 2,
+		"dateRead": "2024-01-11",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "9592",
+		"title": "Mother Night",
+		"author": "Kurt Vonnegut Jr.",
+		"rating": 4,
+		"dateRead": "2024-01-02",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "457228",
+		"title": "Butcher's Crossing",
+		"author": "John  Williams",
+		"rating": 5,
+		"dateRead": "2023-12-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "21913812",
+		"title": "This Changes Everything: Capitalism vs. The Climate",
+		"author": "Naomi Klein",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "80449",
+		"title": "On the Genealogy of Morals",
+		"author": "Friedrich Nietzsche",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "18912",
+		"title": "The Sublime Object of Ideology",
+		"author": "Slavoj Žižek",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "1124178",
+		"title": "Beast and Man",
+		"author": "Mary Midgley",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "4406",
+		"title": "East of Eden",
+		"author": "John Steinbeck",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "434903",
+		"title": "The Rings of Saturn",
+		"author": "W.G. Sebald",
+		"rating": 5,
+		"dateRead": "2023-11-16",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1824325",
+		"title": "You Shall Be as Gods: A Radical Interpretation of the Old Testament and Its Traditions",
+		"author": "Erich Fromm",
+		"rating": 4,
+		"dateRead": "2023-11-16",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "5107",
+		"title": "The Catcher in the Rye",
+		"author": "J.D. Salinger",
+		"rating": 3,
+		"dateRead": "2023-11-16",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "18373",
+		"title": "Flowers for Algernon",
+		"author": "Daniel Keyes",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 2
+	},
+	{
+		"id": "337427",
+		"title": "Nietzsche and the Vicious Circle",
+		"author": "Pierre Klossowski",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "27833494",
+		"title": "Dark Money: The Hidden History of the Billionaires Behind the Rise of the Radical Right",
+		"author": "Jane Mayer",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "58537332",
+		"title": "The Myth of Normal: Trauma, Illness, and Healing in a Toxic Culture",
+		"author": "Gabor Maté",
+		"rating": 5,
+		"dateRead": "2023-06-16",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "17601",
+		"title": "The Will to Change: Men, Masculinity, and Love",
+		"author": "bell hooks",
+		"rating": 4,
+		"dateRead": "2023-06-03",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "17349",
+		"title": "The Demon-Haunted World: Science as a Candle in the Dark",
+		"author": "Carl Sagan",
+		"rating": 4,
+		"dateRead": "2023-03-09",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "39899253",
+		"title": "Scattered Minds: The Origins and Healing of Attention Deficit Disorder",
+		"author": "Gabor Maté",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "17852736",
+		"title": "Cracked: Why Psychiatry is Doing More Harm Than Good",
+		"author": "James Davies",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "52036",
+		"title": "Siddhartha",
+		"author": "Hermann Hesse",
+		"rating": 5,
+		"dateRead": "2022-07-18",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "529626",
+		"title": "Sometimes a Great Notion",
+		"author": "Ken Kesey",
+		"rating": 5,
+		"dateRead": "2022-07-02",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "37004370",
+		"title": "The Memory Police",
+		"author": "Yōko Ogawa",
+		"rating": 3,
+		"dateRead": "2022-04-21",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "40495148",
+		"title": "Blindness",
+		"author": "José Saramago",
+		"rating": 4,
+		"dateRead": "2022-03-27",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "13722422",
+		"title": "Britannia Unchained: Global Lessons for Growth and Prosperity",
+		"author": "Kwasi Kwarteng",
+		"rating": 1,
+		"dateRead": "2022-03-18",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "12621",
+		"title": "Understanding Power : The Indispensable Chomsky",
+		"author": "Noam Chomsky",
+		"rating": 5,
+		"dateRead": "2022-03-16",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "59924",
+		"title": "The Lathe of Heaven",
+		"author": "Ursula K. Le Guin",
+		"rating": 5,
+		"dateRead": "2021-01-06",
+		"shelf": "read",
+		"readCount": 2
+	},
+	{
+		"id": "418471",
+		"title": "Modernity and the Holocaust",
+		"author": "Zygmunt Bauman",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "49095586",
+		"title": "Calling Bullshit",
+		"author": "Carl T. Bergstrom",
+		"rating": 5,
+		"dateRead": "2022-02-04",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "17673948",
+		"title": "The Idea of Hegel's \"Science of Logic\"",
+		"author": "Stanley Rosen",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "706554",
+		"title": "Beyond the Pleasure Principle",
+		"author": "Sigmund Freud",
+		"rating": 3,
+		"dateRead": "2022-02-01",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "42801015",
+		"title": "Emancipation After Hegel: Achieving a Contradictory Revolution",
+		"author": "Todd McGowan",
+		"rating": 5,
+		"dateRead": "2022-01-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1273640",
+		"title": "The Future of Hegel: Plasticity, Temporality and Dialectic",
+		"author": "Catherine Malabou",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "74034",
+		"title": "Amusing Ourselves to Death: Public Discourse in the Age of Show Business",
+		"author": "Neil Postman",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "328766",
+		"title": "A Kestrel for a Knave",
+		"author": "Barry Hines",
+		"rating": 5,
+		"dateRead": "2022-01-26",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6572270",
+		"title": "Bloodlands: Europe Between Hitler and Stalin",
+		"author": "Timothy Snyder",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "14142",
+		"title": "The Art of Loving",
+		"author": "Erich Fromm",
+		"rating": 4,
+		"dateRead": "2022-01-24",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "40718037",
+		"title": "Man for Himself: An Inquiry Into the Psychology of Ethics",
+		"author": "Erich Fromm",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "3272165",
+		"title": "Bad Science",
+		"author": "Ben Goldacre",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "34466963",
+		"title": "Why We Sleep: Unlocking the Power of Sleep and Dreams",
+		"author": "Matthew Walker",
+		"rating": 3,
+		"dateRead": "2022-01-18",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "127227",
+		"title": "The Human Condition",
+		"author": "Hannah Arendt",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "43997538",
+		"title": "The Renaissance Diet 2.0",
+		"author": "Mike Israetel",
+		"rating": 5,
+		"dateRead": "2022-01-08",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "31850791",
+		"title": "In the Swarm: Digital Prospects",
+		"author": "Byung-Chul Han",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "9717",
+		"title": "The Unbearable Lightness of Being",
+		"author": "Milan Kundera",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "185168",
+		"title": "Empire of Capital",
+		"author": "Ellen Meiksins Wood",
+		"rating": 4,
+		"dateRead": "2022-01-03",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "50892327",
+		"title": "Count Down: How Our Modern World Is Threatening Sperm Counts, Altering Male and Female Reproductive Development, and Imperiling the Future of the Human Race",
+		"author": "Shanna H. Swan",
+		"rating": 4,
+		"dateRead": "2021-12-28",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "18915",
+		"title": "The Fragile Absolute: Or, Why is the Christian Legacy Worth Fighting For?",
+		"author": "Slavoj Žižek",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "41104077",
+		"title": "Invisible Women: Data Bias in a World Designed for Men",
+		"author": "Caroline Criado Pérez",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "25490",
+		"title": "To Have or to Be? The Nature of the Psyche",
+		"author": "Erich Fromm",
+		"rating": 4,
+		"dateRead": "2021-12-16",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "55644795",
+		"title": "Rentier Capitalism: Who Owns the Economy, and Who Pays for It?",
+		"author": "Brett Christophers",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "87665",
+		"title": "Orthodoxy",
+		"author": "G.K. Chesterton",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "7662339",
+		"title": "The Road: Stories, Journalism, and Essays",
+		"author": "Vasily Grossman",
+		"rating": 5,
+		"dateRead": "2021-11-04",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "50364458",
+		"title": "The Tyranny of Merit: What's Become of the Common Good?",
+		"author": "Michael J. Sandel",
+		"rating": 4,
+		"dateRead": "2021-10-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "57751566",
+		"title": "Sedated: How Modern Capitalism Created our Mental Health Crisis",
+		"author": "James Davies",
+		"rating": 5,
+		"dateRead": "2021-10-19",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "197327",
+		"title": "Imperial Reckoning: The Untold Story of Britain's Gulag in Kenya",
+		"author": "Caroline Elkins",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "366536",
+		"title": "Evolution as a Religion",
+		"author": "Mary Midgley",
+		"rating": 4,
+		"dateRead": "2021-10-10",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "49247043",
+		"title": "This Is How They Tell Me the World Ends: The Cyberweapons Arms Race",
+		"author": "Nicole Perlroth",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "38212112",
+		"title": "The Culture of Narcissism: American Life in An Age of Diminishing Expectations",
+		"author": "Christopher Lasch",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "7623692",
+		"title": "The Age of Absurdity: Why Modern Life makes it Hard to be Happy",
+		"author": "Michael Foley",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "54626107",
+		"title": "Border and Rule: Global Migration, Capitalism, and the Rise of Racist Nationalism",
+		"author": "Harsha Walia",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "41817486",
+		"title": "A Clockwork Orange",
+		"author": "Anthony Burgess",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "2784",
+		"title": "Ways of Seeing",
+		"author": "John Berger",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "39803561",
+		"title": "The Paper Menagerie",
+		"author": "Ken Liu",
+		"rating": 5,
+		"dateRead": "2021-06-26",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "40717990",
+		"title": "The Sane Society",
+		"author": "Erich Fromm",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "8890989",
+		"title": "Churchill's Secret War: The British Empire and the Ravaging of India During World War II",
+		"author": "Madhusree Mukerjee",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "8031168",
+		"title": "Delusions of Gender: How Our Minds, Society, and Neurosexism Create Difference",
+		"author": "Cordelia Fine",
+		"rating": 4,
+		"dateRead": "2021-07-21",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1143788",
+		"title": "How to Talk About Books You Haven't Read",
+		"author": "Pierre Bayard",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "474203",
+		"title": "The Fear of Freedom",
+		"author": "Erich Fromm",
+		"rating": 5,
+		"dateRead": "2021-07-11",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "331460",
+		"title": "The Psychic Life of Power: Theories in Subjection",
+		"author": "Judith Butler",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "53092",
+		"title": "Society of the Spectacle",
+		"author": "Guy Debord",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "880378",
+		"title": "The Autobiography of Benvenuto Cellini",
+		"author": "Benvenuto Cellini",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "53054943",
+		"title": "The Jakarta Method: Washington's Anticommunist Crusade and the Mass Murder Program that Shaped Our World",
+		"author": "Vincent Bevins",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "7039129",
+		"title": "The Politics of Psychoanalysis: An Introduction to Freudian and Post-Freudian Theory",
+		"author": "Stephen Frosh",
+		"rating": 5,
+		"dateRead": "2021-07-02",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "29214420",
+		"title": "Doughnut Economics: Seven Ways to Think Like a 21st-Century Economist",
+		"author": "Kate Raworth",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "37758635",
+		"title": "Fully Automated Luxury Communism: A Manifesto",
+		"author": "Aaron Bastani",
+		"rating": 2,
+		"dateRead": "2021-06-24",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "5692",
+		"title": "Crime and Punishment",
+		"author": "Fyodor Dostoevsky",
+		"rating": 5,
+		"dateRead": "2021-06-22",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "40163368",
+		"title": "The Inner Level: How More Equal Societies Reduce Stress, Restore Sanity and Improve Everyone's Well-Being",
+		"author": "Richard G. Wilkinson",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "41160292",
+		"title": "Exhalation",
+		"author": "Ted Chiang",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "29380",
+		"title": "Animal Liberation",
+		"author": "Peter Singer",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "31171856",
+		"title": "Ten Myths About Israel",
+		"author": "Ilan Pappé",
+		"rating": 4,
+		"dateRead": "2021-06-15",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "36646716",
+		"title": "Shanzhai: Deconstruction in Chinese",
+		"author": "Byung-Chul Han",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "18386",
+		"title": "The Death of Ivan Ilych",
+		"author": "Leo Tolstoy",
+		"rating": 5,
+		"dateRead": "2021-06-14",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "393199",
+		"title": "Down and Out in Paris and London",
+		"author": "George Orwell",
+		"rating": 4,
+		"dateRead": "2021-06-10",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "63790",
+		"title": "Not in Our Genes: Biology, Ideology and Human Nature",
+		"author": "Richard C. Lewontin",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "4929",
+		"title": "Kafka on the Shore",
+		"author": "Haruki Murakami",
+		"rating": 5,
+		"dateRead": "2021-06-04",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "13221379",
+		"title": "What Money Can't Buy: The Moral Limits of Markets",
+		"author": "Michael J. Sandel",
+		"rating": 3,
+		"dateRead": "2021-06-02",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "51933",
+		"title": "Madness and Civilization: A History of Insanity in the Age of Reason",
+		"author": "Michel Foucault",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "90568",
+		"title": "For They Know Not What They Do: Enjoyment as a Political Factor",
+		"author": "Slavoj Žižek",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "697251",
+		"title": "Martian Time-Slip",
+		"author": "Philip K. Dick",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "22816087",
+		"title": "Seveneves",
+		"author": "Neal Stephenson",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "185161",
+		"title": "Democracy Against Capitalism: Renewing Historical Materialism",
+		"author": "Ellen Meiksins Wood",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "274392",
+		"title": "Black Skin, White Masks",
+		"author": "Frantz Fanon",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "17160008",
+		"title": "Feral: Rewilding the Land, the Sea and Human Life",
+		"author": "George Monbiot",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "22590",
+		"title": "Ubik",
+		"author": "Philip K. Dick",
+		"rating": 5,
+		"dateRead": "2021-05-25",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "25355620",
+		"title": "The Capitalist Unconscious: Marx and Lacan",
+		"author": "Samo Tomšič",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "289666",
+		"title": "Mapping Ideology",
+		"author": "Slavoj Žižek",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "29751000",
+		"title": "Against the Double Blackmail: Refugees, Terror and Other Troubles with the Neighbours",
+		"author": "Slavoj Žižek",
+		"rating": 4,
+		"dateRead": "2021-05-19",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "46002",
+		"title": "Critique of Cynical Reason",
+		"author": "Peter Sloterdijk",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "357636",
+		"title": "Civilization and Its Discontents",
+		"author": "Sigmund Freud",
+		"rating": 4,
+		"dateRead": "2021-05-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "396931",
+		"title": "The Origins of Totalitarianism",
+		"author": "Hannah Arendt",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "201388",
+		"title": "Minima Moralia: Reflections on a Damaged Life",
+		"author": "Theodor W. Adorno",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "2474084",
+		"title": "The Work of Art in the Age of Its Technological Reproducibility, and Other Writings on Media",
+		"author": "Walter Benjamin",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "85767",
+		"title": "Gender Trouble: Feminism and the Subversion of Identity",
+		"author": "Judith Butler",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "30089748",
+		"title": "Capitalism and Desire: The Psychic Cost of Free Markets",
+		"author": "Todd McGowan",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "188897",
+		"title": "Socialism: Utopian and Scientific",
+		"author": "Friedrich Engels",
+		"rating": 5,
+		"dateRead": "2021-05-03",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "80339",
+		"title": "The Soul of Man Under Socialism",
+		"author": "Oscar Wilde",
+		"rating": 4,
+		"dateRead": "2021-05-02",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "3979190",
+		"title": "Critique of the Gotha Program",
+		"author": "Karl Marx",
+		"rating": 5,
+		"dateRead": "2021-05-02",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "50403486",
+		"title": "Subprime Attention Crisis",
+		"author": "Tim Hwang",
+		"rating": 5,
+		"dateRead": "2021-05-01",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "36409934",
+		"title": "Terrorism and Communism: A Reply to Karl Kautsky",
+		"author": "Leon Trotsky",
+		"rating": 3,
+		"dateRead": "2021-04-27",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "54063245",
+		"title": "The Book of Trespass: Crossing the Lines that Divide Us",
+		"author": "Nick Hayes",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "43080056",
+		"title": "Who Owns England?: How We Lost Our Green and Pleasant Land, and How to Take It Back",
+		"author": "Guy Shrubsole",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "5128",
+		"title": "The Doors of Perception & Heaven and Hell",
+		"author": "Aldous Huxley",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "457264",
+		"title": "The Second Sex",
+		"author": "Simone de Beauvoir",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "9870118",
+		"title": "Did Somebody Say Totalitarianism?: Five Interventions in the (Mis)Use of a Notion",
+		"author": "Slavoj Žižek",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "229231",
+		"title": "The Interpretation of Dreams",
+		"author": "Sigmund Freud",
+		"rating": 4,
+		"dateRead": "2021-04-20",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "13330433",
+		"title": "The Democracy Project: A History, a Crisis, a Movement",
+		"author": "David Graeber",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "13265617",
+		"title": "A General Introduction to Psychoanalysis",
+		"author": "Sigmund Freud",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "403846",
+		"title": "Caliban and the Witch: Women, the Body and Primitive Accumulation",
+		"author": "Silvia Federici",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "299215",
+		"title": "The Road to Serfdom",
+		"author": "Friedrich A. Hayek",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "74095",
+		"title": "Selected Poems: The Influential 20th Century German Poet's Accessible Bilingual Collection for Modern Readers",
+		"author": "Bertolt Brecht",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "8913542",
+		"title": "23 Things They Don't Tell You About Capitalism",
+		"author": "Ha-Joon Chang",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "1108378",
+		"title": "What Is to Be Done?",
+		"author": "Vladimir Lenin",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "189234",
+		"title": "Letters From Prison, Volume 1",
+		"author": "Antonio Gramsci",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "4934",
+		"title": "The Brothers Karamazov",
+		"author": "Fyodor Dostoevsky",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "216377",
+		"title": "VALIS",
+		"author": "Philip K. Dick",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "135836",
+		"title": "Trainspotting",
+		"author": "Irvine Welsh",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "12505",
+		"title": "The Idiot",
+		"author": "Fyodor Dostoevsky",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "1237300",
+		"title": "The Shock Doctrine: The Rise of Disaster Capitalism",
+		"author": "Naomi Klein",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "168668",
+		"title": "Catch-22",
+		"author": "Joseph Heller",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "51306",
+		"title": "Mutual Aid: A Factor of Evolution",
+		"author": "Pyotr Kropotkin",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "51893",
+		"title": "Thus Spoke Zarathustra",
+		"author": "Friedrich Nietzsche",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "12321",
+		"title": "Beyond Good and Evil",
+		"author": "Friedrich Nietzsche",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "451565",
+		"title": "Human, All Too Human: A Book for Free Spirits",
+		"author": "Friedrich Nietzsche",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "22616",
+		"title": "The System of Objects",
+		"author": "Jean Baudrillard",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "24886497",
+		"title": "And the Weak Suffer What They Must?  Europe's Crisis and America's Economic Future",
+		"author": "Yanis Varoufakis",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "24388295",
+		"title": "Disaster Capitalism: Making a Killing Out of Catastrophe",
+		"author": "Antony Loewenstein",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "12228097",
+		"title": "The Chimp Paradox: How Our Impulses and Emotions Can Determine Success and Happiness and How We Can Control Them",
+		"author": "Steve   Peters",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "312957",
+		"title": "Post-Scarcity Anarchism",
+		"author": "Murray Bookchin",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "1129911",
+		"title": "The Open Society and Its Enemies - Volume One: The Spell of Plato",
+		"author": "Karl Popper",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "61551",
+		"title": "The Open Society and Its Enemies - Volume Two: Hegel and Marx",
+		"author": "Karl Popper",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "355656",
+		"title": "Capital: A Critique of Political Economy, Volume 2",
+		"author": "Karl Marx",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "647",
+		"title": "No Logo",
+		"author": "Naomi Klein",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "243947",
+		"title": "The Plague of Fantasies",
+		"author": "Slavoj Žižek",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "54650835",
+		"title": "Postcapitalist Desire: The Final Lectures",
+		"author": "Mark Fisher",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "on-the-bookshelf",
+		"readCount": 0
+	},
+	{
+		"id": "36262339",
+		"title": "Death's End",
+		"author": "Liu Cixin",
+		"rating": 5,
+		"dateRead": "2021-04-07",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "52692610",
+		"title": "The Cyberiad",
+		"author": "Stanisław Lem",
+		"rating": 3,
+		"dateRead": "2021-04-01",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "37133029",
+		"title": "Psychopolitics: Neoliberalism and New Technologies of Power",
+		"author": "Byung-Chul Han",
+		"rating": 5,
+		"dateRead": "2021-03-26",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "22886612",
+		"title": "Nemesis Games",
+		"author": "James S.A. Corey",
+		"rating": 4,
+		"dateRead": "2021-03-20",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "23168817",
+		"title": "The Dark Forest",
+		"author": "Liu Cixin",
+		"rating": 5,
+		"dateRead": "2021-03-16",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "35718985",
+		"title": "The Grapes of Wrath",
+		"author": "John Steinbeck",
+		"rating": 5,
+		"dateRead": "2021-03-08",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "48887762",
+		"title": "Myth and Mayhem: A Leftist Critique of Jordan Peterson",
+		"author": "Ben Burgis",
+		"rating": 5,
+		"dateRead": "2021-03-07",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "18656030",
+		"title": "Cibola Burn",
+		"author": "James S.A. Corey",
+		"rating": 3,
+		"dateRead": "2021-03-01",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "25490360",
+		"title": "The Burnout Society",
+		"author": "Byung-Chul Han",
+		"rating": 4,
+		"dateRead": "2021-02-27",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "41894188",
+		"title": "The Medium is the Massage: An Inventory of Effects",
+		"author": "Marshall McLuhan",
+		"rating": 4,
+		"dateRead": "2021-02-24",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "586391",
+		"title": "Island",
+		"author": "Aldous Huxley",
+		"rating": 4,
+		"dateRead": "2021-02-23",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6763725",
+		"title": "Capitalist Realism: Is There No Alternative?",
+		"author": "Mark Fisher",
+		"rating": 5,
+		"dateRead": "2021-02-20",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "76171",
+		"title": "We",
+		"author": "Yevgeny Zamyatin",
+		"rating": 4,
+		"dateRead": "2021-02-20",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "52692612",
+		"title": "One Billion Years to the End of the World",
+		"author": "Arkady Strugatsky",
+		"rating": 5,
+		"dateRead": "2021-02-18",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "36262331",
+		"title": "The Three-Body Problem",
+		"author": "Liu Cixin",
+		"rating": 4,
+		"dateRead": "2021-02-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "35403039",
+		"title": "The End of Policing",
+		"author": "Alex S. Vitale",
+		"rating": 3,
+		"dateRead": "2021-02-14",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "225468",
+		"title": "Industrial Society and Its Future",
+		"author": "Theodore John Kaczynski",
+		"rating": 0,
+		"dateRead": null,
+		"shelf": "to-read",
+		"readCount": 0
+	},
+	{
+		"id": "16131032",
+		"title": "Abaddon’s Gate",
+		"author": "James S.A. Corey",
+		"rating": 4,
+		"dateRead": "2021-02-11",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "32603498",
+		"title": "The Divide: A Brief Guide to Global Inequality and its Solutions",
+		"author": "Jason Hickel",
+		"rating": 5,
+		"dateRead": "2021-02-05",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "12591698",
+		"title": "Caliban’s War",
+		"author": "James S.A. Corey",
+		"rating": 5,
+		"dateRead": "2021-01-30",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "38914131",
+		"title": "The People’s Republic of Walmart: How the World’s Biggest Corporations are Laying the Foundation for Socialism",
+		"author": "Leigh Phillips",
+		"rating": 4,
+		"dateRead": "2021-01-25",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "8855321",
+		"title": "Leviathan Wakes",
+		"author": "James S.A. Corey",
+		"rating": 4,
+		"dateRead": "2021-01-21",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1450671",
+		"title": "On Ideology",
+		"author": "Louis Althusser",
+		"rating": 4,
+		"dateRead": "2021-01-16",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "18423",
+		"title": "The Left Hand of Darkness",
+		"author": "Ursula K. Le Guin",
+		"rating": 5,
+		"dateRead": "2021-01-15",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "216363",
+		"title": "The Man in the High Castle",
+		"author": "Philip K. Dick",
+		"rating": 3,
+		"dateRead": "2021-01-09",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "39895849",
+		"title": "Like A Thief In Broad Daylight: Power in the Era of Post-Human Capitalism",
+		"author": "Slavoj Žižek",
+		"rating": 4,
+		"dateRead": "2021-01-03",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "694454",
+		"title": "Dialectical and Historical Materialism",
+		"author": "Joseph Stalin",
+		"rating": 3,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "40961427",
+		"title": "1984",
+		"author": "George Orwell",
+		"rating": 5,
+		"dateRead": "2020-12-26",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6304389",
+		"title": "The Spirit Level: Why More Equal Societies Almost Always Do Better",
+		"author": "Richard G. Wilkinson",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "4900",
+		"title": "Heart of Darkness",
+		"author": "Joseph Conrad",
+		"rating": 4,
+		"dateRead": "2020-12-21",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "581552",
+		"title": "In the Penal Colony",
+		"author": "Franz Kafka",
+		"rating": 4,
+		"dateRead": "2020-11-29",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "92625",
+		"title": "The Ones Who Walk Away from Omelas",
+		"author": "Ursula K. Le Guin",
+		"rating": 5,
+		"dateRead": "2020-11-28",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "49552",
+		"title": "The Stranger",
+		"author": "Albert Camus",
+		"rating": 5,
+		"dateRead": "2020-11-21",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "72657",
+		"title": "Pedagogy of the Oppressed",
+		"author": "Paulo Freire",
+		"rating": 4,
+		"dateRead": "2020-11-19",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "40940649",
+		"title": "I Am Legend",
+		"author": "Richard Matheson",
+		"rating": 3,
+		"dateRead": "2020-11-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "298275",
+		"title": "Nausea",
+		"author": "Jean-Paul Sartre",
+		"rating": 4,
+		"dateRead": "2020-11-14",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "13651",
+		"title": "The Dispossessed: An Ambiguous Utopia",
+		"author": "Ursula K. Le Guin",
+		"rating": 5,
+		"dateRead": null,
+		"shelf": "read",
+		"readCount": 2
+	},
+	{
+		"id": "18919",
+		"title": "How to Read Lacan",
+		"author": "Slavoj Žižek",
+		"rating": 4,
+		"dateRead": "2020-11-08",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "2638701",
+		"title": "Violence: Six Sideways Reflections",
+		"author": "Slavoj Žižek",
+		"rating": 4,
+		"dateRead": "2020-11-07",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "5129",
+		"title": "Brave New World",
+		"author": "Aldous Huxley",
+		"rating": 4,
+		"dateRead": "2020-11-04",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "11989",
+		"title": "The Plague",
+		"author": "Albert Camus",
+		"rating": 5,
+		"dateRead": "2020-11-01",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "333538",
+		"title": "The Castle",
+		"author": "Franz Kafka",
+		"rating": 4,
+		"dateRead": "2020-10-26",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "91950",
+		"title": "The Myth of Sisyphus",
+		"author": "Albert Camus",
+		"rating": 4,
+		"dateRead": "2020-10-24",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "3735293",
+		"title": "Clean Code: A Handbook of Agile Software Craftsmanship",
+		"author": "Robert C. Martin",
+		"rating": 4,
+		"dateRead": "2020-10-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "4865",
+		"title": "How to Win Friends & Influence People",
+		"author": "Dale Carnegie",
+		"rating": 4,
+		"dateRead": "2020-09-17",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6792458",
+		"title": "The New Jim Crow: Mass Incarceration in the Age of Colorblindness",
+		"author": "Michelle Alexander",
+		"rating": 5,
+		"dateRead": null,
+		"shelf": "read",
+		"readCount": 2
+	},
+	{
+		"id": "179612",
+		"title": "The State and Revolution",
+		"author": "Vladimir Lenin",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "17690",
+		"title": "The Trial",
+		"author": "Franz Kafka",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6320534",
+		"title": "Under the Dome",
+		"author": "Stephen  King",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "16256798",
+		"title": "The One Thing: The Surprisingly Simple Truth Behind Extraordinary Results",
+		"author": "Gary Keller",
+		"rating": 3,
+		"dateRead": "2020-09-11",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "551926",
+		"title": "Anarchism and Other Essays",
+		"author": "Emma Goldman",
+		"rating": 4,
+		"dateRead": "2020-09-07",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "257903",
+		"title": "The Ego and His Own: The Case of the Individual Against Authority",
+		"author": "Max Stirner",
+		"rating": 4,
+		"dateRead": "2020-08-12",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "213519",
+		"title": "Reform or Revolution",
+		"author": "Rosa Luxemburg",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "33917107",
+		"title": "On Tyranny: Twenty Lessons from the Twentieth Century",
+		"author": "Timothy Snyder",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "4069",
+		"title": "Man's Search for Meaning",
+		"author": "Viktor E. Frankl",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6739402",
+		"title": "Guerilla Warfare",
+		"author": "Ernesto Che Guevara",
+		"rating": 4,
+		"dateRead": "2020-08-03",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "179609",
+		"title": "Imperialism: The Highest Stage of Capitalism",
+		"author": "Vladimir Lenin",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "386162",
+		"title": "The Hitchhiker’s Guide to the Galaxy",
+		"author": "Douglas Adams",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "13079982",
+		"title": "Fahrenheit 451",
+		"author": "Ray Bradbury",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "18050143",
+		"title": "Zero to One: Notes on Startups, or How to Build the Future",
+		"author": "Peter Thiel",
+		"rating": 3,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "485894",
+		"title": "The Metamorphosis",
+		"author": "Franz Kafka",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "30553",
+		"title": "The Road to Wigan Pier",
+		"author": "George Orwell",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "14817",
+		"title": "A Scanner Darkly",
+		"author": "Philip K. Dick",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "23129811",
+		"title": "On Palestine",
+		"author": "Noam Chomsky",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1113155",
+		"title": "The Conquest of Bread",
+		"author": "Pyotr Kropotkin",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "36490332",
+		"title": "Talking to My Daughter About the Economy: or, How Capitalism Works—and How It Fails",
+		"author": "Yanis Varoufakis",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "9646",
+		"title": "Homage to Catalonia",
+		"author": "George Orwell",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "33606119",
+		"title": "Why I'm No Longer Talking to White People About Race",
+		"author": "Reni Eddo-Lodge",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "12618",
+		"title": "Chomsky On Anarchism",
+		"author": "Noam Chomsky",
+		"rating": 3,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "40876575",
+		"title": "Utopia for Realists: How We Can Build the Ideal World",
+		"author": "Rutger Bregman",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "37506348",
+		"title": "Winners Take All: The Elite Charade of Changing the World",
+		"author": "Anand Giridharadas",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "635635",
+		"title": "Women, Race & Class",
+		"author": "Angela Y. Davis",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "30474",
+		"title": "The Communist Manifesto",
+		"author": "Karl Marx",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "1038873",
+		"title": "Think: A Compelling Introduction to Philosophy",
+		"author": "Simon Blackburn",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "10408011",
+		"title": "Chavs: The Demonization of the Working Class",
+		"author": "Owen   Jones",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "66933",
+		"title": "The Wretched of the Earth",
+		"author": "Frantz Fanon",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "349650",
+		"title": "One-Dimensional Man: Studies in the Ideology of Advanced Industrial Society",
+		"author": "Herbert Marcuse",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "20527133",
+		"title": "Superintelligence: Paths, Dangers, Strategies",
+		"author": "Nick Bostrom",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "34466958",
+		"title": "Bullshit Jobs: A Theory",
+		"author": "David Graeber",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "188378",
+		"title": "The Anatomy of Fascism",
+		"author": "Robert O. Paxton",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "18579571",
+		"title": "Seventeen Contradictions and the End of Capitalism",
+		"author": "David Harvey",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "23120225",
+		"title": "The Establishment: And How They Get Away with It",
+		"author": "Owen   Jones",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "12617",
+		"title": "Manufacturing Consent: The Political Economy of the Mass Media",
+		"author": "Edward S. Herman",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "10567",
+		"title": "Cell",
+		"author": "Stephen  King",
+		"rating": 2,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "92057",
+		"title": "The Autobiography of Malcolm X",
+		"author": "Malcolm X",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "6617037",
+		"title": "Debt: The First 5,000 Years",
+		"author": "David Graeber",
+		"rating": 4,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	},
+	{
+		"id": "19063",
+		"title": "The Book Thief",
+		"author": "Markus Zusak",
+		"rating": 5,
+		"dateRead": "2020-07-31",
+		"shelf": "read",
+		"readCount": 1
+	}
+]
