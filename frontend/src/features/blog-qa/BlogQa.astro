@@ -1,0 +1,61 @@
+---
+import { featureRuntime } from '@/config/features';
+
+interface Props {
+	slug: string;
+}
+const { slug } = Astro.props;
+const endpoint = featureRuntime.blogQa.endpoint;
+---
+
+<div id="blog-qa" data-slug={slug} data-endpoint={endpoint}>
+	<button id="blog-qa-open" type="button" class="blog-qa-trigger">
+		<span class="blog-qa-trigger-label">Ask about this post</span>
+	</button>
+
+	<dialog id="blog-qa-dialog" class="blog-qa-dialog" aria-labelledby="blog-qa-title">
+		<div class="blog-qa-panel">
+			<header class="blog-qa-header">
+				<h2 id="blog-qa-title" class="blog-qa-title">Ask about this post</h2>
+				<button id="blog-qa-close" type="button" class="blog-qa-close" aria-label="Close">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<line x1="18" y1="6" x2="6" y2="18"></line>
+						<line x1="6" y1="6" x2="18" y2="18"></line>
+					</svg>
+				</button>
+			</header>
+
+			<form id="blog-qa-form" class="blog-qa-form">
+				<label for="blog-qa-input" class="blog-qa-label">Your question</label>
+				<textarea
+					id="blog-qa-input"
+					name="question"
+					rows="3"
+					maxlength="500"
+					required
+					placeholder="What does the alarm handler do?"
+					class="blog-qa-input"
+				></textarea>
+				<div class="blog-qa-actions">
+					<span id="blog-qa-charcount" class="blog-qa-charcount">0 / 500</span>
+					<button id="blog-qa-submit" type="submit" class="blog-qa-submit">
+						<span class="blog-qa-submit-label">Ask</span>
+					</button>
+				</div>
+			</form>
+
+			<div id="blog-qa-result" class="blog-qa-result" hidden>
+				<div id="blog-qa-status" class="blog-qa-status"></div>
+				<div id="blog-qa-answer" class="blog-qa-answer"></div>
+				<details id="blog-qa-sources-wrap" class="blog-qa-sources" hidden>
+					<summary>Sources</summary>
+					<ul id="blog-qa-sources"></ul>
+				</details>
+			</div>
+		</div>
+	</dialog>
+</div>
+
+<script>
+	import './script.ts';
+</script>

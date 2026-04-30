@@ -10,6 +10,7 @@ async-trait = "0.1.89"
 chrono = { version = "0.4", features = ["wasmbind", "serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.140"
+sha2 = "0.10"
 time = { version = "0.3", features = ["wasm-bindgen", "serde", "parsing", "formatting"] }
 tokio = "1.47.1"
 tracing = "0.1"

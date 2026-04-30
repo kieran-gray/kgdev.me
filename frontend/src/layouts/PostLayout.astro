@@ -3,6 +3,8 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import PostHeader from '@/components/post/PostHeader.astro';
 import PostContent from '@/components/post/PostContent.astro';
 import TableOfContents from '@/components/post/TableOfContents.astro';
+import BlogQa from '@/features/blog-qa/BlogQa.astro';
+import { features } from '@/config/features';
 
 interface HeadProps {
 	title: string;
@@ -63,6 +65,7 @@ const showToc = tocHeadings.length >= 2;
 		{showToc && (
 			<aside class="post-toc" aria-label="Table of contents">
 				<TableOfContents headings={tocHeadings} />
+				{features.blogQa.enabled && <BlogQa slug={post.slug} />}
 			</aside>
 		)}
 	</div>

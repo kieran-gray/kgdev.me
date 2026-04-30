@@ -8,6 +8,7 @@ export function getFeatureFlags(env) {
 	return {
 		search: { enabled: readFlag(env, 'PUBLIC_FEATURE_SEARCH', true) },
 		viewCounter: { enabled: readFlag(env, 'PUBLIC_FEATURE_VIEW_COUNTER', true) },
+		blogQa: { enabled: readFlag(env, 'PUBLIC_FEATURE_BLOG_QA', true) },
 		contact: { enabled: readFlag(env, 'PUBLIC_FEATURE_CONTACT', true) },
 		og: { enabled: readFlag(env, 'PUBLIC_FEATURE_OG', true) },
 		mermaid: { enabled: readFlag(env, 'PUBLIC_FEATURE_MERMAID', true) },
