@@ -1,0 +1,28 @@
+[package]
+name = "kgdev_me_backend"
+version = "0.1.0"
+edition = "2024"
+authors = ["Kieran Gray <gray.kieran@protonmail.com>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+time = { workspace = true }
+tracing = { workspace = true }
+tracing-web = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+wasm-bindgen = { workspace = true }
+worker = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+wiremock = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["wasm-bindgen"]

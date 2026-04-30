@@ -2,9 +2,8 @@
     "name": "kgdev.me",
     "private": true,
     "workspaces": [
-        "web",
-        "services/contact-service",
-        "services/view-counter"
+        "frontend",
+        "backend"
     ],
     "devDependencies": {
         "concurrently": "^8.2.2",
@@ -15,18 +14,16 @@
         "wrangler": "^4.85.0"
     },
     "scripts": {
-        "dev": "concurrently -n web,contact,counter \"npm run dev:web\" \"npm run dev:contact\" \"npm run dev:counter\"",
-        "dev:web": "npm run dev --workspace=web",
-        "dev:contact": "npm run dev --workspace=services/contact-service",
-        "dev:counter": "npm run dev --workspace=services/view-counter",
+        "dev": "concurrently -n frontend,backend \"npm run dev:frontend\" \"npm run dev:backend\"",
+        "dev:frontend": "npm run dev --workspace=frontend",
+        "dev:backend": "npm run dev --workspace=backend",
         "format": "npm run format --workspaces --if-present",
         "build": "npm run build --workspaces --if-present",
-        "build:web": "npm run build --workspace=web",
-        "build:contact": "npm run build --workspace=services/contact-service",
-        "build:counter": "npm run build --workspace=services/view-counter",
+        "build:frontend": "npm run build --workspace=frontend",
+        "build:backend": "npm run build --workspace=backend",
         "test": "npm run test --workspaces --if-present",
-        "test:contact": "npm run test --workspace=services/contact-service",
-        "test:counter": "npm run test --workspace=services/view-counter",
+        "test:frontend": "npm run test --workspace=frontend",
+        "test:backend": "npm run test --workspace=backend",
         "deploy": "npm run deploy --workspaces --if-present"
     }
 }
