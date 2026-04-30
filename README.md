@@ -4,11 +4,9 @@ Source for [kgdev.me](https://kgdev.me) — a personal blog and portfolio. Every
 
 ## Projects
 
-**[web](./web)** — The Astro blog. Static site generation.
+**[frontend](./frontend)** — The Astro blog. Static site generation.
 
-**[services/contact-service](./services/contact-service)** — Handles contact form submissions. Validates Cloudflare Turnstile tokens and forwards messages via the Cloudflare Email Routing API.
-
-**[services/view-counter](./services/view-counter)** — Tracks live view counts on blog posts using Cloudflare Durable Objects.
+**[backend](./backend)** — Generic blog backend. Handles contact form submissions and realtime blog features such as the live view counter using Cloudflare Durable Objects.
 
 ## Workspaces
 

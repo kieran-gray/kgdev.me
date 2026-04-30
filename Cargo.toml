@@ -1,7 +1,6 @@
 [workspace]
 members = [
-    "services/contact-service",
-    "services/view-counter",
+    "backend",
 ]
 resolver = "2"
 

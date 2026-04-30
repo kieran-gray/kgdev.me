@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       worker-path:
-        description: 'Path to the worker directory (e.g., services/contact-service)'
+        description: 'Path to the worker directory (e.g., backend)'
         required: true
         type: string
       workspace-path:

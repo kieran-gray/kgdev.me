@@ -1,0 +1,53 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/backend-ci-cd.yaml'
+      - '.github/workflows/_reusable-rust-worker-ci.yaml'
+      - '.github/workflows/_reusable-rust-worker-deploy.yaml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/backend-ci-cd.yaml'
+      - '.github/workflows/_reusable-rust-worker-ci.yaml'
+      - '.github/workflows/_reusable-rust-worker-deploy.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  ci:
+    uses: ./.github/workflows/_reusable-rust-worker-ci.yaml
+    with:
+      worker-name: kgdev-me-backend
+      worker-path: backend
+      has-integration-tests: true
+
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: ./.github/workflows/_reusable-rust-worker-deploy.yaml
+    with:
+      worker-name: kgdev-me-backend
+      worker-path: backend
+    secrets: inherit

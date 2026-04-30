@@ -72,24 +72,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
 
 [[package]]
-name = "blog_live_view_counter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "time",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "tracing-web",
- "uuid",
- "wasm-bindgen",
- "wiremock",
- "worker",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -601,7 +583,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kgdev_me_contact_us"
+name = "kgdev_me_backend"
 version = "0.1.0"
 dependencies = [
  "async-trait",
