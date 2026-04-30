@@ -15,10 +15,9 @@ const minutesRead = post.minutesRead;
 const isPinned = data.isPinned === true;
 const href = `/posts/${slug}/`;
 ---
-
 <a href={href} class="group">
-	<div
-		class="h-full bg-[var(--card-outer-bg)] p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.6)] hover:bg-[var(--accent-700)]"
+	<div 
+		class="h-full bg-[var(--card-outer-bg)] p-[1px] text-sm shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)] transition hover:bg-[var(--accent-700)]"
 	>
 		<div
 			class="flex h-full w-full flex-col bg-[var(--card-inner-bg)] p-4 text-[var(--text-color)] opacity-95"
@@ -41,7 +40,7 @@ const href = `/posts/${slug}/`;
 				<h2 class="pb-4 text-lg font-bold">{data.title}</h2>
 
 				<Tags tags={data.tags} />
-				{showExcerpt && <p class="line-clamp-6 pt-4">{data.excerpt}</p>}
+				{showExcerpt && <p class="line-clamp-6 pt-4 text-[var(--muted-text)] ">{data.excerpt}</p>}
 			</div>
 			<p class="pt-4 text-[var(--link)] underline hover:text-[var(--link-hover)]">
 				read more →
