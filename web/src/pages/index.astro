@@ -1,32 +1,36 @@
 ---
-import { siteConfig } from '@/config/site.config';
-import Base from '@/layouts/Base.astro';
+import { siteConfig } from '@/config/site';
+import BaseLayout from '@/layouts/BaseLayout.astro';
 import Hero from '@/components/content/Hero.astro';
 import LatestPosts from '@/components/content/LatestPosts.astro';
-import LatestProjects from '@/components/content/LatestProjects.astro';
-import { getCollection, type CollectionEntry } from 'astro:content';
-import { getAllPosts } from '@/lib/content/posts';
+import LatestProjects from '@/features/projects/LatestProjects.astro';
+import { getEntry, render } from 'astro:content';
+import { getLatestPosts } from '@/lib/content/posts';
+import { getHomepageProjects } from '@/lib/content/projects';
 import { buildPersonSchema } from '@/lib/seo/jsonLd';
 
 const { title } = siteConfig.meta;
 const { description } = siteConfig.meta;
 
-const allPosts = await getAllPosts();
-const latestPosts = allPosts.slice(0, 3);
+const latestPosts = await getLatestPosts(3);
+const { projects: homepageProjects, title: projectsTitle } = await getHomepageProjects();
 
-const allProjects: CollectionEntry<'projects'>[] = await getCollection('projects');
-const pinnedProjects = allProjects.filter((p) => p.data.pinned === true);
-const homepageProjects = (pinnedProjects.length ? pinnedProjects : allProjects).slice(0, 2);
-const projectsTitle = pinnedProjects.length ? 'Pinned Projects' : 'Latest Projects';
+const homePage = await getEntry('pages', 'home');
+if (!homePage) {
+	throw new Error('Home page content entry not found');
+}
+const { Content } = await render(homePage);
 
 const personSchema = buildPersonSchema();
 ---
 
-<Base head={{ title, description }}>
+<BaseLayout head={{ title, description }}>
 	<Fragment slot="head">
 		<script is:inline type="application/ld+json" set:html={JSON.stringify(personSchema)} />
 	</Fragment>
-	<Hero />
+	<Hero headline={homePage.data.headline} currentRole={homePage.data.currentRole}>
+		<Content />
+	</Hero>
 	<LatestPosts posts={latestPosts} />
-	<LatestProjects projects={homepageProjects} title={projectsTitle} />
-</Base>
+	{homepageProjects.length > 0 && <LatestProjects projects={homepageProjects} title={projectsTitle} />}
+</BaseLayout>

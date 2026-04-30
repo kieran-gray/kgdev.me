@@ -103,6 +103,33 @@ const scenarios = [
 			);
 			return failures;
 		}
+	},
+	{
+		name: 'FEATURE_PROJECTS=false',
+		env: { FEATURE_PROJECTS: 'false', PUBLIC_FEATURE_PROJECTS: 'false' },
+		check() {
+			const failures = [];
+			const homeHtml = read('index.html');
+			const tagsHtml = read('tags/index.html');
+			assert(!existsSync(join(dist, 'projects/index.html')), 'Expected no /projects route when projects is disabled', failures);
+			assert(!homeHtml.includes('Pinned Projects') && !homeHtml.includes('Latest Projects'), 'Expected no projects section on the homepage when projects is disabled', failures);
+			assert(!homeHtml.includes('href="/projects"'), 'Expected no homepage projects link when projects is disabled', failures);
+			assert(!homeHtml.includes('>PROJECTS<'), 'Expected no projects nav item when projects is disabled', failures);
+			assert(!tagsHtml.includes('projects'), 'Expected tags index not to advertise project counts when projects is disabled', failures);
+			return failures;
+		}
+	},
+	{
+		name: 'FEATURE_BOOKS=false',
+		env: { FEATURE_BOOKS: 'false', PUBLIC_FEATURE_BOOKS: 'false' },
+		check() {
+			const failures = [];
+			const homeHtml = read('index.html');
+			assert(!existsSync(join(dist, 'books/index.html')), 'Expected no /books route when books is disabled', failures);
+			assert(!homeHtml.includes('>BOOKS<'), 'Expected no books nav item when books is disabled', failures);
+			assert(!homeHtml.includes('href="/books"'), 'Expected no books link when books is disabled', failures);
+			return failures;
+		}
 	}
 ];
 

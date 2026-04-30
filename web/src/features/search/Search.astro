@@ -1,0 +1,52 @@
+---
+import searchScript from './script.ts?url';
+import { features } from '@/config/features';
+
+const searchTargets = features.projects.enabled ? 'posts and projects' : 'posts';
+---
+
+<dialog id="search-dialog" aria-label="Search" data-search-targets={searchTargets}>
+  <div id="search-box">
+    <div id="search-input-wrap">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        class="search-icon"
+      >
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input
+        id="search-input"
+        type="search"
+        placeholder={`Search ${searchTargets}...`}
+        autocomplete="off"
+        spellcheck="false"
+        aria-label="Search query"
+        aria-autocomplete="list"
+        aria-controls="search-results"
+      />
+      <kbd id="search-esc-hint">Esc</kbd>
+    </div>
+    <div id="search-results-wrap">
+      <p id="search-hint">Type to search {searchTargets}...</p>
+      <div id="search-results" role="listbox" aria-label="Search results"></div>
+    </div>
+    <div id="search-footer">
+      <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+      <span><kbd>↵</kbd> open</span>
+      <span><kbd>Esc</kbd> close</span>
+    </div>
+  </div>
+</dialog>
+
+
+<script is:inline type="module" src={searchScript}></script>

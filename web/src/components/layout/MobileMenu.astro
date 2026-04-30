@@ -1,7 +1,14 @@
 ---
-import { siteConfig } from '@/config/site.config';
+import { siteConfig } from '@/config/site';
+import { features } from '@/config/features';
 import SchemePicker from './SchemePicker.astro';
 import ThemeSwitch from './ThemeSwitch.astro';
+
+const navItems = siteConfig.nav.filter((item) => {
+	if (item.href === '/projects') return features.projects.enabled;
+	if (item.href === '/books') return features.books.enabled;
+	return true;
+});
 ---
 
 <div
@@ -17,7 +24,7 @@ import ThemeSwitch from './ThemeSwitch.astro';
 	aria-label="Navigation menu"
 >
 	<nav class="flex flex-col p-3">
-		{siteConfig.nav.map((item) => (
+		{navItems.map((item) => (
 			<a href={item.href} class="border-b border-[var(--border-color)] py-3 hover:text-[var(--accent-500)]">
 				{item.label}
 			</a>

@@ -1,6 +1,7 @@
 ---
 import Section from './Section.astro';
-import { siteConfig } from '@/config/site.config';
+import { siteConfig } from '@/config/site';
+import { features } from '@/config/features';
 
 const year = new Date().getFullYear();
 ---
@@ -10,7 +11,7 @@ const year = new Date().getFullYear();
 		<div class="pb-4">
 			<a class="underline hover:text-[var(--accent-500)]" href="/sitemap-0.xml">Sitemap</a>
 			 - <a class="underline hover:text-[var(--accent-500)]" href="/tags">Tags</a>
-			 {siteConfig.features.contact.enabled && (<span> - <a class="underline hover:text-[var(--accent-500)]" href="/contact">Contact</a></span>)}
+			 {features.contact.enabled && (<span> - <a class="underline hover:text-[var(--accent-500)]" href="/contact">Contact</a></span>)}
 		</div>
 		© {year} - {siteConfig.author.name}
 	</footer>

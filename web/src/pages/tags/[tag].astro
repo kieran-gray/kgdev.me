@@ -1,75 +1,41 @@
 ---
 import Section from '@/components/layout/Section.astro';
 import Card from '@/components/ui/Card.astro';
-import Base from '@/layouts/Base.astro';
-import Heading from '@/components/ui/Heading.astro';
-import { siteConfig } from '@/config/site.config';
-import { sortPostsByDate } from '@/lib/format/date';
-import ProjectCard from '@/components/project/ProjectCard.astro';
-import { getCollection, type CollectionEntry } from 'astro:content';
+import PageLayout from '@/layouts/PageLayout.astro';
+import { siteConfig } from '@/config/site';
+import ProjectCard from '@/features/projects/ProjectCard.astro';
+import { getTagIndex, getTaggedContent, getTaggedContentDescription } from '@/lib/content/tags';
 import type { PostEntry } from '@/lib/content/posts';
+import type { ProjectEntry } from '@/lib/content/projects';
 
 export async function getStaticPaths() {
-	const allPosts = await getCollection('posts');
-
-	const allPostsWithMeta: PostEntry[] = await Promise.all(
-		allPosts.map(async (entry) => {
-			const { remarkPluginFrontmatter } = await entry.render();
-			return Object.assign(entry, {
-				minutesRead: remarkPluginFrontmatter?.minutesRead as string | undefined
-			});
-		})
-	);
-
-	const projects: CollectionEntry<'projects'>[] = await getCollection('projects');
-
-	const projectTagsFor = (p: CollectionEntry<'projects'>) => [
-		...(p.data.tags || []),
-		...(p.data.tech?.languages || [])
-	];
-
-	const allTags: Set<string> = new Set([
-		...allPostsWithMeta.flatMap((post) => post.data.tags || []),
-		...projects.flatMap(projectTagsFor)
-	]);
-
-	return [...allTags].map((tag) => {
-		const filteredPosts = allPostsWithMeta.filter((post) =>
-			(post.data.tags || []).includes(tag)
-		);
-		filteredPosts.sort(sortPostsByDate);
-
-		const filteredProjects = projects.filter((p) => projectTagsFor(p).includes(tag));
-
+	const tagIndex = await getTagIndex();
+	return Promise.all(tagIndex.map(async ({ tag }) => {
+		const { posts, projects } = await getTaggedContent(tag);
 		return {
 			params: { tag },
 			props: {
-				posts: filteredPosts,
-				projects: filteredProjects
+				posts,
+				projects
 			}
 		};
-	});
+	}));
 }
 
 interface Props {
 	posts: PostEntry[];
-	projects: CollectionEntry<'projects'>[];
+	projects: ProjectEntry[];
 }
 
 const { tag } = Astro.params;
 const title = `#${tag} | ${siteConfig.meta.title}`;
-const description = `All posts and projects tagged "${tag}".`;
+const description = getTaggedContentDescription(tag!);
 
 const { posts, projects } = Astro.props as Props;
 ---
 
-<Base head={{ title, description }}>
-	<Section>
-		<Heading title={`#${tag}`} />
-		<div class="pt-2 text-center">
-			<a href="/tags" class="underline hover:text-[var(--accent-500)]">all tags →</a>
-		</div>
-	</Section>
+<PageLayout head={{ title, description }} heading={`#${tag}`}>
+	<a slot="after-heading" href="/tags" class="underline hover:text-[var(--accent-500)]">all tags →</a>
 
 	{
 		projects?.length ? (
@@ -96,4 +62,4 @@ const { posts, projects } = Astro.props as Props;
 			</Section>
 		) : null
 	}
-</Base>
+</PageLayout>

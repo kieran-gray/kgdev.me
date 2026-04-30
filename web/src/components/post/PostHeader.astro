@@ -1,10 +1,10 @@
 ---
 import { formatDate } from '@/lib/format/date';
-import { siteConfig } from '@/config/site.config';
+import { features } from '@/config/features';
 import Section from '../layout/Section.astro';
 import Tags from '../content/Tags.astro';
 import PinnedBadge from '../ui/PinnedBadge.astro';
-import ViewCounter from '../feature/ViewCounter.astro';
+import ViewCounter from '@/features/view-counter/ViewCounter.astro';
 
 interface Props {
 	title: string;
@@ -46,7 +46,7 @@ const showImg = !!img?.src;
 					) : null
 				}</span
 			>
-			{siteConfig.features.viewCounter.enabled && <ViewCounter slug={slug} />}
+			{features.viewCounter.enabled && <ViewCounter slug={slug} />}
 		</div>
 
 		{showImg && <img src={img!.src} alt={img!.alt ?? ''} />}

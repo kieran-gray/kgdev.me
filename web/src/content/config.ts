@@ -1,4 +1,5 @@
 import { defineCollection, z } from 'astro:content';
+import { file, glob } from 'astro/loaders';
 
 const hostingSchema = z.object({
 	provider: z.string(),
@@ -26,7 +27,12 @@ const repoSchema = z.object({
 });
 
 const projects = defineCollection({
-	type: 'content',
+	loader: glob({
+		base: new URL('../features/projects/content', import.meta.url),
+		pattern: '**/*.md',
+		generateId: ({ entry }) => entry.replace(/\.md$/, ''),
+		_legacy: true
+	}),
 	schema: z.object({
 		name: z.string(),
 		summary: z.string(),
@@ -68,6 +74,19 @@ const projects = defineCollection({
 	})
 });
 
+const books = defineCollection({
+	loader: file('src/features/books/content/books.json'),
+	schema: z.object({
+		id: z.string(),
+		title: z.string(),
+		author: z.string(),
+		rating: z.number().int().min(0).max(5),
+		dateRead: z.string().nullable(),
+		shelf: z.string(),
+		readCount: z.number().int().min(0)
+	})
+});
+
 const posts = defineCollection({
 	type: 'content',
 	schema: z.object({
@@ -82,4 +101,19 @@ const posts = defineCollection({
 	})
 });
 
-export const collections = { projects, posts };
+const pages = defineCollection({
+	type: 'content',
+	schema: z.object({
+		headline: z.string(),
+		currentRole: z
+			.object({
+				title: z.string(),
+				org: z.string().optional(),
+				orgUrl: z.string().url().optional(),
+				summary: z.string().optional()
+			})
+			.optional()
+	})
+});
+
+export const collections = { projects, posts, pages, books };

@@ -1,9 +1,8 @@
 ---
-import { siteConfig } from '@/config/site.config';
-import Base from '@/layouts/Base.astro';
+import { siteConfig } from '@/config/site';
+import PageLayout from '@/layouts/PageLayout.astro';
 import Section from '@/components/layout/Section.astro';
 import Card from '@/components/ui/Card.astro';
-import Heading from '@/components/ui/Heading.astro';
 import { getAllPosts } from '@/lib/content/posts';
 
 const title = `Posts | ${siteConfig.meta.title}`;
@@ -13,8 +12,7 @@ const description =
 const allPosts = await getAllPosts();
 ---
 
-<Base head={{ title, description }}>
-	<Section><Heading title="Posts" /></Section>
+<PageLayout head={{ title, description }} heading="Posts">
 	<Section>
 		{
 			allPosts.map((post) => (
@@ -24,4 +22,4 @@ const allPosts = await getAllPosts();
 			))
 		}
 	</Section>
-</Base>
+</PageLayout>

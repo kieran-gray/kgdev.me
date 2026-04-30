@@ -1,0 +1,127 @@
+---
+import Footer from '@/components/layout/Footer.astro';
+import Navbar from '@/components/layout/Navbar.astro';
+import Search from '@/features/search/Search.astro';
+import ThemeStyles from '@/components/layout/ThemeStyles.astro';
+import { siteConfig } from '@/config/site';
+import { theme } from '@/config/theme';
+import { features } from '@/config/features';
+import { ClientRouter } from 'astro:transitions';
+import '@/styles/global.css';
+
+export interface Props {
+	head: {
+		title: string;
+		description: string;
+		type?: 'website' | 'article';
+		image?: string;
+		article?: {
+			publishedTime: string;
+			author: string;
+			tags?: string[];
+		};
+	};
+}
+
+const {
+	head: { title, description, type = 'website', image, article }
+} = Astro.props as Props;
+
+const ogImage = features.og.enabled
+	? image ?? new URL('/og/default.png', Astro.site).toString()
+	: image ?? siteConfig.ogFallbackImage;
+const defaultScheme = theme.default;
+const schemeList = theme.list.join('|');
+---
+
+<html lang={siteConfig.meta.locale} data-scheme-list={schemeList}>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<meta name="author" content={siteConfig.author.name} />
+
+		<ThemeStyles />
+
+		<script is:inline define:vars={{ defaultScheme }}>
+	const applyTheme = (doc = document.documentElement) => {
+		try {
+			const savedTheme = localStorage.getItem('theme');
+			const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+			const theme = savedTheme || systemTheme;
+
+			const scheme = localStorage.getItem('scheme') || defaultScheme;
+
+			const isDark = theme === 'dark';
+			doc.classList.toggle('dark', isDark);
+			doc.setAttribute('data-theme', theme);
+			doc.setAttribute('data-scheme', scheme);
+		} catch (e) {
+			console.error('Theme initialization failed', e);
+		}
+	};
+
+	applyTheme();
+
+	document.addEventListener('astro:before-swap', (e) => {
+		applyTheme(e.newDocument.documentElement);
+		e.newDocument.documentElement.classList.add('is-transitioning');
+	});
+
+	document.addEventListener('astro:after-swap', () => {
+		requestAnimationFrame(() => {
+			document.documentElement.classList.remove('is-transitioning');
+		});
+	});
+		</script>
+
+		<link rel="preload" href="/fonts/JetBrainsMono-Bold.woff2" as="font" type="font/woff2" crossorigin />
+
+		<!-- Canonical URL -->
+		<link rel="canonical" href={Astro.url.href} />
+
+		<!-- Open Graph -->
+		<meta property="og:site_name" content={`${siteConfig.brand.name}${siteConfig.brand.tld ? '.' + siteConfig.brand.tld : ''}`} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:type" content={type} />
+		<meta property="og:url" content={Astro.url.href} />
+		<meta property="og:locale" content={siteConfig.meta.locale} />
+		{ogImage && <meta property="og:image" content={ogImage} />}
+		{ogImage && <meta property="og:image:alt" content={title} />}
+		{ogImage && <meta property="og:image:width" content="1200" />}
+		{ogImage && <meta property="og:image:height" content="630" />}
+
+		<!-- Article meta (blog posts) -->
+		{type === 'article' && article && (
+			<>
+				<meta property="article:published_time" content={article.publishedTime} />
+				<meta property="article:author" content={article.author} />
+				{article.tags?.map((tag) => <meta property="article:tag" content={tag} />)}
+			</>
+		)}
+
+		<!-- Twitter -->
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:card" content="summary_large_image" />
+		{ogImage && <meta name="twitter:image" content={ogImage} />}
+
+		<slot name="head" />
+		<link rel="sitemap" href="/sitemap-index.xml" />
+		{features.rss.enabled && (
+			<link rel="alternate" type="application/rss+xml" href="/rss.xml" />
+		)}
+		{siteConfig.brand.favicon && <link rel="icon" href={siteConfig.brand.favicon} />}
+		<ClientRouter />
+	</head>
+	<body class="flex min-h-screen flex-col bg-[var(--page-bg)] font-mono text-[var(--text-color)]">
+		<Navbar/>
+		<div class="flex-1" data-pagefind-body={features.search.enabled ? true : undefined}>
+			<slot />
+		</div>
+		<Footer/>
+		{features.search.enabled && <Search />}
+	</body>
+</html>

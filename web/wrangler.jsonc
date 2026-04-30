@@ -9,6 +9,19 @@
     "pattern": "kgdev.me",
     "custom_domain": true
   },
+  "vars": {
+    "PUBLIC_FEATURE_SEARCH": "true",
+    "PUBLIC_FEATURE_VIEW_COUNTER": "true",
+    "PUBLIC_FEATURE_CONTACT": "true",
+    "PUBLIC_FEATURE_OG": "true",
+    "PUBLIC_FEATURE_MERMAID": "true",
+    "PUBLIC_FEATURE_RSS": "true",
+    "PUBLIC_FEATURE_BOOKS": "true",
+    "PUBLIC_FEATURE_PROJECTS": "true",
+    "PUBLIC_VIEW_COUNTER_URL": "wss://counter.kgdev.me",
+    "PUBLIC_CONTACT_URL": "https://contact.kgdev.me/api/v1/contact/",
+    "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAADFJ-aGGTpoBJuyq"
+  },
   "main": "dist/_worker.js/index.js",
   "compatibility_flags": [
     "global_fetch_strictly_public",
@@ -17,5 +30,22 @@
   "assets": {
     "binding": "ASSETS",
     "directory": "dist"
+  },
+  "env": {
+    "dev": {
+      "vars": {
+        "PUBLIC_FEATURE_SEARCH": "true",
+        "PUBLIC_FEATURE_VIEW_COUNTER": "true",
+        "PUBLIC_FEATURE_CONTACT": "true",
+        "PUBLIC_FEATURE_OG": "true",
+        "PUBLIC_FEATURE_MERMAID": "true",
+        "PUBLIC_FEATURE_RSS": "true",
+        "PUBLIC_FEATURE_BOOKS": "true",
+        "PUBLIC_FEATURE_PROJECTS": "true",
+        "PUBLIC_VIEW_COUNTER_URL": "ws://localhost:8000",
+        "PUBLIC_CONTACT_URL": "http://localhost:8001/api/v1/contact/",
+        "PUBLIC_TURNSTILE_SITE_KEY": "1x00000000000000000000AA"
+      }
+    }
   }
 }

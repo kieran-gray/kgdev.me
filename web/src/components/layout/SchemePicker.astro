@@ -1,6 +1,5 @@
 ---
-import { siteConfig } from '@/config/site.config';
-import { schemes } from '@/styles/schemes';
+import { theme, schemes } from '@/config/theme';
 
 interface Props {
 	id: string;
@@ -15,7 +14,7 @@ const optionTextClass = width === 'wide' ? 'text-sm' : '';
 const checkSize = width === 'wide' ? 'h-5 w-5 shrink-0' : 'h-4 w-4';
 const labelClass = width === 'wide' ? 'min-w-0 flex-1 truncate' : '';
 
-const orderedSchemes = siteConfig.schemes.list.map((name) => ({ name, ...schemes[name] }));
+const orderedSchemes = theme.list.map((name) => ({ name, ...schemes[name] }));
 ---
 
 <div class="relative">

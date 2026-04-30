@@ -1,4 +1,4 @@
-import { siteConfig } from '@/config/site.config';
+import { siteConfig } from '@/config/site';
 
 export interface PersonSchema {
 	'@context': 'https://schema.org';

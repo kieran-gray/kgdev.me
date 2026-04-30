@@ -20,3 +20,13 @@ export async function getAllPosts(): Promise<PostEntry[]> {
 	withMeta.sort(sortPostsByDate);
 	return withMeta;
 }
+
+export async function getLatestPosts(limit: number): Promise<PostEntry[]> {
+	const posts = await getAllPosts();
+	return posts.slice(0, limit);
+}
+
+export async function getPostsByTag(tag: string): Promise<PostEntry[]> {
+	const posts = await getAllPosts();
+	return posts.filter((post) => (post.data.tags || []).includes(tag));
+}
