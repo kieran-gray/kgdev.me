@@ -1,9 +1,9 @@
 import type { APIRoute } from 'astro';
-import { getCollection } from 'astro:content';
+import { CollectionEntry, getCollection } from 'astro:content';
 import { buildPostSourcePayload } from '@/lib/content/post-source';
 
 export async function getStaticPaths() {
-	const posts = await getCollection('posts');
+	const posts: CollectionEntry<'posts'>[] = await getCollection('posts');
 	return posts.map((entry) => ({ params: { slug: entry.slug }, props: { entry } }));
 }
 
