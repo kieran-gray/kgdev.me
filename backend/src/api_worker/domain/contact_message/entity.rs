@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::api_worker::domain::exceptions::ValidationError;
+use crate::api_worker::domain::ContactMessageValidationError;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ContactMessage {
@@ -14,7 +14,11 @@ pub struct ContactMessage {
 }
 
 impl ContactMessage {
-    pub fn create(email: String, name: String, message: String) -> Result<Self, ValidationError> {
+    pub fn create(
+        email: String,
+        name: String,
+        message: String,
+    ) -> Result<Self, ContactMessageValidationError> {
         Self::validate_email(&email)?;
         Self::validate_name(&name)?;
         Self::validate_message(&message)?;
@@ -29,9 +33,9 @@ impl ContactMessage {
         })
     }
 
-    fn validate_email(email: &str) -> Result<(), ValidationError> {
+    fn validate_email(email: &str) -> Result<(), ContactMessageValidationError> {
         if email.is_empty() || email.len() > 254 || email.chars().any(|c| c.is_whitespace()) {
-            return Err(ValidationError::InvalidEmail(
+            return Err(ContactMessageValidationError::InvalidEmail(
                 "Email must be between 1 and 254 characters".into(),
             ));
         }
@@ -41,28 +45,30 @@ impl ContactMessage {
         let domain = parts.next().unwrap_or("");
 
         if parts.next().is_some() || local.is_empty() || domain.is_empty() {
-            return Err(ValidationError::InvalidEmail(
+            return Err(ContactMessageValidationError::InvalidEmail(
                 "Invalid email format".to_string(),
             ));
         }
 
         match domain.find('.') {
             Some(i) if i > 0 && i < domain.len() - 1 => Ok(()),
-            _ => Err(ValidationError::InvalidEmail(
+            _ => Err(ContactMessageValidationError::InvalidEmail(
                 "Invalid email format".to_string(),
             )),
         }
     }
 
-    fn validate_name(name: &str) -> Result<(), ValidationError> {
+    fn validate_name(name: &str) -> Result<(), ContactMessageValidationError> {
         let trimmed = name.trim();
 
         if trimmed.is_empty() {
-            return Err(ValidationError::InvalidName("Name cannot be empty".into()));
+            return Err(ContactMessageValidationError::InvalidName(
+                "Name cannot be empty".into(),
+            ));
         }
 
         if trimmed.len() > 100 {
-            return Err(ValidationError::InvalidName(
+            return Err(ContactMessageValidationError::InvalidName(
                 "Name must be 100 characters or less".into(),
             ));
         }
@@ -70,17 +76,17 @@ impl ContactMessage {
         Ok(())
     }
 
-    fn validate_message(message: &str) -> Result<(), ValidationError> {
+    fn validate_message(message: &str) -> Result<(), ContactMessageValidationError> {
         let trimmed = message.trim();
 
         if trimmed.is_empty() {
-            return Err(ValidationError::InvalidMessage(
+            return Err(ContactMessageValidationError::InvalidMessage(
                 "Message cannot be empty".into(),
             ));
         }
 
         if trimmed.len() > 5000 {
-            return Err(ValidationError::InvalidMessage(
+            return Err(ContactMessageValidationError::InvalidMessage(
                 "Message must be 5000 characters or less".into(),
             ));
         }
@@ -119,7 +125,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            ValidationError::InvalidEmail(_)
+            ContactMessageValidationError::InvalidEmail(_)
         ));
     }
 
@@ -135,7 +141,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            ValidationError::InvalidEmail(_)
+            ContactMessageValidationError::InvalidEmail(_)
         ));
     }
 
@@ -159,7 +165,7 @@ mod tests {
             assert!(result.is_err(), "Email '{}' should be invalid", email);
             assert!(matches!(
                 result.unwrap_err(),
-                ValidationError::InvalidEmail(_)
+                ContactMessageValidationError::InvalidEmail(_)
             ));
         }
     }
@@ -195,7 +201,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            ValidationError::InvalidName(_)
+            ContactMessageValidationError::InvalidName(_)
         ));
     }
 
@@ -210,7 +216,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            ValidationError::InvalidName(_)
+            ContactMessageValidationError::InvalidName(_)
         ));
     }
 
@@ -226,7 +232,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            ValidationError::InvalidName(_)
+            ContactMessageValidationError::InvalidName(_)
         ));
     }
 
@@ -241,7 +247,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            ValidationError::InvalidMessage(_)
+            ContactMessageValidationError::InvalidMessage(_)
         ));
     }
 
@@ -256,7 +262,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            ValidationError::InvalidMessage(_)
+            ContactMessageValidationError::InvalidMessage(_)
         ));
     }
 
@@ -272,7 +278,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            ValidationError::InvalidMessage(_)
+            ContactMessageValidationError::InvalidMessage(_)
         ));
     }
 }

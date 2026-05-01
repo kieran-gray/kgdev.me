@@ -4,6 +4,7 @@ pubDate: 2025-07-13
 description: 'Building an idempotent event consumer in Python to eliminate duplicate processing and complete the exactly-once delivery guarantee in a distributed system.'
 author: 'Kieran Gray'
 isPinned: false
+qaPlaceholder: 'How does the idempotent consumer prevent duplicate processing?'
 excerpt: The adventure continues. In our last post we started the quest for the holy grail of distributed systems - Exactly-Once delivery. We tackled the first half of the problem by building a reliable producer with a transactional outbox...
 tags: ['python', 'architecture', 'events']
 ---

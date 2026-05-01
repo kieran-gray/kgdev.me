@@ -56,6 +56,7 @@ const blogPostingSchema = buildBlogPostingSchema({
 		pubDate: data.pubDate,
 		slug,
 		isPinned: data.isPinned,
+		qaPlaceholder: data.qaPlaceholder,
 		image: { src: data.image?.src, alt: data.image?.alt }
 	}}
 	tocHeadings={tocHeadings}

@@ -9,14 +9,15 @@ pub async fn public<F, Fut>(
     ctx: RouteContext<AppState>,
 ) -> Result<Response>
 where
-    F: Fn(Request, RouteContext<AppState>, CorsContext) -> Fut,
+    F: Fn(Request, RouteContext<AppState>) -> Fut,
     Fut: std::future::Future<Output = Result<Response>>,
 {
     let cors_context = CorsContext::new(ctx.data.config.allowed_origins.clone(), &req);
     if let Err(response) = cors_context.validate(&req) {
         return Ok(response);
     }
-    handler(req, ctx, cors_context).await
+    let result = handler(req, ctx).await?;
+    Ok(cors_context.add_to_response(result))
 }
 
 pub fn create_options_handler(

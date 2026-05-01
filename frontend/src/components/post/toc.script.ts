@@ -8,7 +8,7 @@ function setupToc() {
 	links.forEach((l) => slugToLink.set(l.dataset.slug!, l));
 
 	const contentHeadings = Array.from(
-		document.querySelectorAll<HTMLElement>('.content h2[id], .content h3[id]')
+		document.querySelectorAll<HTMLElement>('.post-main h1[id], .content h2[id], .content h3[id]')
 	);
 	if (!contentHeadings.length) return;
 

@@ -1,4 +1,5 @@
 pub mod api_worker;
+pub mod blog_post_qa;
 pub mod view_counter;
 
 use tracing::{Instrument, error, info, info_span};

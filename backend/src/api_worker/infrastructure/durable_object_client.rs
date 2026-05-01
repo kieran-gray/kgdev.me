@@ -22,4 +22,28 @@ impl DurableObjectClient {
 
         stub.fetch_with_request(request).await
     }
+
+    pub async fn post(
+        &self,
+        page: &str,
+        path: &str,
+        body: serde_json::Value,
+    ) -> worker::Result<Response> {
+        let stub = self.namespace.get_by_name(page)?;
+
+        let headers = Headers::new();
+        headers.append("Content-Type", "application/json")?;
+
+        let body_string = serde_json::to_string(&body)?;
+
+        let mut init = RequestInit::new();
+        init.with_method(Method::Post)
+            .with_headers(headers)
+            .with_body(Some(body_string.into()));
+
+        let url = format!("https://_.com{path}");
+        let request = Request::new_with_init(&url, &init)?;
+
+        stub.fetch_with_request(request).await
+    }
 }

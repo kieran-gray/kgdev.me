@@ -4,8 +4,10 @@ pubDate: 2026-04-27
 description: 'A small WebSocket-driven view counter on Cloudflare Durable Objects in Rust.'
 author: 'Kieran Gray'
 isPinned: false
+qaPlaceholder: 'How does the Durable Object keep the connection count accurate?'
 excerpt: I want a live view counter on each of my blog posts. Up when someone joins, down when they leave, no reload, and totals saved between sessions. Here's how I built it on Cloudflare Durable Objects in Rust.
 tags: ['cloudflare', 'rust']
+glossaryTerms: ['durable-object', 'event-sourcing', 'cloudflare-workers', 'astro']
 ---
 
 I want a live view counter on each of my blog posts.

@@ -12,6 +12,7 @@
   "vars": {
     "PUBLIC_FEATURE_SEARCH": "true",
     "PUBLIC_FEATURE_VIEW_COUNTER": "true",
+    "PUBLIC_FEATURE_BLOG_QA": "true",
     "PUBLIC_FEATURE_CONTACT": "true",
     "PUBLIC_FEATURE_OG": "true",
     "PUBLIC_FEATURE_MERMAID": "true",
@@ -19,6 +20,7 @@
     "PUBLIC_FEATURE_BOOKS": "true",
     "PUBLIC_FEATURE_PROJECTS": "true",
     "PUBLIC_VIEW_COUNTER_URL": "wss://blog-api.kgdev.me",
+    "PUBLIC_BLOG_QA_URL": "https://blog-api.kgdev.me/api/v1/ask",
     "PUBLIC_CONTACT_URL": "https://blog-api.kgdev.me/api/v1/contact/",
     "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAADFJ-aGGTpoBJuyq"
   },
@@ -36,6 +38,7 @@
       "vars": {
         "PUBLIC_FEATURE_SEARCH": "true",
         "PUBLIC_FEATURE_VIEW_COUNTER": "true",
+        "PUBLIC_FEATURE_BLOG_QA": "true",
         "PUBLIC_FEATURE_CONTACT": "true",
         "PUBLIC_FEATURE_OG": "true",
         "PUBLIC_FEATURE_MERMAID": "true",
@@ -43,6 +46,7 @@
         "PUBLIC_FEATURE_BOOKS": "true",
         "PUBLIC_FEATURE_PROJECTS": "true",
         "PUBLIC_VIEW_COUNTER_URL": "ws://localhost:8000",
+        "PUBLIC_BLOG_QA_URL": "http://localhost:8000/api/v1/ask",
         "PUBLIC_CONTACT_URL": "http://localhost:8000/api/v1/contact/",
         "PUBLIC_TURNSTILE_SITE_KEY": "1x00000000000000000000AA"
       }

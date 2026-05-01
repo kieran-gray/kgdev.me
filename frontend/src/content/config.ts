@@ -97,7 +97,24 @@ const posts = defineCollection({
 		excerpt: z.string(),
 		tags: z.array(z.string()).default([]),
 		isPinned: z.boolean().default(false),
+		qaPlaceholder: z.string().optional(),
+		glossaryTerms: z.array(z.string()).default([]),
 		image: z.object({ src: z.string().optional(), alt: z.string().optional() }).default({})
+	})
+});
+
+const glossary = defineCollection({
+	type: 'content',
+	schema: z.object({
+		term: z.string(),
+		sources: z
+			.array(
+				z.object({
+					title: z.string(),
+					url: z.string().url()
+				})
+			)
+			.default([])
 	})
 });
 
@@ -116,4 +133,4 @@ const pages = defineCollection({
 	})
 });
 
-export const collections = { projects, posts, pages, books };
+export const collections = { projects, posts, pages, books, glossary };

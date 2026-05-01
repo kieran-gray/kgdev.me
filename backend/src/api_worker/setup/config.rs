@@ -11,7 +11,12 @@ pub struct Config {
     pub allowed_blog_paths: Vec<String>,
     pub cloudflare_account_id: String,
     pub cloudflare_api_token: String,
+    pub cloudflare_vectorize_api_token: String,
     pub destination_email: String,
+    pub vectorize_index_name: String,
+    pub embedding_model: String,
+    pub generation_model: String,
+    pub qa_daily_cap: u32,
 }
 
 impl Config {
@@ -22,7 +27,12 @@ impl Config {
         let allowed_blog_paths = Config::parse_csv(env, "ALLOWED_BLOG_PATHS")?;
         let cloudflare_account_id = Config::parse(env, "CLOUDFLARE_ACCOUNT_ID")?;
         let cloudflare_api_token = Config::parse(env, "CLOUDFLARE_EMAIL_API_TOKEN")?;
+        let cloudflare_vectorize_api_token = Config::parse(env, "CLOUDFLARE_VECTORIZE_API_TOKEN")?;
         let destination_email = Config::parse(env, "DESTINATION_EMAIL")?;
+        let vectorize_index_name = Config::parse(env, "VECTORIZE_INDEX_NAME")?;
+        let embedding_model = Config::parse(env, "EMBEDDING_MODEL")?;
+        let generation_model = Config::parse(env, "GENERATION_MODEL")?;
+        let qa_daily_cap = Config::parse(env, "QA_DAILY_CAP")?;
 
         Ok(Config {
             siteverify_url,
@@ -31,7 +41,12 @@ impl Config {
             allowed_blog_paths,
             cloudflare_account_id,
             cloudflare_api_token,
+            cloudflare_vectorize_api_token,
             destination_email,
+            vectorize_index_name,
+            embedding_model,
+            generation_model,
+            qa_daily_cap,
         })
     }
 

@@ -28,8 +28,8 @@ function assert(condition, message, failures) {
 
 const scenarios = [
 	{
-		name: 'FEATURE_SEARCH=false',
-		env: { FEATURE_SEARCH: 'false', PUBLIC_FEATURE_SEARCH: 'false' },
+		name: 'search',
+		env: { PUBLIC_FEATURE_SEARCH: 'false' },
 		check() {
 			const failures = [];
 			const html = read('index.html');
@@ -41,8 +41,8 @@ const scenarios = [
 		}
 	},
 	{
-		name: 'FEATURE_VIEW_COUNTER=false',
-		env: { FEATURE_VIEW_COUNTER: 'false', PUBLIC_FEATURE_VIEW_COUNTER: 'false' },
+		name: 'viewCounter',
+		env: { PUBLIC_FEATURE_VIEW_COUNTER: 'false' },
 		check() {
 			const failures = [];
 			const html = read('posts/blog-view-counter/index.html');
@@ -52,8 +52,8 @@ const scenarios = [
 		}
 	},
 	{
-		name: 'FEATURE_CONTACT=false',
-		env: { FEATURE_CONTACT: 'false', PUBLIC_FEATURE_CONTACT: 'false' },
+		name: 'contact',
+		env: { PUBLIC_FEATURE_CONTACT: 'false' },
 		check() {
 			const failures = [];
 			const html = read('index.html');
@@ -63,8 +63,8 @@ const scenarios = [
 		}
 	},
 	{
-		name: 'FEATURE_OG=false',
-		env: { FEATURE_OG: 'false', PUBLIC_FEATURE_OG: 'false' },
+		name: 'og',
+		env: { PUBLIC_FEATURE_OG: 'false' },
 		check() {
 			const failures = [];
 			const html = read('posts/blog-view-counter/index.html');
@@ -75,8 +75,8 @@ const scenarios = [
 		}
 	},
 	{
-		name: 'FEATURE_MERMAID=false',
-		env: { FEATURE_MERMAID: 'false', PUBLIC_FEATURE_MERMAID: 'false' },
+		name: 'mermaid',
+		env: { PUBLIC_FEATURE_MERMAID: 'false' },
 		check() {
 			const failures = [];
 			const astroDir = join(dist, '_astro');
@@ -90,8 +90,8 @@ const scenarios = [
 		}
 	},
 	{
-		name: 'FEATURE_RSS=false',
-		env: { FEATURE_RSS: 'false', PUBLIC_FEATURE_RSS: 'false' },
+		name: 'rss',
+		env: { PUBLIC_FEATURE_RSS: 'false' },
 		check() {
 			const failures = [];
 			const html = read('index.html');
@@ -105,8 +105,8 @@ const scenarios = [
 		}
 	},
 	{
-		name: 'FEATURE_PROJECTS=false',
-		env: { FEATURE_PROJECTS: 'false', PUBLIC_FEATURE_PROJECTS: 'false' },
+		name: 'projects',
+		env: { PUBLIC_FEATURE_PROJECTS: 'false' },
 		check() {
 			const failures = [];
 			const homeHtml = read('index.html');
@@ -120,8 +120,8 @@ const scenarios = [
 		}
 	},
 	{
-		name: 'FEATURE_BOOKS=false',
-		env: { FEATURE_BOOKS: 'false', PUBLIC_FEATURE_BOOKS: 'false' },
+		name: 'books',
+		env: { PUBLIC_FEATURE_BOOKS: 'false' },
 		check() {
 			const failures = [];
 			const homeHtml = read('index.html');
@@ -130,7 +130,17 @@ const scenarios = [
 			assert(!homeHtml.includes('href="/books"'), 'Expected no books link when books is disabled', failures);
 			return failures;
 		}
-	}
+	},
+	{
+		name: 'blogQa',
+		env: { PUBLIC_FEATURE_BLOG_QA: 'false' },
+		check() {
+			const failures = [];
+			const html = read('posts/blog-view-counter/index.html');
+			assert(!html.includes('id="blog-qa"'), 'Expected no Blog QA mount when blogQa is disabled', failures);
+			return failures;
+		}
+	},
 ];
 
 const scenarioFailures = [];

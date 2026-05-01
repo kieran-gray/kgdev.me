@@ -3,18 +3,25 @@ use std::sync::Arc;
 use worker::Env;
 
 use crate::api_worker::{
-    api::client::DurableObjectClient,
-    application::{ContactMessageService, ContactMessageServiceTrait},
+    application::{
+        BlogQaService, BlogQaServiceTrait, ContactMessageService, ContactMessageServiceTrait,
+        QaCacheService,
+    },
     infrastructure::{
-        CloudflareEmailService, CloudflareRequestValidationService, WorkerHttpClient,
+        CloudflareEmailService, CloudflareRequestValidationService, KVCache,
+        QaCoordinatorDoService, VectorizeRestService, WorkerHttpClient, WorkersAiService,
+        durable_object_client::DurableObjectClient,
     },
     setup::{Config, exceptions::SetupError},
 };
 
+const QA_CACHE_TTL_SECONDS: u64 = 60 * 60 * 24 * 30;
+
 pub struct AppState {
     pub config: Config,
     pub contact_message_service: Arc<dyn ContactMessageServiceTrait>,
-    pub do_client: DurableObjectClient,
+    pub blog_qa_service: Arc<dyn BlogQaServiceTrait>,
+    pub view_counter_do_client: DurableObjectClient,
 }
 
 impl AppState {
@@ -37,7 +44,44 @@ impl AppState {
         let contact_message_service =
             ContactMessageService::create(request_validation_service, email_service);
 
-        let do_client = DurableObjectClient::new(
+        let ai_binding = env
+            .ai("AI")
+            .map_err(|_| SetupError::MissingVariable("AI".to_string()))?;
+        let ai_service = WorkersAiService::create(
+            ai_binding,
+            config.embedding_model.clone(),
+            config.generation_model.clone(),
+        );
+
+        let vectorize_service = VectorizeRestService::create(
+            config.cloudflare_account_id.clone(),
+            config.cloudflare_vectorize_api_token.clone(),
+            config.vectorize_index_name.clone(),
+            http_client.clone(),
+        );
+
+        let kv = env
+            .kv("BLOG_POST_QA_CACHE")
+            .map_err(|_| SetupError::MissingVariable("BLOG_POST_QA_CACHE".to_string()))?;
+        let kv_cache = Arc::new(KVCache::create(kv, QA_CACHE_TTL_SECONDS));
+        let qa_cache_service = QaCacheService::create(kv_cache);
+
+        let qa_do_client = DurableObjectClient::new(
+            env.durable_object("BLOG_POST_QA")
+                .map_err(|_| SetupError::MissingVariable("BLOG_POST_QA".to_string()))?,
+        );
+        let qa_coordinator = QaCoordinatorDoService::create(qa_do_client);
+
+        let blog_qa_service = BlogQaService::create(
+            ai_service,
+            vectorize_service,
+            qa_cache_service,
+            qa_coordinator,
+            config.generation_model.clone(),
+            config.qa_daily_cap,
+        );
+
+        let view_counter_do_client = DurableObjectClient::new(
             env.durable_object("VIEW_COUNTER")
                 .map_err(|_| SetupError::MissingVariable("VIEW_COUNTER".to_string()))?,
         );
@@ -45,7 +89,8 @@ impl AppState {
         Ok(Self {
             config,
             contact_message_service,
-            do_client,
+            blog_qa_service,
+            view_counter_do_client,
         })
     }
 }
