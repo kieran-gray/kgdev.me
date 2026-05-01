@@ -1,9 +1,10 @@
-use crate::api_worker::application::CachedSource;
+use crate::api_worker::application::{CachedSource, Reference};
 
 #[derive(Debug, Clone)]
 pub enum SseEvent {
     Meta {
         sources: Vec<CachedSource>,
+        references: Vec<Reference>,
         cached: bool,
         model: String,
     },
@@ -21,11 +22,13 @@ impl SseEvent {
         match self {
             Self::Meta {
                 sources,
+                references,
                 cached,
                 model,
             } => {
                 let payload = serde_json::json!({
                     "sources": sources,
+                    "references": references,
                     "cached": cached,
                     "model": model,
                 });

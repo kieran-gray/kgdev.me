@@ -67,7 +67,7 @@ const showToc = tocHeadings.length >= 1;
 		</div>
 		{showToc && (
 			<aside class="post-toc" aria-label="Table of contents">
-				<TableOfContents pageTitle={post.title} headings={tocHeadings} />
+				<TableOfContents headings={tocHeadings} />
 				{features.blogQa.enabled && <BlogQa slug={post.slug} placeholder={post.qaPlaceholder} />}
 			</aside>
 		)}

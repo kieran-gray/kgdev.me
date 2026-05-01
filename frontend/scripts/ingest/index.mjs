@@ -6,9 +6,11 @@ import { parseArgs } from 'node:util';
 import { chunk } from './chunker.mjs';
 import { readManifest, writeManifest, recordPost, previousEntry } from './manifest.mjs';
 import { readEnv, embedBatch, upsertVectors, deleteVectorIds, putKvJson } from './cloudflare.mjs';
+import { loadGlossary, resolveGlossaryTerms } from './glossary.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const POSTS_DIR = resolve(here, '../../src/content/posts');
+const GLOSSARY_DIR = resolve(here, '../../src/content/glossary');
 const MANIFEST_PATH = resolve(here, 'manifest.json');
 
 const INDEX_NAME = process.env.VECTORIZE_INDEX_NAME ?? 'blog-chunks';
@@ -16,13 +18,24 @@ const MODEL = process.env.EMBEDDING_MODEL ?? '@cf/baai/bge-base-en-v1.5';
 const EMBED_BATCH = 50;
 const UPSERT_BATCH = 100;
 
-function parseFrontmatterTitle(source) {
-	if (!source.startsWith('---\n')) return null;
+function parsePostFrontmatter(source) {
+	if (!source.startsWith('---\n')) return { title: null, glossaryTerms: [] };
 	const end = source.indexOf('\n---\n', 4);
-	if (end === -1) return null;
+	if (end === -1) return { title: null, glossaryTerms: [] };
 	const fm = source.slice(4, end);
-	const match = fm.match(/^title:\s*['"](.+?)['"]\s*$/m);
-	return match ? match[1] : null;
+
+	const titleMatch = fm.match(/^title:\s*['"](.+?)['"]\s*$/m);
+	const title = titleMatch ? titleMatch[1] : null;
+
+	const termsMatch = fm.match(/^glossaryTerms:\s*\[(.*?)\]\s*$/m);
+	const glossaryTerms = termsMatch
+		? termsMatch[1]
+				.split(',')
+				.map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+				.filter(Boolean)
+		: [];
+
+	return { title, glossaryTerms };
 }
 
 function sha256Hex(s) {
@@ -43,11 +56,23 @@ function discoverPosts(filter) {
 	return found;
 }
 
+function buildGlossaryChunks(resolvedGlossary, postChunkCount) {
+	return resolvedGlossary.map((entry, i) => ({
+		chunk_id: postChunkCount + i,
+		heading: `Glossary: ${entry.term}`,
+		text: `${entry.term}\n\n${entry.definition}`,
+		char_start: 0,
+		char_end: 0,
+		sources: entry.sources,
+	}));
+}
+
 async function ingestPost(slug, opts) {
 	const path = resolve(POSTS_DIR, `${slug}.md`);
 	const source = readFileSync(path, 'utf8');
-	const postVersion = sha256Hex(source);
-	const title = parseFrontmatterTitle(source);
+	const { title, glossaryTerms } = parsePostFrontmatter(source);
+	const resolvedGlossary = resolveGlossaryTerms(slug, glossaryTerms, opts.glossary);
+	const postVersion = sha256Hex(source + JSON.stringify(resolvedGlossary));
 
 	const prev = previousEntry(opts.manifest, slug);
 	if (prev?.post_version === postVersion && !opts.force) {
@@ -58,9 +83,11 @@ async function ingestPost(slug, opts) {
 		return { slug, skipped: true };
 	}
 
-	const chunks = chunk(source);
+	const postChunks = chunk(source);
+	const glossaryChunks = buildGlossaryChunks(resolvedGlossary, postChunks.length);
+	const chunks = [...postChunks, ...glossaryChunks];
 	console.log(
-		`  ${slug}: ${chunks.length} chunks` +
+		`  ${slug}: ${postChunks.length} chunks + ${glossaryChunks.length} glossary` +
 			(prev ? ` (was ${prev.chunk_count})` : '') +
 			` @ ${postVersion.slice(0, 8)}`,
 	);
@@ -76,10 +103,8 @@ async function ingestPost(slug, opts) {
 		embeddings.push(...vecs);
 	}
 
-	const records = chunks.map((c, i) => ({
-		id: vectorId(slug, c.chunk_id),
-		values: embeddings[i],
-		metadata: {
+	const records = chunks.map((c, i) => {
+		const metadata = {
 			post_slug: slug,
 			post_version: postVersion,
 			post_title: title ?? slug,
@@ -88,8 +113,16 @@ async function ingestPost(slug, opts) {
 			text: c.text,
 			char_start: c.char_start,
 			char_end: c.char_end,
-		},
-	}));
+		};
+		if (c.sources && c.sources.length > 0) {
+			metadata.sources = JSON.stringify(c.sources);
+		}
+		return {
+			id: vectorId(slug, c.chunk_id),
+			values: embeddings[i],
+			metadata,
+		};
+	});
 
 	for (let i = 0; i < records.length; i += UPSERT_BATCH) {
 		await upsertVectors(opts.cf, INDEX_NAME, records.slice(i, i + UPSERT_BATCH));
@@ -157,7 +190,9 @@ async function main() {
 		force: values.force,
 		manifest: readManifest(MANIFEST_PATH),
 		cf: values['dry-run'] ? null : readEnv(),
+		glossary: loadGlossary(GLOSSARY_DIR),
 	};
+	console.log(`Loaded ${opts.glossary.size} glossary term(s)`);
 
 	const slugs = discoverPosts(positionals.length ? positionals : null);
 	console.log(`Ingesting ${slugs.length} post(s) into ${INDEX_NAME}${opts.dryRun ? ' (dry run)' : ''}`);

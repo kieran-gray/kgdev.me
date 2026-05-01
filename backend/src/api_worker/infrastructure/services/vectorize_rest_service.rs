@@ -6,7 +6,7 @@ use serde_json::json;
 use tracing::{error, warn};
 
 use crate::api_worker::{
-    application::{AppError, ScoredChunk, VectorizeServiceTrait},
+    application::{AppError, Reference, ScoredChunk, VectorizeServiceTrait},
     infrastructure::http_client::HttpClientTrait,
 };
 
@@ -57,6 +57,7 @@ struct MatchMetadata {
     text: String,
     post_slug: String,
     post_version: Option<String>,
+    sources: Option<String>,
 }
 
 #[async_trait(?Send)]
@@ -123,12 +124,24 @@ impl VectorizeServiceTrait for VectorizeRestService {
                 if metadata.post_version.as_deref() != Some(post_version) {
                     return None;
                 }
+                let references = metadata
+                    .sources
+                    .as_deref()
+                    .and_then(|raw| match serde_json::from_str::<Vec<Reference>>(raw) {
+                        Ok(refs) => Some(refs),
+                        Err(e) => {
+                            warn!(error = %e, raw = raw, "could not parse chunk sources metadata");
+                            None
+                        }
+                    })
+                    .unwrap_or_default();
                 Some(ScoredChunk {
                     chunk_id: metadata.chunk_id,
                     heading: metadata.heading.unwrap_or_default(),
                     text: metadata.text,
                     post_slug: metadata.post_slug,
                     score: m.score,
+                    references,
                 })
             })
             .collect();

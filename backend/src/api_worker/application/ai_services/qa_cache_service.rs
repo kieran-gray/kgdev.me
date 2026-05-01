@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::api_worker::application::{
-    AppError,
+    AppError, Reference,
     cache_service::{CacheError, CacheTrait},
 };
 
@@ -19,6 +19,8 @@ pub struct CachedSource {
 pub struct CachedAnswer {
     pub answer: String,
     pub sources: Vec<CachedSource>,
+    #[serde(default)]
+    pub references: Vec<Reference>,
     pub model: String,
     pub ts: i64,
 }

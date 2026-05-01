@@ -9,7 +9,8 @@ use tracing::{info, warn};
 use crate::api_worker::{
     application::{
         AiInferenceServiceTrait, AppError, CachedAnswer, CachedSource, ChargeOutcome,
-        QaCacheServiceTrait, QaCoordinatorTrait, ScoredChunk, SseEvent, VectorizeServiceTrait,
+        QaCacheServiceTrait, QaCoordinatorTrait, Reference, ScoredChunk, SseEvent,
+        VectorizeServiceTrait,
     },
     domain::Question,
 };
@@ -18,8 +19,16 @@ const VECTORIZE_TOP_K: u32 = 10;
 const RESULTS_PER_POST: usize = 4;
 const MIN_SCORE: f32 = 0.65;
 const SYSTEM_PROMPT: &str = concat!(
-    "You answer questions about a single blog post. Use ONLY the provided excerpts. ",
-    "If the answer is not present, say \"I don't see that in this post.\" ",
+    "You answer questions about a blog post. The excerpts you receive are either ",
+    "passages from the post or authoritative reference definitions for technical ",
+    "terms (these are headed \"Glossary: ...\"). ",
+    "Treat both as valid context. However: ",
+    "do NOT refer to excerpts by number or any index (e.g. \"[1]\", \"excerpt 2\"). ",
+    "do NOT imply that glossary content is part of the blog post. ",
+    "When using glossary content, clearly indicate it is a definition. ",
+    "If a question asks about a term and a Glossary excerpt covers it, you may explain ",
+    "the term in full from that excerpt. ",
+    "If the answer is not present in any excerpt, say \"I don't see that in this post.\" ",
     "Be concise. Quote briefly when it helps. Do not invent facts."
 );
 
@@ -62,16 +71,27 @@ impl BlogQaService {
 fn build_prompt(question: &str, chunks: &[ScoredChunk]) -> (String, String) {
     let system = SYSTEM_PROMPT.to_string();
 
-    let mut user = String::from("Excerpts from the post:\n\n");
-    for (i, c) in chunks.iter().enumerate() {
+    let mut user = String::from("Excerpts and glossary definitions:\n\n");
+
+    for c in chunks {
         let heading = if c.heading.is_empty() {
             "(intro)"
         } else {
-            c.heading.as_str()
+            &c.heading
         };
-        user.push_str(&format!("[{}] {}\n{}\n\n", i + 1, heading, c.text));
+
+        if !c.references.is_empty() {
+            user.push_str("=== GLOSSARY ENTRY ===\n");
+        } else {
+            user.push_str("=== BLOG EXCERPT ===\n");
+        }
+
+        user.push_str(&format!("Title: {}\n", heading));
+        user.push_str(&format!("Content:\n{}\n\n", c.text));
     }
-    user.push_str(&format!("Question: {question}\n\nAnswer:"));
+
+    user.push_str(&format!("Question: {}\n\nAnswer:", question));
+
     (system, user)
 }
 
@@ -108,6 +128,7 @@ impl BlogQaServiceTrait for BlogQaService {
                 let _ = coordinator.record_hit(&slug, &hash).await;
                 yield SseEvent::Meta {
                     sources: cached.sources,
+                    references: cached.references,
                     cached: true,
                     model: cached.model,
                 };
@@ -182,20 +203,14 @@ impl BlogQaServiceTrait for BlogQaService {
                 })
                 .collect();
 
+            let references = dedupe_references(&matches);
+
             if matches.is_empty() {
                 warn!(slug = slug.as_str(), "no relevant chunks");
                 let answer = "I don't see that in this post.".to_string();
-                let cached_answer = CachedAnswer {
-                    answer: answer.clone(),
-                    sources: sources.clone(),
-                    model: generation_model.clone(),
-                    ts: now_ms(),
-                };
-                if let Err(e) = cache.put(&slug, &post_version, &hash, &cached_answer).await {
-                    warn!(error = %e, "qa cache write failed");
-                }
                 yield SseEvent::Meta {
                     sources,
+                    references,
                     cached: false,
                     model: generation_model.clone(),
                 };
@@ -206,6 +221,7 @@ impl BlogQaServiceTrait for BlogQaService {
 
             yield SseEvent::Meta {
                 sources: sources.clone(),
+                references: references.clone(),
                 cached: false,
                 model: generation_model.clone(),
             };
@@ -242,6 +258,7 @@ impl BlogQaServiceTrait for BlogQaService {
             let cached_answer = CachedAnswer {
                 answer: answer.clone(),
                 sources: sources.clone(),
+                references: references.clone(),
                 model: generation_model.clone(),
                 ts: now_ms(),
             };
@@ -257,4 +274,17 @@ impl BlogQaServiceTrait for BlogQaService {
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
+}
+
+fn dedupe_references(matches: &[ScoredChunk]) -> Vec<Reference> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for chunk in matches {
+        for reference in &chunk.references {
+            if seen.insert(reference.url.clone()) {
+                out.push(reference.clone());
+            }
+        }
+    }
+    out
 }

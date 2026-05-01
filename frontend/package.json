@@ -16,6 +16,7 @@
 		"test:ingest": "node --test scripts/ingest/*.test.mjs",
 		"test:unit": "vitest run",
 		"ingest:rag": "node scripts/ingest/index.mjs",
+		"ingest:rag:force": "node scripts/ingest/index.mjs --force",
 		"verify-template": "npm run typecheck && npm run build && npm run test:unit && npm run test:features",
 		"format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
 		"format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",

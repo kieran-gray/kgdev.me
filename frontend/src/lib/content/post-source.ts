@@ -69,7 +69,7 @@ export function buildPostSourcePayload(entry: CollectionEntry<'posts'>): PostSou
 }
 
 export async function getAllPostSourcePayloads(): Promise<PostSourcePayload[]> {
-	const entries = await getCollection('posts');
+	const entries: CollectionEntry<'posts'>[] = await getCollection('posts');
 	return entries
 		.sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
 		.map(buildPostSourcePayload);

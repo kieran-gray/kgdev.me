@@ -6,8 +6,14 @@ interface Source {
 	score: number;
 }
 
+interface Reference {
+	title: string;
+	url: string;
+}
+
 interface MetaPayload {
 	sources: Source[];
+	references?: Reference[];
 	cached: boolean;
 	model: string;
 }
@@ -49,6 +55,8 @@ function setup() {
 	const answerEl = root.querySelector<HTMLDivElement>('#blog-qa-answer');
 	const sourcesWrap = root.querySelector<HTMLDetailsElement>('#blog-qa-sources-wrap');
 	const sourcesList = root.querySelector<HTMLUListElement>('#blog-qa-sources');
+	const referencesWrap = root.querySelector<HTMLDivElement>('#blog-qa-references-wrap');
+	const referencesList = root.querySelector<HTMLUListElement>('#blog-qa-references');
 
 	if (
 		!openBtn ||
@@ -63,7 +71,9 @@ function setup() {
 		!statusEl ||
 		!answerEl ||
 		!sourcesWrap ||
-		!sourcesList
+		!sourcesList ||
+		!referencesWrap ||
+		!referencesList
 	) {
 		return;
 	}
@@ -94,6 +104,8 @@ function setup() {
 		answerEl!.textContent = '';
 		sourcesList!.innerHTML = '';
 		sourcesWrap!.hidden = true;
+		referencesList!.innerHTML = '';
+		referencesWrap!.hidden = true;
 	}
 
 	function renderSources(sources: Source[]) {
@@ -109,6 +121,25 @@ function setup() {
 			sourcesList!.appendChild(li);
 		}
 		sourcesWrap!.hidden = false;
+	}
+
+	function renderReferences(references: Reference[]) {
+		referencesList!.innerHTML = '';
+		if (references.length === 0) {
+			referencesWrap!.hidden = true;
+			return;
+		}
+		for (const r of references) {
+			const li = document.createElement('li');
+			const a = document.createElement('a');
+			a.href = r.url;
+			a.target = '_blank';
+			a.rel = 'noopener noreferrer';
+			a.textContent = r.title;
+			li.appendChild(a);
+			referencesList!.appendChild(li);
+		}
+		referencesWrap!.hidden = false;
 	}
 
 	function appendDelta(text: string) {
@@ -155,6 +186,7 @@ function setup() {
 				const meta = JSON.parse(parsed.data) as MetaPayload;
 				showStatus('ok', meta.cached ? 'Cached answer' : 'Drafting answer…');
 				renderSources(meta.sources);
+				renderReferences(meta.references ?? []);
 			} else if (parsed.event === 'delta') {
 				const payload = JSON.parse(parsed.data) as { text: string };
 				appendDelta(payload.text);
