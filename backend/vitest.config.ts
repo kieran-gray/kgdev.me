@@ -12,6 +12,7 @@ export default defineWorkersConfig(async () => {
 							ENVIRONMENT: 'test',
 							CLOUDFLARE_ACCOUNT_ID: 'test-account-id',
 							CLOUDFLARE_EMAIL_API_TOKEN: 'test-api-token',
+							CLOUDFLARE_VECTORIZE_API_TOKEN: 'test-vectorize-api-token',
 							CLOUDFLARE_SITEVERIFY_URL: 'https://test.kgdev.me/turnstile/v0/siteverify',
 							CLOUDFLARE_TURNSTILE_SECRET_KEY: 'test-secret-key',
 							ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:5174,http://localhost:5175',
