@@ -211,3 +211,38 @@
 	border-left: 2px solid var(--accent-200);
 	line-height: 1.4;
 }
+
+.blog-qa-mobile-wrap {
+	padding: 1.5rem 0;
+}
+
+@media (min-width: 1280px) {
+	.blog-qa-mobile-wrap {
+		display: none;
+	}
+}
+
+.blog-qa-mobile-trigger {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	width: 100%;
+	padding: 0.6rem 0.75rem;
+	border: 2px solid var(--accent-200);
+	background: transparent;
+	color: var(--accent-700);
+	font-family: inherit;
+	font-size: 0.7rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	cursor: pointer;
+	transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.blog-qa-mobile-trigger:hover,
+.blog-qa-mobile-trigger:active {
+	border-color: var(--accent-500);
+	color: var(--accent-500);
+}

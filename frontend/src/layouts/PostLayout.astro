@@ -4,6 +4,7 @@ import PostHeader from '@/components/post/PostHeader.astro';
 import PostContent from '@/components/post/PostContent.astro';
 import TableOfContents from '@/components/post/TableOfContents.astro';
 import BlogQa from '@/features/blog-qa/BlogQa.astro';
+import BlogQaMobileTrigger from '@/features/blog-qa/BlogQaMobileTrigger.astro';
 import { features } from '@/config/features';
 
 interface HeadProps {
@@ -34,6 +35,7 @@ interface Props {
 		pubDate: Date;
 		slug: string;
 		isPinned?: boolean;
+		qaPlaceholder?: string;
 		image?: {
 			src?: string;
 			alt?: string;
@@ -43,7 +45,7 @@ interface Props {
 }
 
 const { head, post, tocHeadings = [] } = Astro.props as Props;
-const showToc = tocHeadings.length >= 2;
+const showToc = tocHeadings.length >= 1;
 ---
 
 <BaseLayout head={head}>
@@ -61,11 +63,12 @@ const showToc = tocHeadings.length >= 2;
 				img={post.image}
 			/>
 			<PostContent><slot /></PostContent>
+			{showToc && features.blogQa.enabled && <BlogQaMobileTrigger />}
 		</div>
 		{showToc && (
 			<aside class="post-toc" aria-label="Table of contents">
-				<TableOfContents headings={tocHeadings} />
-				{features.blogQa.enabled && <BlogQa slug={post.slug} />}
+				<TableOfContents pageTitle={post.title} headings={tocHeadings} />
+				{features.blogQa.enabled && <BlogQa slug={post.slug} placeholder={post.qaPlaceholder} />}
 			</aside>
 		)}
 	</div>

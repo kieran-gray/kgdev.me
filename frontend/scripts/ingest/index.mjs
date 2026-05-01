@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { chunk } from './chunker.mjs';
 import { readManifest, writeManifest, recordPost, previousEntry } from './manifest.mjs';
-import { readEnv, embedBatch, upsertVectors, deleteVectorIds } from './cloudflare.mjs';
+import { readEnv, embedBatch, upsertVectors, deleteVectorIds, putKvJson } from './cloudflare.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const POSTS_DIR = resolve(here, '../../src/content/posts');
@@ -52,6 +52,9 @@ async function ingestPost(slug, opts) {
 	const prev = previousEntry(opts.manifest, slug);
 	if (prev?.post_version === postVersion && !opts.force) {
 		console.log(`  ${slug}: unchanged (${postVersion.slice(0, 8)}), skipping`);
+		if (!opts.dryRun) {
+			await putKvJson(opts.cf, `post_version:${slug}`, { v: postVersion });
+		}
 		return { slug, skipped: true };
 	}
 
@@ -101,6 +104,8 @@ async function ingestPost(slug, opts) {
 		await deleteVectorIds(opts.cf, INDEX_NAME, stale);
 	}
 
+	await putKvJson(opts.cf, `post_version:${slug}`, { v: postVersion });
+
 	recordPost(opts.manifest, slug, {
 		post_version: postVersion,
 		chunk_count: chunks.length,
@@ -123,10 +128,11 @@ function printHelp() {
 			'  --help         Show this help.',
 			'',
 			'Env:',
-			'  CLOUDFLARE_ACCOUNT_ID            Required (unless --dry-run).',
-			'  CLOUDFLARE_RAG_INGEST_API_TOKEN Required (unless --dry-run). Needs Workers AI + Vectorize edit.',
-			'  VECTORIZE_INDEX_NAME    Default: blog-chunks',
-			'  EMBEDDING_MODEL         Default: @cf/baai/bge-base-en-v1.5',
+			'  CLOUDFLARE_ACCOUNT_ID                 Required (unless --dry-run).',
+			'  CLOUDFLARE_RAG_INGEST_API_TOKEN       Required (unless --dry-run). Needs Workers AI + Vectorize edit + KV write.',
+			'  BLOG_POST_QA_CACHE_KV_NAMESPACE_ID    Required (unless --dry-run). The KV namespace bound as BLOG_POST_QA_CACHE in the worker.',
+			'  VECTORIZE_INDEX_NAME                  Default: blog-chunks',
+			'  EMBEDDING_MODEL                       Default: @cf/baai/bge-base-en-v1.5',
 		].join('\n'),
 	);
 }

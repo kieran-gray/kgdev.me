@@ -3,16 +3,18 @@ const API_BASE = 'https://api.cloudflare.com/client/v4';
 export function readEnv() {
 	const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 	const apiToken = process.env.CLOUDFLARE_RAG_INGEST_API_TOKEN;
+	const kvNamespaceId = process.env.BLOG_POST_QA_CACHE_KV_NAMESPACE_ID;
 	const missing = [];
 	if (!accountId) missing.push('CLOUDFLARE_ACCOUNT_ID');
 	if (!apiToken) missing.push('CLOUDFLARE_RAG_INGEST_API_TOKEN');
+	if (!kvNamespaceId) missing.push('BLOG_POST_QA_CACHE_KV_NAMESPACE_ID');
 	if (missing.length) {
 		throw new Error(
 			`Missing env vars: ${missing.join(', ')}. ` +
-			'Token needs Workers AI + Vectorize edit permissions.',
+			'Token needs Workers AI + Vectorize edit + KV write permissions.',
 		);
 	}
-	return { accountId, apiToken };
+	return { accountId, apiToken, kvNamespaceId };
 }
 
 async function cfFetch(url, init, ctx) {
@@ -83,4 +85,31 @@ export async function deleteVectorIds(ctx, indexName, ids) {
 		},
 		{ ...ctx, label: 'vectorize-delete' },
 	);
+}
+
+export async function putKvJson(ctx, key, value) {
+	const url = `${API_BASE}/accounts/${ctx.accountId}/storage/kv/namespaces/${ctx.kvNamespaceId}/values/${encodeURIComponent(key)}`;
+	await cfFetch(
+		url,
+		{
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(value),
+		},
+		{ ...ctx, label: 'kv-put' },
+	);
+}
+
+export async function createMetadataIndex(ctx, indexName, propertyName, type = 'string') {
+	const url = `${API_BASE}/accounts/${ctx.accountId}/vectorize/v2/indexes/${indexName}/metadata_index/create`;
+	const json = await cfFetch(
+		url,
+		{
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ propertyName, indexType: type }),
+		},
+		{ ...ctx, label: 'vectorize-metadata-index' },
+	);
+	return json;
 }

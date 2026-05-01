@@ -1,0 +1,22 @@
+---
+---
+<div class="blog-qa-mobile-wrap">
+	<button type="button" class="blog-qa-mobile-trigger" id="blog-qa-mobile-open">
+		<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<circle cx="12" cy="12" r="10"/>
+			<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+			<line x1="12" y1="17" x2="12.01" y2="17"/>
+		</svg>
+		<span>Ask about this post</span>
+	</button>
+</div>
+
+<script>
+	function setup() {
+		document.getElementById('blog-qa-mobile-open')?.addEventListener('click', () => {
+			(document.getElementById('blog-qa-open') as HTMLButtonElement | null)?.click();
+		});
+	}
+
+	document.addEventListener('astro:page-load', setup);
+</script>

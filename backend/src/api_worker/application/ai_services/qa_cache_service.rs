@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use tracing::warn;
 
 use crate::api_worker::application::{
     AppError,
@@ -26,16 +24,35 @@ pub struct CachedAnswer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct DailyCounter {
-    date: String,
-    count: u32,
+struct PostVersion {
+    v: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct EmbeddingEntry {
+    e: Vec<f32>,
+}
+
+const EMBEDDING_TTL_SECONDS: u64 = 60 * 60 * 24 * 90;
 
 #[async_trait(?Send)]
 pub trait QaCacheServiceTrait {
-    async fn get(&self, slug: &str, hash: &str) -> Result<Option<CachedAnswer>, AppError>;
-    async fn put(&self, slug: &str, hash: &str, answer: &CachedAnswer) -> Result<(), AppError>;
-    async fn check_and_increment_daily_cap(&self, cap: u32) -> Result<bool, AppError>;
+    async fn get(
+        &self,
+        slug: &str,
+        post_version: &str,
+        hash: &str,
+    ) -> Result<Option<CachedAnswer>, AppError>;
+    async fn put(
+        &self,
+        slug: &str,
+        post_version: &str,
+        hash: &str,
+        answer: &CachedAnswer,
+    ) -> Result<(), AppError>;
+    async fn get_post_version(&self, slug: &str) -> Result<Option<String>, AppError>;
+    async fn get_embedding(&self, hash: &str) -> Result<Option<Vec<f32>>, AppError>;
+    async fn put_embedding(&self, hash: &str, embedding: &[f32]) -> Result<(), AppError>;
 }
 
 pub struct QaCacheService<C: CacheTrait + Send + Sync> {
@@ -47,12 +64,16 @@ impl<C: CacheTrait + Send + Sync + 'static> QaCacheService<C> {
         Arc::new(Self { cache })
     }
 
-    fn answer_key(slug: &str, hash: &str) -> String {
-        format!("qa:{slug}:{hash}")
+    fn answer_key(slug: &str, post_version: &str, hash: &str) -> String {
+        format!("qa:{slug}:{post_version}:{hash}")
     }
 
-    fn daily_key() -> String {
-        "cap:daily".to_string()
+    fn post_version_key(slug: &str) -> String {
+        format!("post_version:{slug}")
+    }
+
+    fn embedding_key(hash: &str) -> String {
+        format!("emb:{hash}")
     }
 }
 
@@ -62,52 +83,59 @@ fn map_cache_err(e: CacheError) -> AppError {
 
 #[async_trait(?Send)]
 impl<C: CacheTrait + Send + Sync + 'static> QaCacheServiceTrait for QaCacheService<C> {
-    async fn get(&self, slug: &str, hash: &str) -> Result<Option<CachedAnswer>, AppError> {
+    async fn get(
+        &self,
+        slug: &str,
+        post_version: &str,
+        hash: &str,
+    ) -> Result<Option<CachedAnswer>, AppError> {
         self.cache
-            .get::<CachedAnswer>(Self::answer_key(slug, hash))
+            .get::<CachedAnswer>(Self::answer_key(slug, post_version, hash))
             .await
             .map_err(map_cache_err)
     }
 
-    async fn put(&self, slug: &str, hash: &str, answer: &CachedAnswer) -> Result<(), AppError> {
+    async fn put(
+        &self,
+        slug: &str,
+        post_version: &str,
+        hash: &str,
+        answer: &CachedAnswer,
+    ) -> Result<(), AppError> {
         self.cache
-            .set(Self::answer_key(slug, hash), answer)
+            .set(Self::answer_key(slug, post_version, hash), answer)
             .await
             .map_err(map_cache_err)
     }
 
-    async fn check_and_increment_daily_cap(&self, cap: u32) -> Result<bool, AppError> {
-        let today = Utc::now().format("%Y-%m-%d").to_string();
-        let key = Self::daily_key();
-
-        let current = self
+    async fn get_post_version(&self, slug: &str) -> Result<Option<String>, AppError> {
+        let entry = self
             .cache
-            .get::<DailyCounter>(key.clone())
+            .get::<PostVersion>(Self::post_version_key(slug))
             .await
-            .unwrap_or_else(|e| {
-                warn!(error = %e, "daily counter read failed; treating as fresh day");
-                None
-            });
+            .map_err(map_cache_err)?;
+        Ok(entry.map(|e| e.v))
+    }
 
-        let next = match current {
-            Some(c) if c.date == today => {
-                if c.count >= cap {
-                    return Ok(false);
-                }
-                DailyCounter {
-                    date: today,
-                    count: c.count + 1,
-                }
-            }
-            _ => DailyCounter {
-                date: today,
-                count: 1,
-            },
-        };
+    async fn get_embedding(&self, hash: &str) -> Result<Option<Vec<f32>>, AppError> {
+        let entry = self
+            .cache
+            .get::<EmbeddingEntry>(Self::embedding_key(hash))
+            .await
+            .map_err(map_cache_err)?;
+        Ok(entry.map(|e| e.e))
+    }
 
-        if let Err(e) = self.cache.set(key, &next).await {
-            warn!(error = %e, "daily counter write failed; allowing request");
-        }
-        Ok(true)
+    async fn put_embedding(&self, hash: &str, embedding: &[f32]) -> Result<(), AppError> {
+        self.cache
+            .set_with_ttl(
+                Self::embedding_key(hash),
+                EmbeddingEntry {
+                    e: embedding.to_vec(),
+                },
+                EMBEDDING_TTL_SECONDS,
+            )
+            .await
+            .map_err(map_cache_err)
     }
 }

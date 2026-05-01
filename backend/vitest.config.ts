@@ -1,10 +1,11 @@
-import { defineWorkersConfig, readD1Migrations } from '@cloudflare/vitest-pool-workers/config';
+import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config';
 
 export default defineWorkersConfig(async () => {
 	return {
 		test: {
 			poolOptions: {
 				workers: {
+					remoteBindings: false,
 					wrangler: { configPath: './wrangler.jsonc' },
 					miniflare: {
 						bindings: {

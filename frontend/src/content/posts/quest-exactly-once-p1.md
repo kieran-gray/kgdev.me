@@ -4,6 +4,7 @@ pubDate: 2025-06-07
 description: 'Building a reliable event producer in Python using the transactional outbox pattern to guarantee at-least-once delivery in a distributed system.'
 author: 'Kieran Gray'
 isPinned: false
+qaPlaceholder: ‘How does the transactional outbox guarantee at-least-once delivery?’
 excerpt: We’re about to go on a bit of an adventure, I’m not sure how difficult it’s going to be (or if it’s possible), but I’m going to learn some things, and maybe you can learn some things too...
 tags: ['python', 'architecture', 'events']
 ---

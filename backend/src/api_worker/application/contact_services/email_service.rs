@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::api_worker::{application::AppError, domain::entity::ContactMessage};
+use crate::api_worker::{application::AppError, domain::ContactMessage};
 
 #[async_trait(?Send)]
 pub trait EmailServiceTrait {

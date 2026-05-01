@@ -19,10 +19,19 @@ impl KVCache {
 #[async_trait(?Send)]
 impl CacheTrait for KVCache {
     async fn set<T: Serialize>(&self, key: String, value: T) -> Result<(), CacheError> {
+        self.set_with_ttl(key, value, self.ttl).await
+    }
+
+    async fn set_with_ttl<T: Serialize>(
+        &self,
+        key: String,
+        value: T,
+        ttl_seconds: u64,
+    ) -> Result<(), CacheError> {
         self.cache
             .put(&key, value)
             .unwrap()
-            .expiration_ttl(self.ttl)
+            .expiration_ttl(ttl_seconds)
             .execute()
             .await
             .map_err(|_| {

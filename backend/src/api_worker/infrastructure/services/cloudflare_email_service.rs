@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::api_worker::{
     application::{AppError, EmailServiceTrait},
-    domain::entity::ContactMessage,
+    domain::ContactMessage,
     infrastructure::http_client::HttpClientTrait,
 };
 

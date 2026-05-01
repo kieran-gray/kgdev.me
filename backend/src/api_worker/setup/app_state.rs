@@ -3,14 +3,14 @@ use std::sync::Arc;
 use worker::Env;
 
 use crate::api_worker::{
-    api::client::DurableObjectClient,
     application::{
         BlogQaService, BlogQaServiceTrait, ContactMessageService, ContactMessageServiceTrait,
         QaCacheService,
     },
     infrastructure::{
-        CloudflareEmailService, CloudflareRequestValidationService, KVCache, VectorizeRestService,
-        WorkerHttpClient, WorkersAiService,
+        CloudflareEmailService, CloudflareRequestValidationService, KVCache,
+        QaCoordinatorDoService, VectorizeRestService, WorkerHttpClient, WorkersAiService,
+        durable_object_client::DurableObjectClient,
     },
     setup::{Config, exceptions::SetupError},
 };
@@ -21,7 +21,7 @@ pub struct AppState {
     pub config: Config,
     pub contact_message_service: Arc<dyn ContactMessageServiceTrait>,
     pub blog_qa_service: Arc<dyn BlogQaServiceTrait>,
-    pub do_client: DurableObjectClient,
+    pub view_counter_do_client: DurableObjectClient,
 }
 
 impl AppState {
@@ -66,15 +66,22 @@ impl AppState {
         let kv_cache = Arc::new(KVCache::create(kv, QA_CACHE_TTL_SECONDS));
         let qa_cache_service = QaCacheService::create(kv_cache);
 
+        let qa_do_client = DurableObjectClient::new(
+            env.durable_object("BLOG_POST_QA")
+                .map_err(|_| SetupError::MissingVariable("BLOG_POST_QA".to_string()))?,
+        );
+        let qa_coordinator = QaCoordinatorDoService::create(qa_do_client);
+
         let blog_qa_service = BlogQaService::create(
             ai_service,
             vectorize_service,
             qa_cache_service,
+            qa_coordinator,
             config.generation_model.clone(),
             config.qa_daily_cap,
         );
 
-        let do_client = DurableObjectClient::new(
+        let view_counter_do_client = DurableObjectClient::new(
             env.durable_object("VIEW_COUNTER")
                 .map_err(|_| SetupError::MissingVariable("VIEW_COUNTER".to_string()))?,
         );
@@ -83,7 +90,7 @@ impl AppState {
             config,
             contact_message_service,
             blog_qa_service,
-            do_client,
+            view_counter_do_client,
         })
     }
 }

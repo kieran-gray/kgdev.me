@@ -97,6 +97,7 @@ const posts = defineCollection({
 		excerpt: z.string(),
 		tags: z.array(z.string()).default([]),
 		isPinned: z.boolean().default(false),
+		qaPlaceholder: z.string().optional(),
 		image: z.object({ src: z.string().optional(), alt: z.string().optional() }).default({})
 	})
 });

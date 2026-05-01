@@ -1,5 +1,5 @@
 import { SELF, fetchMock, env } from 'cloudflare:test';
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 
 describe('Contact Us Worker', () => {
 	beforeAll(async () => {
@@ -8,6 +8,7 @@ describe('Contact Us Worker', () => {
 	});
 
 	afterEach(() => {
+		vi.restoreAllMocks();
 		fetchMock.assertNoPendingInterceptors();
 	});
 
@@ -165,4 +166,69 @@ describe("WebSocket connect", () => {
     
     expect(response.status).toBe(403);
   });
+});
+
+describe('Ask Question Worker', () => {
+	it('streams a fallback answer with a mocked AI embedding', async () => {
+		await (env as any).BLOG_POST_QA_CACHE.put(
+			'post_version:my-post',
+			JSON.stringify({ v: 'test-version-1' })
+		);
+
+		vi.spyOn(env.AI, 'run').mockResolvedValue({
+			data: [[0.0123, -0.0456, 0.0789, 0.1011]]
+		} as any);
+
+		fetchMock
+			.get('https://api.cloudflare.com')
+			.intercept({
+				method: 'POST',
+				path: '/client/v4/accounts/test-account-id/vectorize/v2/indexes/blog-chunks/query'
+			})
+			.reply(
+				200,
+				JSON.stringify({
+					success: true,
+					result: {
+						matches: [
+							{
+								score: 0.41,
+								metadata: {
+									chunk_id: 1,
+									heading: 'Intro',
+									text: 'A short excerpt that is not relevant enough to use.',
+									post_slug: 'my-post',
+									post_version: 'test-version-1'
+								}
+							}
+						]
+					}
+				})
+			);
+
+		const response = await SELF.fetch('http://example.com/api/v1/ask/my-post', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Origin: 'http://localhost:5173'
+			},
+			body: JSON.stringify({
+				question: 'What does this post say about retries?'
+			})
+		});
+
+		const body = await response.text();
+
+		expect(response.status).toBe(200);
+		expect(env.AI.run).toHaveBeenCalledWith(
+			'@cf/baai/bge-base-en-v1.5',
+			expect.objectContaining({
+				text: ['what does this post say about retries']
+			})
+		);
+		expect(body).toContain('event: meta');
+		expect(body).toContain('"cached":false');
+		expect(body).toContain("I don't see that in this post.");
+		expect(body).toContain('event: done');
+	});
 });

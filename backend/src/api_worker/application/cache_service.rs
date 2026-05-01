@@ -23,6 +23,12 @@ impl std::error::Error for CacheError {}
 #[async_trait(?Send)]
 pub trait CacheTrait {
     async fn set<T: Serialize>(&self, key: String, value: T) -> Result<(), CacheError>;
+    async fn set_with_ttl<T: Serialize>(
+        &self,
+        key: String,
+        value: T,
+        ttl_seconds: u64,
+    ) -> Result<(), CacheError>;
     async fn get<T: for<'de> Deserialize<'de>>(&self, key: String)
     -> Result<Option<T>, CacheError>;
     async fn clear(&self, key: String) -> Result<(), CacheError>;

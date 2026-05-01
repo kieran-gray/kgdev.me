@@ -17,6 +17,7 @@ pub trait VectorizeServiceTrait {
         &self,
         embedding: &[f32],
         post_slug: &str,
+        post_version: &str,
         top_k: u32,
     ) -> Result<Vec<ScoredChunk>, AppError>;
 }

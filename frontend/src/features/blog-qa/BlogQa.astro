@@ -3,8 +3,9 @@ import { featureRuntime } from '@/config/features';
 
 interface Props {
 	slug: string;
+	placeholder?: string;
 }
-const { slug } = Astro.props;
+const { slug, placeholder = 'Ask a question about this post…' } = Astro.props;
 const endpoint = featureRuntime.blogQa.endpoint;
 ---
 
@@ -33,7 +34,7 @@ const endpoint = featureRuntime.blogQa.endpoint;
 					rows="3"
 					maxlength="500"
 					required
-					placeholder="What does the alarm handler do?"
+					placeholder={placeholder}
 					class="blog-qa-input"
 				></textarea>
 				<div class="blog-qa-actions">

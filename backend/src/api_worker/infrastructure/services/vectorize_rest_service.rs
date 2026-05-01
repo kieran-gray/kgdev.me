@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::json;
 use tracing::{error, warn};
 
 use crate::api_worker::{
@@ -56,6 +56,7 @@ struct MatchMetadata {
     heading: Option<String>,
     text: String,
     post_slug: String,
+    post_version: Option<String>,
 }
 
 #[async_trait(?Send)]
@@ -64,6 +65,7 @@ impl VectorizeServiceTrait for VectorizeRestService {
         &self,
         embedding: &[f32],
         post_slug: &str,
+        post_version: &str,
         top_k: u32,
     ) -> Result<Vec<ScoredChunk>, AppError> {
         let url = format!(
@@ -80,9 +82,13 @@ impl VectorizeServiceTrait for VectorizeRestService {
             "topK": top_k,
             "returnMetadata": "all",
             "returnValues": false,
+            "filter": {
+                "post_slug": { "$eq": post_slug },
+                "post_version": { "$eq": post_version },
+            },
         });
 
-        let raw: Value = self
+        let response_json = self
             .http_client
             .post(&url, body, headers)
             .await
@@ -91,13 +97,14 @@ impl VectorizeServiceTrait for VectorizeRestService {
                 AppError::InternalError(format!("Vectorize query failed: {e}"))
             })?;
 
-        let envelope: QueryEnvelope = serde_json::from_value(raw.clone()).map_err(|e| {
-            error!(error = %e, body = %raw, "Vectorize response could not be parsed");
-            AppError::InternalError("Vectorize response was malformed".to_string())
-        })?;
+        let envelope: QueryEnvelope =
+            serde_json::from_value(response_json.clone()).map_err(|e| {
+                error!(error = %e, body = %response_json, "Vectorize response could not be parsed");
+                AppError::InternalError("Vectorize response was malformed".to_string())
+            })?;
 
         if !envelope.success.unwrap_or(false) {
-            warn!(body = %raw, "Vectorize returned non-success");
+            warn!(body = %response_json, "Vectorize returned non-success");
             return Err(AppError::InternalError(
                 "Vectorize returned non-success".to_string(),
             ));
@@ -111,6 +118,9 @@ impl VectorizeServiceTrait for VectorizeRestService {
             .filter_map(|m| {
                 let metadata = m.metadata?;
                 if metadata.post_slug != post_slug {
+                    return None;
+                }
+                if metadata.post_version.as_deref() != Some(post_version) {
                     return None;
                 }
                 Some(ScoredChunk {

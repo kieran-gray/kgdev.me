@@ -6,6 +6,7 @@ interface Props {
 }
 
 const { headings } = Astro.props;
+const tocHeadings: MarkdownHeading[] = [{ depth: 1, slug: 'top', text: "Overview" }, ...headings];
 ---
 
 <nav class="toc overflow-x-hidden" aria-label="Table of contents">
@@ -18,7 +19,7 @@ const { headings } = Astro.props;
     </button>
   </div>
   <ol class="toc-list">
-    {headings.map(h => (
+    {tocHeadings.map(h => (
       <li class={`toc-item toc-h${h.depth}`}>
         <a href={`#${h.slug}`} class="toc-link" data-slug={h.slug}>
           {h.text}

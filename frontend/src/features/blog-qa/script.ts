@@ -6,11 +6,10 @@ interface Source {
 	score: number;
 }
 
-interface AnswerResponse {
-	answer: string;
+interface MetaPayload {
 	sources: Source[];
-	model: string;
 	cached: boolean;
+	model: string;
 }
 
 interface ErrorResponse {
@@ -69,15 +68,20 @@ function setup() {
 		return;
 	}
 
-	let inFlight = false;
+	document.body.appendChild(dialog);
+
+	let abortController: AbortController | null = null;
 
 	function setBusy(busy: boolean) {
-		inFlight = busy;
 		submitBtn!.disabled = busy;
 		submitLabel!.textContent = busy ? 'Thinking…' : 'Ask';
 	}
 
-	function showResult(state: 'loading' | 'ok' | 'error', message?: string) {
+	function abortInFlight() {
+		abortController?.abort();
+	}
+
+	function showStatus(state: 'loading' | 'ok' | 'error', message?: string) {
 		resultBox!.hidden = false;
 		statusEl!.textContent = message ?? '';
 		statusEl!.dataset.state = state;
@@ -92,20 +96,23 @@ function setup() {
 		sourcesWrap!.hidden = true;
 	}
 
-	function renderAnswer(data: AnswerResponse) {
-		answerEl!.textContent = data.answer;
+	function renderSources(sources: Source[]) {
 		sourcesList!.innerHTML = '';
-		if (data.sources.length === 0) {
+		if (sources.length === 0) {
 			sourcesWrap!.hidden = true;
 			return;
 		}
-		for (const s of data.sources) {
+		for (const s of sources) {
 			const li = document.createElement('li');
 			const heading = s.heading || '(intro)';
 			li.textContent = `${heading} — ${(s.score * 100).toFixed(0)}%`;
 			sourcesList!.appendChild(li);
 		}
 		sourcesWrap!.hidden = false;
+	}
+
+	function appendDelta(text: string) {
+		answerEl!.textContent = (answerEl!.textContent ?? '') + text;
 	}
 
 	function openDialog() {
@@ -115,55 +122,134 @@ function setup() {
 	}
 
 	function closeDialog() {
-		if (inFlight) return;
-		dialog!.close();
+		abortInFlight();
+		if (dialog!.open) dialog!.close();
+	}
+
+	function parseSseBlock(block: string): { event: string; data: string } | null {
+		const lines = block.split('\n');
+		let event = 'message';
+		const dataLines: string[] = [];
+		for (const line of lines) {
+			if (line.startsWith('event:')) {
+				event = line.slice(6).trim();
+			} else if (line.startsWith('data:')) {
+				dataLines.push(line.slice(5).trim());
+			}
+		}
+		if (dataLines.length === 0) return null;
+		return { event, data: dataLines.join('\n') };
+	}
+
+	async function consumeSseStream(body: ReadableStream<Uint8Array>): Promise<void> {
+		const reader = body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = '';
+		let sawDone = false;
+
+		const handleBlock = (block: string) => {
+			const parsed = parseSseBlock(block);
+			if (!parsed) return;
+
+			if (parsed.event === 'meta') {
+				const meta = JSON.parse(parsed.data) as MetaPayload;
+				showStatus('ok', meta.cached ? 'Cached answer' : 'Drafting answer…');
+				renderSources(meta.sources);
+			} else if (parsed.event === 'delta') {
+				const payload = JSON.parse(parsed.data) as { text: string };
+				appendDelta(payload.text);
+			} else if (parsed.event === 'done') {
+				sawDone = true;
+				showStatus(
+					'ok',
+					statusEl!.dataset.state === 'error' ? (statusEl!.textContent ?? '') : 'Done'
+				);
+			} else if (parsed.event === 'error') {
+				const payload = JSON.parse(parsed.data) as { message: string };
+				showStatus('error', payload.message);
+			}
+		};
+
+		const flushFramedBlocks = () => {
+			while (true) {
+				const idx = buffer.indexOf('\n\n');
+				if (idx === -1) break;
+				const block = buffer.slice(0, idx);
+				buffer = buffer.slice(idx + 2);
+				handleBlock(block);
+			}
+		};
+
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true }).replace(/\r\n?/g, '\n');
+			flushFramedBlocks();
+		}
+
+		buffer += decoder.decode().replace(/\r\n?/g, '\n');
+		flushFramedBlocks();
+		const trailing = buffer.replace(/^\n+|\n+$/g, '');
+		if (trailing.length > 0) {
+			handleBlock(trailing);
+		}
+
+		if (!sawDone && !answerEl!.textContent) {
+			showStatus('error', 'Stream ended without a response.');
+		}
 	}
 
 	async function submit(question: string) {
 		clearResult();
-		showResult('loading', 'Searching the post and drafting an answer…');
+		showStatus('loading', 'Searching the post and drafting an answer…');
 		setBusy(true);
+		const controller = new AbortController();
+		abortController = controller;
+		const { signal } = controller;
 
 		try {
 			const res = await fetch(`${endpoint}/${encodeURIComponent(slug!)}`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ question })
+				headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+				body: JSON.stringify({ question }),
+				signal
 			});
 
-			const text = await res.text();
-			let body: AnswerResponse | ErrorResponse | null = null;
-			try {
-				body = text ? JSON.parse(text) : null;
-			} catch {
-				/* fall through */
-			}
+			const contentType = res.headers.get('content-type') ?? '';
 
-			if (!res.ok) {
-				const msg = body && 'error' in body ? body.error : `Request failed (${res.status})`;
-				showResult('error', msg);
+			if (!res.ok || contentType.includes('application/json')) {
+				let message = `Request failed (${res.status})`;
+				try {
+					const body = (await res.json()) as ErrorResponse;
+					if ('error' in body) message = body.error;
+				} catch {
+					/* keep default */
+				}
+				showStatus('error', message);
 				return;
 			}
 
-			if (!body || !('answer' in body)) {
-				showResult('error', 'Malformed response from the server.');
+			if (!res.body) {
+				showStatus('error', 'No response body.');
 				return;
 			}
 
-			const data = body as AnswerResponse;
-			showResult('ok', data.cached ? 'Cached answer' : 'Fresh answer');
-			renderAnswer(data);
+			await consumeSseStream(res.body);
 		} catch (err) {
-			showResult('error', err instanceof Error ? err.message : 'Network error');
+			if (signal.aborted) return;
+			showStatus('error', err instanceof Error ? err.message : 'Network error');
 		} finally {
-			setBusy(false);
+			if (abortController === controller) {
+				abortController = null;
+				setBusy(false);
+			}
 		}
 	}
 
 	const onOpen = () => openDialog();
 	const onClose = () => closeDialog();
-	const onCancel = (e: Event) => {
-		if (inFlight) e.preventDefault();
+	const onCancel = () => {
+		abortInFlight();
 	};
 	const onBackdropClick = (e: MouseEvent) => {
 		if (e.target === dialog) closeDialog();
@@ -188,6 +274,7 @@ function setup() {
 	onInput();
 
 	cleanup = () => {
+		abortInFlight();
 		openBtn.removeEventListener('click', onOpen);
 		closeBtn.removeEventListener('click', onClose);
 		dialog.removeEventListener('cancel', onCancel);
@@ -195,6 +282,7 @@ function setup() {
 		input.removeEventListener('input', onInput);
 		form.removeEventListener('submit', onSubmit);
 		if (dialog.open) dialog.close();
+		root.appendChild(dialog);
 	};
 }
 
