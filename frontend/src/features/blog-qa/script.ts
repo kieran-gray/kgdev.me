@@ -81,6 +81,48 @@ function setup() {
 	document.body.appendChild(dialog);
 
 	let abortController: AbortController | null = null;
+	let removeViewportListeners: (() => void) | null = null;
+
+	function teardownViewportTracking() {
+		if (removeViewportListeners) {
+			removeViewportListeners();
+			removeViewportListeners = null;
+		}
+		dialog!.style.removeProperty('--blog-qa-viewport-top');
+		dialog!.style.removeProperty('--blog-qa-viewport-left');
+		dialog!.style.removeProperty('--blog-qa-viewport-width');
+		dialog!.style.removeProperty('--blog-qa-viewport-height');
+	}
+
+	function syncDialogViewport() {
+		const viewport = window.visualViewport;
+		const height = viewport?.height ?? window.innerHeight;
+		const width = viewport?.width ?? window.innerWidth;
+		const top = (viewport?.offsetTop ?? 0) + height / 2;
+		const left = (viewport?.offsetLeft ?? 0) + width / 2;
+
+		dialog!.style.setProperty('--blog-qa-viewport-top', `${top}px`);
+		dialog!.style.setProperty('--blog-qa-viewport-left', `${left}px`);
+		dialog!.style.setProperty('--blog-qa-viewport-width', `${width}px`);
+		dialog!.style.setProperty('--blog-qa-viewport-height', `${height}px`);
+	}
+
+	function setupViewportTracking() {
+		teardownViewportTracking();
+		syncDialogViewport();
+
+		const viewport = window.visualViewport;
+		if (!viewport) return;
+
+		const onViewportChange = () => syncDialogViewport();
+		viewport.addEventListener('resize', onViewportChange);
+		viewport.addEventListener('scroll', onViewportChange);
+
+		removeViewportListeners = () => {
+			viewport.removeEventListener('resize', onViewportChange);
+			viewport.removeEventListener('scroll', onViewportChange);
+		};
+	}
 
 	function setBusy(busy: boolean) {
 		submitBtn!.disabled = busy;
@@ -149,11 +191,13 @@ function setup() {
 	function openDialog() {
 		clearResult();
 		dialog!.showModal();
+		setupViewportTracking();
 		input!.focus();
 	}
 
 	function closeDialog() {
 		abortInFlight();
+		teardownViewportTracking();
 		if (dialog!.open) dialog!.close();
 	}
 
@@ -307,6 +351,7 @@ function setup() {
 
 	cleanup = () => {
 		abortInFlight();
+		teardownViewportTracking();
 		openBtn.removeEventListener('click', onOpen);
 		closeBtn.removeEventListener('click', onClose);
 		dialog.removeEventListener('cancel', onCancel);
