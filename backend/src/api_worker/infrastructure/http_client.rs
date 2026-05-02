@@ -11,6 +11,12 @@ pub trait HttpClientTrait: Send + Sync {
         body: Value,
         headers: Vec<(&str, &str)>,
     ) -> Result<Value, String>;
+
+    async fn get(&self, url: &str, headers: Vec<(&str, &str)>) -> Result<Value, String> {
+        let _ = url;
+        let _ = headers;
+        Err("Not implemented".to_string())
+    }
 }
 
 pub struct WorkerHttpClient;
@@ -18,6 +24,27 @@ pub struct WorkerHttpClient;
 impl WorkerHttpClient {
     pub fn new() -> Self {
         Self
+    }
+
+    async fn execute_request(&self, request: Request) -> Result<Value, String> {
+        let mut response = Fetch::Request(request).send().await.map_err(|e| {
+            error!("HTTP request failed: {:?}", e);
+            format!("HTTP request failed: {}", e)
+        })?;
+
+        let status = response.status_code();
+        if !(200..300).contains(&status) {
+            let body = response.text().await.unwrap_or_default();
+            error!("API call returned {}: {}", status, body);
+            return Err(format!("HTTP {} from upstream: {}", status, body));
+        }
+
+        let json_response: Value = response.json().await.map_err(|e| {
+            error!("Failed to parse JSON response: {:?}", e);
+            format!("Failed to parse JSON response: {}", e)
+        })?;
+
+        Ok(json_response)
     }
 }
 
@@ -53,23 +80,24 @@ impl HttpClientTrait for WorkerHttpClient {
         let request = Request::new_with_init(url, &init)
             .map_err(|e| format!("Failed to create request: {}", e))?;
 
-        let mut response = Fetch::Request(request).send().await.map_err(|e| {
-            error!("HTTP request failed: {:?}", e);
-            format!("HTTP request failed: {}", e)
-        })?;
+        self.execute_request(request).await
+    }
 
-        let status = response.status_code();
-        if !(200..300).contains(&status) {
-            let body = response.text().await.unwrap_or_default();
-            error!("Cloudflare API returned {}: {}", status, body);
-            return Err(format!("HTTP {} from upstream: {}", status, body));
+    async fn get(&self, url: &str, headers: Vec<(&str, &str)>) -> Result<Value, String> {
+        let mut init = RequestInit::new();
+        init.with_method(Method::Get);
+
+        let worker_headers = Headers::new();
+        for (name, value) in headers {
+            worker_headers
+                .set(name, value)
+                .map_err(|e| format!("Failed to set header {}: {}", name, e))?;
         }
+        init.with_headers(worker_headers);
 
-        let json_response: Value = response.json().await.map_err(|e| {
-            error!("Failed to parse JSON response: {:?}", e);
-            format!("Failed to parse JSON response: {}", e)
-        })?;
+        let request = Request::new_with_init(url, &init)
+            .map_err(|e| format!("Failed to create request: {}", e))?;
 
-        Ok(json_response)
+        self.execute_request(request).await
     }
 }

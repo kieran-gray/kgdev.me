@@ -22,7 +22,7 @@ describe('post endpoints', () => {
 	});
 
 	test('markdown route emits raw markdown with cache headers', async () => {
-		buildPostSourcePayload.mockReturnValue({
+		buildPostSourcePayload.mockResolvedValue({
 			sourceMarkdown: '# Hello\n',
 			contentHash: 'abc123'
 		});
@@ -37,7 +37,7 @@ describe('post endpoints', () => {
 	});
 
 	test('json route emits full payload with etag', async () => {
-		buildPostSourcePayload.mockReturnValue({
+		buildPostSourcePayload.mockResolvedValue({
 			slug: 'hello',
 			contentHash: 'def456',
 			sourceMarkdown: '# Hello\n',
