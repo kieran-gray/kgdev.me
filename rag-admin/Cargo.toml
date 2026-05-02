@@ -14,12 +14,9 @@ leptos_axum = { version = "0.8", optional = true }
 
 axum = { version = "0.8", optional = true }
 tokio = { version = "1.47", features = ["rt-multi-thread", "macros", "sync", "fs"], optional = true }
-tower = { version = "0.5", optional = true }
-tower-http = { version = "0.6", features = ["fs"], optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 sha2 = { version = "0.10", optional = true }
 hex = { version = "0.4", optional = true }
-regex = { version = "1.11", optional = true }
 async-trait = { version = "0.1", optional = true }
 futures-util = { version = "0.3", optional = true }
 async-stream = { version = "0.3", optional = true }
@@ -41,13 +38,10 @@ hydrate = ["leptos/hydrate"]
 ssr = [
     "dep:axum",
     "dep:tokio",
-    "dep:tower",
-    "dep:tower-http",
     "dep:leptos_axum",
     "dep:reqwest",
     "dep:sha2",
     "dep:hex",
-    "dep:regex",
     "dep:async-trait",
     "dep:futures-util",
     "dep:async-stream",
@@ -61,7 +55,7 @@ ssr = [
 ]
 
 [package.metadata.cargo-all-features]
-denylist = ["axum", "tokio", "tower", "tower-http", "leptos_axum", "reqwest", "sha2", "hex", "regex", "async-trait", "futures-util", "async-stream", "time", "tracing", "tracing-subscriber", "toml"]
+denylist = ["axum", "tokio", "leptos_axum", "reqwest", "sha2", "hex", "async-trait", "futures-util", "async-stream", "time", "tracing", "tracing-subscriber", "toml"]
 skip_feature_sets = [["ssr", "hydrate"], []]
 
 [package.metadata.leptos]
@@ -77,3 +71,6 @@ bin-features = ["ssr"]
 bin-default-features = false
 lib-features = ["hydrate"]
 lib-default-features = false
+
+[package.metadata.cargo-machete]
+ignored = ["http"]
