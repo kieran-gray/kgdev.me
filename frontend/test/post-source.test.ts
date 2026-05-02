@@ -74,13 +74,15 @@ describe('post-source helpers', () => {
 		vi.mocked(readFileSync).mockReturnValue('---\ntitle: Mock Post\n---\n\nBody content');
 
 		const payload = await buildPostSourcePayload(entry as never);
-		const expectedHash = createHash('sha256').update(payload.sourceMarkdown).digest('hex');
 
 		assert.equal(payload.slug, 'blog-view-counter');
 		assert.equal(payload.canonicalUrl, 'https://kgdev.me/posts/blog-view-counter/');
 		assert.equal(payload.rawMarkdownUrl, 'https://kgdev.me/posts/blog-view-counter.md');
 		assert.equal(payload.jsonUrl, 'https://kgdev.me/api/posts/blog-view-counter.json');
-		assert.equal(payload.contentHash, expectedHash);
+		assert.equal(
+			payload.contentHash,
+			'0e5d4ffd56f0b01b6052fdf6a49a5b3bf1f145fb76afdc771abef37dd46c05d3'
+		);
 		assert.ok(payload.sourceMarkdown.startsWith('---\n'));
 		assert.ok(!payload.markdownBody.startsWith('---\n'));
 	});
