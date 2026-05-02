@@ -19,6 +19,10 @@ pub fn manifest_path() -> PathBuf {
     data_dir().join("manifest.json")
 }
 
+pub fn tokenizer_path() -> PathBuf {
+    data_dir().join("tokenizer.json")
+}
+
 pub fn defaults() -> SettingsDto {
     SettingsDto {
         blog_url: "http://localhost:4321".into(),

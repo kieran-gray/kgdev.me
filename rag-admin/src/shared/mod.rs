@@ -24,6 +24,7 @@ pub struct PostDetailDto {
     pub is_dirty: bool,
     pub markdown_body_length: u32,
     pub plain_text_excerpt: String,
+    pub embedding_token_limit: u32,
     pub glossary_terms: Vec<GlossaryTermDto>,
     pub chunk_preview: Vec<ChunkPreview>,
 }
@@ -40,6 +41,8 @@ pub struct ChunkPreview {
     pub chunk_id: u32,
     pub heading: String,
     pub text_excerpt: String,
+    pub tokens: Vec<String>,
+    pub token_count: u32,
     pub text_length: u32,
     pub is_glossary: bool,
 }
