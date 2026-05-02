@@ -45,10 +45,6 @@ export function stripFrontmatter(source: string): string {
 	return source.slice(end + 5);
 }
 
-function sha256Hex(value: string): string {
-	return createHash('sha256').update(value).digest('hex');
-}
-
 function toAbsoluteUrl(pathname: string): string {
 	return new URL(pathname, siteConfig.url).toString();
 }
