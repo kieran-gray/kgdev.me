@@ -57,7 +57,9 @@ export function readGlossarySource(slug: string): string {
 	return readFileSync(resolve(glossaryDir, `${slug}.md`), 'utf8');
 }
 
-export async function buildPostSourcePayload(entry: CollectionEntry<'posts'>): Promise<PostSourcePayload> {
+export async function buildPostSourcePayload(
+	entry: CollectionEntry<'posts'>
+): Promise<PostSourcePayload> {
 	const sourceMarkdown = readPostSource(entry.slug);
 	const markdownBody = stripFrontmatter(sourceMarkdown).trim();
 	const canonicalPath = `/posts/${entry.slug}/`;
@@ -92,7 +94,10 @@ export async function buildPostSourcePayload(entry: CollectionEntry<'posts'>): P
 	}));
 	const glossaryJson = JSON.stringify(glossaryForHashing);
 
-	const contentHash = createHash('sha256').update(sourceMarkdown).update(glossaryJson).digest('hex');
+	const contentHash = createHash('sha256')
+		.update(sourceMarkdown)
+		.update(glossaryJson)
+		.digest('hex');
 
 	return {
 		slug: entry.slug,

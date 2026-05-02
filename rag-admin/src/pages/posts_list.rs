@@ -76,7 +76,7 @@ fn PostsTable(posts: Vec<PostSummary>) -> impl IntoView {
                                 .clone()
                                 .unwrap_or_else(|| "N/A".into());
                             last.truncate(19);
-                            
+
                             let href = format!("/posts/{}", p.slug);
                             view! {
                                 <tr class="hover:bg-[var(--color-card-inner)] transition-colors group">
