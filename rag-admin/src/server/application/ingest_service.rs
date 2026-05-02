@@ -188,10 +188,7 @@ impl IngestService {
         let chunk_count = chunks.len() as u32;
         let post_version = compute_post_version(&post.source_markdown, &post.glossary_terms);
 
-        let was_seen = match (&prev, options.force) {
-            (Some(p), false) if p.post_version == post_version => true,
-            _ => false,
-        };
+        let was_seen = matches!((&prev, options.force), (Some(p), false) if p.post_version == post_version);
 
         if was_seen {
             job.emit(IngestLogEvent::info(format!(
@@ -250,7 +247,7 @@ impl IngestService {
 
         let records: Vec<VectorRecord> = chunks
             .iter()
-            .zip(embeddings.into_iter())
+            .zip(embeddings)
             .map(|(c, values)| {
                 let metadata = build_metadata(
                     slug,

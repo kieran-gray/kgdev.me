@@ -94,7 +94,7 @@ fn fence_marker_of(line: &str) -> Option<String> {
         }
     }
     if count >= 3 {
-        Some(std::iter::repeat(first).take(count).collect())
+        Some(std::iter::repeat_n(first, count).collect())
     } else {
         None
     }
@@ -163,40 +163,42 @@ fn parse_segments(body: &[char]) -> Vec<Segment> {
 
         let fence_match = fence_marker_of(line);
 
-        if !in_fence && fence_match.is_some() {
-            flush(
-                &mut buf,
-                &mut buf_start,
-                &mut buf_atomic,
-                &heading_path,
-                line_start,
-                &mut segments,
-            );
-            in_fence = true;
-            fence_marker = fence_match.unwrap();
-            buf_start = line_start;
-            buf_atomic = true;
-            buf.push(line.clone());
-            cursor = line_with_newline;
-            continue;
-        }
-
-        if in_fence {
-            buf.push(line.clone());
-            if fence_match.is_some() && line.starts_with(&fence_marker) {
-                in_fence = false;
-                fence_marker.clear();
+        match (in_fence, fence_match) {
+            (false, Some(fence_match)) => {
                 flush(
                     &mut buf,
                     &mut buf_start,
                     &mut buf_atomic,
                     &heading_path,
-                    line_with_newline,
+                    line_start,
                     &mut segments,
                 );
+                in_fence = true;
+                fence_marker = fence_match;
+                buf_start = line_start;
+                buf_atomic = true;
+                buf.push(line.clone());
+                cursor = line_with_newline;
+                continue;
             }
-            cursor = line_with_newline;
-            continue;
+            (true, Some(_fence_match)) => {
+                buf.push(line.clone());
+                if line.starts_with(&fence_marker) {
+                    in_fence = false;
+                    fence_marker.clear();
+                    flush(
+                        &mut buf,
+                        &mut buf_start,
+                        &mut buf_atomic,
+                        &heading_path,
+                        line_with_newline,
+                        &mut segments,
+                    );
+                }
+                cursor = line_with_newline;
+                continue;
+            }
+            _ => {}
         }
 
         if let Some((depth, text)) = parse_heading(line) {
