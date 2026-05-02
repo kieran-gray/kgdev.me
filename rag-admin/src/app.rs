@@ -7,7 +7,8 @@ use leptos_router::{
 
 use crate::components::layout::Layout;
 use crate::pages::{
-    post_detail::PostDetailPage, posts_list::PostsListPage, settings::SettingsPage,
+    embed_test::EmbedTestPage, post_detail::PostDetailPage, posts_list::PostsListPage,
+    settings::SettingsPage,
 };
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -42,6 +43,7 @@ pub fn App() -> impl IntoView {
                     <Route path=StaticSegment("") view=PostsListPage />
                     <Route path=(StaticSegment("posts"), ParamSegment("slug")) view=PostDetailPage />
                     <Route path=StaticSegment("settings") view=SettingsPage />
+                    <Route path=StaticSegment("embed") view=EmbedTestPage />
                 </Routes>
             </Layout>
         </Router>

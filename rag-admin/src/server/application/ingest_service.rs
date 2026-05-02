@@ -5,17 +5,17 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tokio::sync::{Mutex, RwLock};
 
-use crate::server::application::chunker::{chunk, ChunkOutput};
+use crate::server::application::chunker::{self, ChunkOutput, MAX_SECTION_CHARS};
 use crate::server::application::ingest_log::IngestLogEvent;
 use crate::server::application::job_registry::{Job, JobRegistry};
 use crate::server::application::ports::{
-    BlogSource, Embedder, KvStore, ManifestStore, VectorStore,
+    BlogSource, Embedder, KvStore, ManifestStore, Tokenizer, VectorStore,
 };
 use crate::server::application::AppError;
 use crate::server::domain::{GlossaryTerm, ManifestEntry, VectorRecord};
 use crate::shared::{
-    ChunkPreview, GlossaryTermDto, IngestJobInfo, IngestOptions, PostDetailDto, PostSummary,
-    SettingsDto,
+    ChunkPreview, ChunkStrategy, EmbedResult, GlossaryTermDto, IngestJobInfo, IngestOptions,
+    PostDetailDto, PostSummary, SettingsDto,
 };
 
 const EMBED_BATCH: usize = 50;
@@ -27,6 +27,8 @@ pub struct IngestService {
     vector_store: Arc<dyn VectorStore>,
     kv_store: Arc<dyn KvStore>,
     manifest_store: Arc<dyn ManifestStore>,
+    tokenizer: Arc<dyn Tokenizer>,
+    embedding_token_limit: u32,
     settings: Arc<RwLock<SettingsDto>>,
     job_registry: Arc<JobRegistry>,
     running: Mutex<HashSet<String>>,
@@ -40,6 +42,8 @@ impl IngestService {
         vector_store: Arc<dyn VectorStore>,
         kv_store: Arc<dyn KvStore>,
         manifest_store: Arc<dyn ManifestStore>,
+        tokenizer: Arc<dyn Tokenizer>,
+        embedding_token_limit: u32,
         settings: Arc<RwLock<SettingsDto>>,
         job_registry: Arc<JobRegistry>,
     ) -> Arc<Self> {
@@ -49,6 +53,8 @@ impl IngestService {
             vector_store,
             kv_store,
             manifest_store,
+            tokenizer,
+            embedding_token_limit,
             settings,
             job_registry,
             running: Mutex::new(HashSet::new()),
@@ -85,15 +91,21 @@ impl IngestService {
         let manifest = self.manifest_store.load().await?;
         let entry = manifest.posts.get(slug);
 
-        let post_chunks = chunk(&post.source_markdown);
+        let strategy = self.settings.read().await.chunk_strategy;
+        let post_chunks = chunker::chunk(strategy, &post.source_markdown);
         let glossary_chunks = build_glossary_chunks(&post.glossary_terms, post_chunks.len() as u32);
         let post_version = compute_post_version(&post.source_markdown, &post.glossary_terms);
 
         let mut all_previews: Vec<ChunkPreview> = post_chunks
             .iter()
-            .map(|c| chunk_preview(c, false))
-            .collect();
-        all_previews.extend(glossary_chunks.iter().map(|c| chunk_preview(c, true)));
+            .map(|c| self.chunk_preview(c, false))
+            .collect::<Result<Vec<_>, _>>()?;
+        all_previews.extend(
+            glossary_chunks
+                .iter()
+                .map(|c| self.chunk_preview(c, true))
+                .collect::<Result<Vec<_>, _>>()?,
+        );
 
         Ok(PostDetailDto {
             is_dirty: entry
@@ -108,6 +120,12 @@ impl IngestService {
             manifest_ingested_at: entry.map(|e| e.ingested_at.clone()),
             markdown_body_length: post.markdown_body.chars().count() as u32,
             plain_text_excerpt: excerpt(&post.plain_text, 400),
+            embedding_token_limit: self.embedding_token_limit,
+            chunk_strategy: strategy,
+            chunk_size_limit: match strategy {
+                ChunkStrategy::Bert => self.embedding_token_limit,
+                ChunkStrategy::Section => MAX_SECTION_CHARS as u32,
+            },
             glossary_terms: post
                 .glossary_terms
                 .iter()
@@ -118,6 +136,23 @@ impl IngestService {
                 })
                 .collect(),
             chunk_preview: all_previews,
+        })
+    }
+
+    fn chunk_preview(&self, c: &ChunkOutput, is_glossary: bool) -> Result<ChunkPreview, AppError> {
+        let tokenized = self.tokenizer.encode(&c.text)?;
+        Ok(ChunkPreview {
+            chunk_id: c.chunk_id,
+            heading: if c.heading.is_empty() {
+                "(no heading)".to_string()
+            } else {
+                c.heading.clone()
+            },
+            text_excerpt: c.text.clone(),
+            tokens: tokenized.tokens,
+            token_count: tokenized.count,
+            text_length: c.text.chars().count() as u32,
+            is_glossary,
         })
     }
 
@@ -173,12 +208,16 @@ impl IngestService {
         let manifest = self.manifest_store.load().await?;
         let prev = manifest.posts.get(slug).cloned();
 
-        let (index_name, embedding_model) = {
+        let (index_name, embedding_model, strategy) = {
             let s = self.settings.read().await;
-            (s.vectorize_index_name.clone(), s.embedding_model.clone())
+            (
+                s.vectorize_index_name.clone(),
+                s.embedding_model.clone(),
+                s.chunk_strategy,
+            )
         };
 
-        let post_chunks = chunk(&post.source_markdown);
+        let post_chunks = chunker::chunk(strategy, &post.source_markdown);
         let glossary_chunks = build_glossary_chunks(&post.glossary_terms, post_chunks.len() as u32);
         let chunks: Vec<ChunkOutput> = post_chunks
             .iter()
@@ -317,6 +356,45 @@ impl IngestService {
 
         Ok(())
     }
+
+    pub async fn embed_texts(
+        &self,
+        model: &str,
+        text_a: &str,
+        text_b: &str,
+    ) -> Result<EmbedResult, AppError> {
+        let texts = vec![text_a.to_string(), text_b.to_string()];
+        let vecs = self.embedder.embed_batch(model, &texts).await?;
+
+        if vecs.len() < 2 || vecs[0].is_empty() {
+            return Err(AppError::Internal(
+                "embedder returned unexpected result".into(),
+            ));
+        }
+
+        let a = &vecs[0];
+        let b = &vecs[1];
+
+        let norm_a = l2_norm(a);
+        let norm_b = l2_norm(b);
+        let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+        let similarity = if norm_a > 0.0 && norm_b > 0.0 {
+            dot / (norm_a * norm_b)
+        } else {
+            0.0
+        };
+
+        Ok(EmbedResult {
+            dims: a.len(),
+            norm_a,
+            norm_b,
+            similarity,
+        })
+    }
+}
+
+fn l2_norm(v: &[f32]) -> f32 {
+    v.iter().map(|x| x * x).sum::<f32>().sqrt()
 }
 
 fn build_glossary_chunks(terms: &[GlossaryTerm], post_chunk_count: u32) -> Vec<ChunkOutput> {
@@ -411,18 +489,4 @@ fn excerpt(s: &str, max_chars: usize) -> String {
     let mut out: String = trimmed.chars().take(max_chars).collect();
     out.push('…');
     out
-}
-
-fn chunk_preview(c: &ChunkOutput, is_glossary: bool) -> ChunkPreview {
-    ChunkPreview {
-        chunk_id: c.chunk_id,
-        heading: if c.heading.is_empty() {
-            "(no heading)".to_string()
-        } else {
-            c.heading.clone()
-        },
-        text_excerpt: c.text.clone(),
-        text_length: c.text.chars().count() as u32,
-        is_glossary,
-    }
 }

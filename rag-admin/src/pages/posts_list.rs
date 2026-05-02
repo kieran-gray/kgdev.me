@@ -12,8 +12,10 @@ pub fn PostsListPage() -> impl IntoView {
         <div class="space-y-6">
             <div class="flex items-end justify-between border-b border-[var(--color-border)] pb-2">
                 <div class="flex flex-col">
-                    <span class="tech-label">"database.queries"</span>
                     <h1 class="text-2xl font-bold tracking-tight">"BLOG_POSTS"</h1>
+                        <p class="text-[10px] mt-2 font-mono opacity-50">
+                            "MANAGE_POST_EMBEDDINGS"
+                        </p>
                 </div>
             </div>
             <Suspense fallback=|| view! { <p class="tech-label animate-pulse">"LOADING_DATA..."</p> }>

@@ -4,7 +4,9 @@ use leptos_router::hooks::use_params_map;
 
 use crate::components::log_panel::LogPanel;
 use crate::server_fns::{get_post_detail, start_ingest};
-use crate::shared::{IngestOptions, LogEvent, LogLevel, PostDetailDto};
+use crate::shared::{
+    ChunkPreview, ChunkStrategy, IngestOptions, LogEvent, LogLevel, PostDetailDto,
+};
 
 #[component]
 pub fn PostDetailPage() -> impl IntoView {
@@ -49,8 +51,19 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
     let slug = StoredValue::new(detail.slug.clone());
     let (events, set_events) = signal::<Vec<LogEvent>>(Vec::new());
     let (running, set_running) = signal(false);
+    let (dialog_open, set_dialog_open) = signal(false);
+    let (pending_options, set_pending_options) = signal::<Option<IngestOptions>>(None);
 
-    let trigger = move |options: IngestOptions| {
+    let open_dialog = move |options: IngestOptions| {
+        set_pending_options.set(Some(options));
+        set_events.set(Vec::new());
+        set_dialog_open.set(true);
+    };
+
+    let confirm = move |_| {
+        let Some(options) = pending_options.get_untracked() else {
+            return;
+        };
         if running.get_untracked() {
             return;
         }
@@ -81,10 +94,26 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
         });
     };
 
+    let close_dialog = move |_| {
+        if running.get_untracked() {
+            return;
+        }
+        set_dialog_open.set(false);
+        set_pending_options.set(None);
+        set_events.set(Vec::new());
+    };
+
+    let op_label = move || match pending_options.get() {
+        Some(IngestOptions { force: true, .. }) => "FORCE_REBUILD",
+        Some(IngestOptions { dry_run: true, .. }) => "DRY_RUN",
+        Some(_) => "EXECUTE_INGEST",
+        None => "UNKNOWN_OP",
+    };
+
     let dirty_badge = if detail.is_dirty {
-        view! { <span class="badge text-amber-500 border-amber-500">"DIRTY"</span> }.into_any()
+        view! { <span class="badge !text-amber-500 !border-amber-500 !bg-amber-900/60">"DIRTY"</span> }.into_any()
     } else if detail.manifest_post_version.is_some() {
-        view! { <span class="badge text-emerald-500 border-emerald-500">"STABLE"</span> }.into_any()
+        view! { <span class="badge !text-emerald-500 !border-emerald-500 !bg-emerald-900/60">"UP TO DATE"</span> }.into_any()
     } else {
         view! { <span class="badge text-amber-500 border-amber-500">"UNINITIALIZED"</span> }
             .into_any()
@@ -108,8 +137,89 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
     let body_len = detail.markdown_body_length;
     let glossary = detail.glossary_terms.clone();
     let chunks = detail.chunk_preview.clone();
+    let strategy = detail.chunk_strategy;
+    let size_limit = detail.chunk_size_limit;
+    let strategy_label = match strategy {
+        ChunkStrategy::Bert => format!("STRATEGY: BERT · TOKEN_LIMIT: {size_limit}"),
+        ChunkStrategy::Section => format!("STRATEGY: SECTION · MAX_CHARS: {size_limit}"),
+    };
 
     view! {
+        // Confirmation dialog overlay
+        {move || dialog_open.get().then(|| view! {
+            <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                <div class="card-outer p-6 w-full max-w-2xl mx-4 flex flex-col gap-4 max-h-[80vh]">
+                    <div class="flex items-start justify-between">
+                        <div class="flex flex-col">
+                            <span class="tech-label">"process.confirm"</span>
+                            <h2 class="text-lg font-bold">{op_label}</h2>
+                        </div>
+                        <button
+                            class="tech-label opacity-50 hover:opacity-100 px-2 py-0.5 border border-[var(--color-border)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-20"
+                            disabled=move || running.get()
+                            on:click=close_dialog
+                        >
+                            "✕"
+                        </button>
+                    </div>
+
+                    {move || {
+                        let has_events = !events.get().is_empty();
+                        if !has_events && !running.get() {
+                            view! {
+                                <p class="tech-label opacity-60">
+                                    {move || format!("Confirm execution of {}?", op_label())}
+                                </p>
+                            }.into_any()
+                        } else {
+                            let _: () = view! { <></> };
+                            ().into_any()
+                        }
+                    }}
+
+                    <div class="flex-1 overflow-auto bg-black/20 min-h-[200px]">
+                        <LogPanel events=events />
+                    </div>
+
+                    <div class="flex justify-end gap-2">
+                        {move || {
+                            if running.get() {
+                                view! {
+                                    <span class="tech-label opacity-50 animate-pulse">"PROCESS_RUNNING..."</span>
+                                }.into_any()
+                            } else if events.get().is_empty() {
+                                view! {
+                                    <div class="flex gap-2">
+                                        <button
+                                            class="btn w-full justify-center"
+                                            on:click=close_dialog
+                                        >
+                                            "CANCEL"
+                                        </button>
+                                        <button
+                                            class="btn btn-primary w-full justify-center"
+                                            on:click=confirm
+                                        >
+                                            "CONFIRM"
+                                        </button>
+                                    </div>
+                                }.into_any()
+                            } else {
+                                view! {
+                                    <button
+                                        class="btn w-full justify-center"
+                                        on:click=close_dialog
+                                    >
+                                        "CLOSE"
+                                    </button>
+                                }.into_any()
+                            }
+                        }}
+                    </div>
+                </div>
+            </div>
+        })}
+
         <div class="space-y-2 border-b border-[var(--color-border)] pb-4">
             <div class="flex items-center gap-4">
                 {dirty_badge}
@@ -118,7 +228,7 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
             <p class="text-xs font-mono opacity-50">{format!("./posts/{}", slug_disp)}</p>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-0 border-x border-t border-[var(--color-border)]">
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-0 border-x border-t border-[var(--color-border)]">
             <Stat label="BODY_SIZE" value=format!("{} B", body_len) />
             <Stat label="GLOSSARY_NODES" value=format!("{:02}", glossary.len()) />
             <Stat label="MANIFEST_CHUNKS" value=format!("{:02}", chunk_count.parse::<i32>().unwrap_or(0)) />
@@ -137,22 +247,19 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
                     <div class="grid grid-cols-1 gap-2">
                         <button
                             class="btn btn-primary w-full justify-center"
-                            disabled=move || running.get()
-                            on:click=move |_| trigger(IngestOptions { force: false, dry_run: false })
+                            on:click=move |_| open_dialog(IngestOptions { force: false, dry_run: false })
                         >
                             "EXECUTE_INGEST"
                         </button>
                         <button
                             class="btn w-full justify-center"
-                            disabled=move || running.get()
-                            on:click=move |_| trigger(IngestOptions { force: true, dry_run: false })
+                            on:click=move |_| open_dialog(IngestOptions { force: true, dry_run: false })
                         >
                             "FORCE_REBUILD"
                         </button>
                         <button
                             class="btn w-full justify-center"
-                            disabled=move || running.get()
-                            on:click=move |_| trigger(IngestOptions { force: false, dry_run: true })
+                            on:click=move |_| open_dialog(IngestOptions { force: false, dry_run: true })
                         >
                             "DRY_RUN"
                         </button>
@@ -196,44 +303,18 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
             </div>
 
             <div class="lg:col-span-2 space-y-6">
-                <section class="card-outer p-4 space-y-4 min-h-[400px] flex flex-col">
-                    <div class="flex flex-col">
-                        <span class="tech-label">"process.output"</span>
-                        <h2 class="text-lg font-bold">"CONSOLE_LOG"</h2>
-                    </div>
-                    <div class="flex-1 bg-black/20">
-                        <LogPanel events=events />
-                    </div>
-                </section>
-
                 <section class="card-outer p-4 space-y-4">
                     <div class="flex flex-col">
                         <span class="tech-label">"data.preview"</span>
                         <h2 class="text-lg font-bold">{format!("CHUNK_STREAM [{:02}]", chunks.len())}</h2>
+                        <span class="tech-label opacity-50 mt-1">
+                            {strategy_label}
+                        </span>
                     </div>
                     <div class="space-y-4">
                         {chunks
                             .into_iter()
-                            .map(|c| {
-                                let prefix = if c.is_glossary { "GLOSSARY" } else { "POST_BODY" };
-                                view! {
-                                    <div class="card-inner p-3 relative overflow-hidden group">
-                                        <div class="absolute top-0 right-0 px-2 py-0.5 bg-[var(--color-border)] tech-label opacity-50">
-                                            {format!("ID:{}", c.chunk_id)}
-                                        </div>
-                                        <div class="flex flex-col mb-2">
-                                            <span class="tech-label text-[var(--color-accent)]">{prefix}</span>
-                                            <span class="font-bold text-sm uppercase tracking-tight">{c.heading}</span>
-                                        </div>
-                                        <pre class="log-pre text-[10px] bg-transparent border-none p-0 max-height-[10rem]">
-                                            {c.text_excerpt}
-                                        </pre>
-                                        <div class="mt-2 flex justify-between items-center tech-label opacity-40">
-                                            <span>{format!("LENGTH: {} CHARS", c.text_length)}</span>
-                                        </div>
-                                    </div>
-                                }
-                            })
+                            .map(|c| view! { <ChunkCard chunk=c strategy=strategy size_limit=size_limit /> })
                             .collect_view()}
                     </div>
                 </section>
@@ -249,6 +330,121 @@ fn Stat(label: &'static str, value: String) -> impl IntoView {
             <div class="tech-label opacity-50 mb-1">{label}</div>
             <div class="font-mono text-xs font-bold truncate tracking-wider">{value}</div>
         </div>
+    }
+}
+
+#[component]
+fn ChunkCard(chunk: ChunkPreview, strategy: ChunkStrategy, size_limit: u32) -> impl IntoView {
+    let (show_tokens, set_show_tokens) = signal(false);
+
+    let prefix = if chunk.is_glossary {
+        "GLOSSARY"
+    } else {
+        "POST_BODY"
+    };
+    let text_length = chunk.text_length;
+    let token_count = chunk.token_count;
+    let heading = chunk.heading.clone();
+
+    let (length_label, count_label, over_limit) = match strategy {
+        ChunkStrategy::Bert => (
+            format!("LENGTH: {text_length} CHARS"),
+            format!("TOKENS: {token_count}/{size_limit}"),
+            token_count > size_limit,
+        ),
+        ChunkStrategy::Section => (
+            format!("LENGTH: {text_length}/{size_limit} CHARS"),
+            format!("TOKENS: {token_count}"),
+            text_length > size_limit,
+        ),
+    };
+
+    let tokens = StoredValue::new(chunk.tokens);
+    let text_excerpt = StoredValue::new(chunk.text_excerpt);
+
+    let count_class = if over_limit {
+        "log-line-error font-bold"
+    } else {
+        "opacity-40"
+    };
+
+    view! {
+        <div class="card-inner p-3 relative overflow-hidden group">
+            <div class="flex flex-row justify-between">
+            <div class="flex flex-col mb-2">
+                <span class="tech-label text-[var(--color-accent)]">{prefix}</span>
+                <span class="font-bold text-sm uppercase tracking-tight">{heading}</span>
+            </div>
+            <div class="flex gap-1 mb-2 py-2 justify-end">
+                <button
+                    type="button"
+                    class=move || tab_class(!show_tokens.get())
+                    on:click=move |_| set_show_tokens.set(false)
+                >
+                    "TEXT"
+                </button>
+                <button
+                    type="button"
+                    class=move || tab_class(show_tokens.get())
+                    on:click=move |_| set_show_tokens.set(true)
+                >
+                    "TOKENS"
+                </button>
+                </div>
+            </div>
+            {move || {
+                if show_tokens.get() {
+                    view! {
+                        <div class="log-pre text-[10px] bg-transparent border-none p-0 flex flex-wrap gap-1 max-h-[14rem] overflow-auto">
+                            {tokens
+                                .with_value(|toks| {
+                                    toks.iter()
+                                        .enumerate()
+                                        .map(|(i, t)| {
+                                            view! {
+                                                <span
+                                                    class="token-pill"
+                                                    title=i.to_string()
+                                                >
+                                                    {t.clone()}
+                                                </span>
+                                            }
+                                        })
+                                        .collect_view()
+                                })}
+                        </div>
+                    }
+                        .into_any()
+                } else {
+                    view! {
+                        <pre class="log-pre text-[10px] bg-transparent border-none p-0 max-h-[10rem]">
+                            {text_excerpt.get_value()}
+                        </pre>
+                    }
+                        .into_any()
+                }
+            }}
+            <div class="mt-2 flex justify-between items-center tech-label">
+                <span class="opacity-40">{length_label}</span>
+                <span class=count_class>{count_label}</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-[var(--color-border)] flex justify-end">
+                <a
+                    href=text_excerpt.with_value(|t| format!("/embed?a={}", urlencoding::encode(t)))
+                    class="tech-label opacity-40 hover:opacity-100 transition-opacity"
+                >
+                    "PROBE_EMBED →"
+                </a>
+            </div>
+        </div>
+    }
+}
+
+fn tab_class(active: bool) -> &'static str {
+    if active {
+        "tech-label px-2 py-0.5 border border-[var(--color-accent-strong)] bg-[var(--color-tag-bg)] cursor-pointer"
+    } else {
+        "tech-label opacity-50 px-2 py-0.5 border border-[var(--color-border)] cursor-pointer"
     }
 }
 

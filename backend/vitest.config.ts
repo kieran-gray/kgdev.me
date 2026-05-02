@@ -17,7 +17,8 @@ export default defineWorkersConfig(async () => {
 							CLOUDFLARE_TURNSTILE_SECRET_KEY: 'test-secret-key',
 							ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:5174,http://localhost:5175',
 							ALLOWED_BLOG_PATHS: 'my-post',
-							DESTINATION_EMAIL: 'test@email.com'
+							DESTINATION_EMAIL: 'test@email.com',
+							EMBEDDING_MODEL: "test-embedding-model"
 						}
 					}
 				}
