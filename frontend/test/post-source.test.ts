@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { describe, test, vi, beforeEach } from 'vitest';
-import { createHash } from 'node:crypto';
 import { buildPostSourcePayload, stripFrontmatter } from '@/lib/content/post-source';
 import { markdownToPlainText } from '@/lib/markdown/plainText';
 import { getCollection } from 'astro:content';
