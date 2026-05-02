@@ -25,6 +25,8 @@ pub struct PostDetailDto {
     pub markdown_body_length: u32,
     pub plain_text_excerpt: String,
     pub embedding_token_limit: u32,
+    pub chunk_strategy: ChunkStrategy,
+    pub chunk_size_limit: u32,
     pub glossary_terms: Vec<GlossaryTermDto>,
     pub chunk_preview: Vec<ChunkPreview>,
 }
@@ -74,6 +76,22 @@ pub struct IngestJobInfo {
     pub stream_url: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbedResult {
+    pub dims: usize,
+    pub norm_a: f32,
+    pub norm_b: f32,
+    pub similarity: f32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ChunkStrategy {
+    Bert,
+    #[default]
+    Section,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct SettingsDto {
     pub blog_url: String,
@@ -82,4 +100,18 @@ pub struct SettingsDto {
     pub cloudflare_account_id: String,
     pub cloudflare_api_token: String,
     pub kv_namespace_id: String,
+    #[serde(default = "default_embedder_backend")]
+    pub embedder_backend: String,
+    #[serde(default = "default_embed_dimensions")]
+    pub embed_dimensions: u32,
+    #[serde(default)]
+    pub chunk_strategy: ChunkStrategy,
+}
+
+fn default_embedder_backend() -> String {
+    "cloudflare".to_string()
+}
+
+fn default_embed_dimensions() -> u32 {
+    1024
 }

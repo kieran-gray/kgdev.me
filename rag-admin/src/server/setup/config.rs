@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 
 use crate::server::setup::exceptions::SetupError;
-use crate::shared::SettingsDto;
+use crate::shared::{ChunkStrategy, SettingsDto};
 
 pub fn data_dir() -> PathBuf {
     std::env::current_dir()
@@ -27,10 +27,13 @@ pub fn defaults() -> SettingsDto {
     SettingsDto {
         blog_url: "http://localhost:4321".into(),
         vectorize_index_name: "blog-chunks".into(),
-        embedding_model: "@cf/baai/bge-base-en-v1.5".into(),
+        embedding_model: "@cf/qwen/qwen3-embedding-0.6b".into(),
         cloudflare_account_id: String::new(),
         cloudflare_api_token: String::new(),
         kv_namespace_id: String::new(),
+        embedder_backend: "cloudflare".into(),
+        embed_dimensions: 1024,
+        chunk_strategy: ChunkStrategy::Section,
     }
 }
 

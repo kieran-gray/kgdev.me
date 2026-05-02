@@ -27,6 +27,10 @@
 html,
 body {
     background-color: var(--color-page-bg);
+    background-image: 
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: var(--grid-size) var(--grid-size);
     color: var(--color-text);
     font-family:
         "JetBrains Mono",
@@ -37,6 +41,35 @@ body {
         Consolas,
         monospace;
     min-height: 100vh;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
+}
+
+header {
+    position: relative;
+    overflow: hidden;
+}
+
+header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        to bottom,
+        transparent,
+        transparent 50%,
+        rgba(0, 0, 0, 0.1) 50%,
+        rgba(0, 0, 0, 0.1)
+    );
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 20;
+    opacity: 0.2;
 }
 
 a {
@@ -203,6 +236,36 @@ a:hover {
 .token-pill:hover {
     border-color: var(--color-accent-strong);
     background-color: var(--color-tag-bg);
+}
+
+.cyber-title {
+    position: relative;
+    font-size: 1.25rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--color-accent-strong);
+    text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cyber-title::before {
+    content: "[";
+    color: var(--color-muted);
+    font-weight: 300;
+}
+
+.cyber-title::after {
+    content: "]";
+    color: var(--color-muted);
+    font-weight: 300;
+}
+
+.cyber-title-text {
+    position: relative;
+    display: inline-block;
 }
 
 /* Technical decorations */

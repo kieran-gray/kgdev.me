@@ -2,8 +2,8 @@ pub mod blog_source;
 pub mod embedder;
 pub mod kv_store;
 pub mod manifest_store;
-pub mod vector_store;
 pub mod tokenizer;
+pub mod vector_store;
 
 pub use blog_source::BlogSource;
 pub use embedder::Embedder;

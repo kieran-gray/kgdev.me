@@ -3,23 +3,23 @@
   "posts": {
     "blog-view-counter": {
       "post_version": "aa2f3726102d7a8579950027675125300c0b9f27b7e1c2ef7b669159b79f085e",
-      "chunk_count": 17,
-      "ingested_at": "2026-05-02T12:48:01.831631116Z"
+      "chunk_count": 15,
+      "ingested_at": "2026-05-02T21:38:53.018417356Z"
     },
     "event-sourcing-cloudflare": {
       "post_version": "731a16dc18e479020158a410eee440d94163a0d5b7802edf4e2c35600eceda40",
-      "chunk_count": 70,
-      "ingested_at": "2026-05-02T12:48:34.11835931Z"
+      "chunk_count": 34,
+      "ingested_at": "2026-05-02T21:40:35.945740266Z"
     },
     "quest-exactly-once-p1": {
       "post_version": "a6315b5e8ed7f4ee4b6358ce3be12d96c929b92eb96c08de0650525e65e5cbae",
-      "chunk_count": 21,
-      "ingested_at": "2026-05-02T12:48:49.065498603Z"
+      "chunk_count": 15,
+      "ingested_at": "2026-05-02T21:41:13.712814818Z"
     },
     "quest-exactly-once-p2": {
       "post_version": "a3f7f91b1a3dad96b24c21385009003cc22e963a7cf3ed75cea2219698efff9e",
-      "chunk_count": 27,
-      "ingested_at": "2026-05-02T12:48:43.653577164Z"
+      "chunk_count": 16,
+      "ingested_at": "2026-05-02T21:40:50.810209723Z"
     }
   }
 }

@@ -69,8 +69,8 @@
     "DESTINATION_EMAIL": "gray.kieran@protonmail.com",
     "ALLOWED_ORIGINS": "https://kgdev.me",
     "ALLOWED_BLOG_PATHS": "blog-view-counter,event-sourcing-cloudflare,quest-exactly-once-p1,quest-exactly-once-p2",
-    "VECTORIZE_INDEX_NAME": "blog-chunks",
-    "EMBEDDING_MODEL": "@cf/baai/bge-base-en-v1.5",
+    "VECTORIZE_INDEX_NAME": "kgdev-me-blog",
+    "EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b",
     "GENERATION_MODEL": "@cf/meta/llama-3.1-8b-instruct",
     "QA_DAILY_CAP": "200"
   },
@@ -90,8 +90,8 @@
         "DESTINATION_EMAIL": "gray.kieran@protonmail.com",
         "ALLOWED_ORIGINS": "",
         "ALLOWED_BLOG_PATHS": "blog-view-counter,event-sourcing-cloudflare,quest-exactly-once-p1,quest-exactly-once-p2",
-        "VECTORIZE_INDEX_NAME": "blog-chunks",
-        "EMBEDDING_MODEL": "@cf/baai/bge-base-en-v1.5",
+        "VECTORIZE_INDEX_NAME": "kgdev-me-blog",
+        "EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b",
         "GENERATION_MODEL": "@cf/meta/llama-3.1-8b-instruct",
         "QA_DAILY_CAP": "50"
       },
