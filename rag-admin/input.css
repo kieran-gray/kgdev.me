@@ -1,0 +1,206 @@
+@import "tailwindcss";
+
+@theme {
+    --color-page-bg: #0f1115;
+    --color-card-outer: #151a1f;
+    --color-card-inner: #1c2128;
+    --color-text: #e5e7eb;
+    --color-muted: #e5e7eb;
+    --color-border: #262c35;
+    --color-accent: #fda4af;
+    --color-accent-strong: #e25c72;
+    --color-link: #fda4af;
+    --color-link-hover: #fecdd3;
+    --color-tag-bg: #5b1f2d;
+    --color-tag-bg-hover: #7a2537;
+    --color-badge-bg: #4a1520;
+    --color-badge-text: #fecdd3;
+    --color-code-bg: #11161c;
+    --color-danger: #f87171;
+    --color-success: #4ade80;
+
+    --grid-size: 20px;
+    --grid-color: rgba(255, 255, 255, 0.03);
+    --grid-color-major: rgba(255, 255, 255, 0.06);
+}
+
+html,
+body {
+    background-color: var(--color-page-bg);
+    color: var(--color-text);
+    font-family:
+        "JetBrains Mono",
+        ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        Monaco,
+        Consolas,
+        monospace;
+    min-height: 100vh;
+}
+
+a {
+    color: var(--color-link);
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+a:hover {
+    color: var(--color-link-hover);
+    text-decoration: none;
+    background-color: var(--color-tag-bg);
+}
+
+.card-outer {
+    background-color: var(--color-card-outer);
+    border: 1px solid var(--color-border);
+    border-radius: 0;
+    position: relative;
+}
+
+/* Blueprint corner markers */
+.card-outer::before,
+.card-outer::after {
+    content: "";
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-color: var(--color-muted);
+    pointer-events: none;
+}
+
+.card-outer::before {
+    top: -1px;
+    left: -1px;
+    border-top: 1px solid;
+    border-left: 1px solid;
+}
+
+.card-outer::after {
+    bottom: -1px;
+    right: -1px;
+    border-bottom: 1px solid;
+    border-right: 1px solid;
+}
+
+.card-inner {
+    background-color: var(--color-card-inner);
+    border: 1px solid var(--color-border);
+    border-radius: 0;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-card-inner);
+    color: var(--color-text);
+    font-weight: 500;
+    font-family: inherit;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.1s ease;
+}
+
+.btn:hover:not(:disabled) {
+    background-color: var(--color-tag-bg);
+    border-color: var(--color-accent-strong);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 0 0 var(--color-accent-strong);
+}
+
+.btn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--color-tag-bg);
+    border-color: var(--color-accent-strong);
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0;
+    background-color: var(--color-badge-bg);
+    color: var(--color-badge-text);
+    font-size: 0.7rem;
+    font-weight: 700;
+    border: 1px solid var(--color-accent-strong);
+    text-transform: uppercase;
+}
+
+.input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--color-page-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0;
+    color: var(--color-text);
+    font-family: inherit;
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--color-accent-strong);
+    background-color: var(--color-card-inner);
+}
+
+.log-pre {
+    background-color: var(--color-code-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 0;
+    padding: 0.75rem;
+    font-family: inherit;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 28rem;
+    overflow: auto;
+}
+
+.log-line-info {
+    color: var(--color-text);
+}
+
+.log-line-warn {
+    color: #fbbf24;
+}
+
+.log-line-error {
+    color: var(--color-danger);
+}
+
+.log-line-success {
+    color: var(--color-success);
+}
+
+/* Technical decorations */
+.tech-label {
+    font-size: 0.65rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.tech-border-b {
+    border-bottom: 1px solid var(--color-border);
+}
+
+.tech-border-r {
+    border-right: 1px solid var(--color-border);
+}
+

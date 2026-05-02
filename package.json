@@ -3,7 +3,8 @@
     "private": true,
     "workspaces": [
         "frontend",
-        "backend"
+        "backend",
+        "rag-admin"
     ],
     "devDependencies": {
         "concurrently": "^8.2.2",
@@ -17,6 +18,7 @@
         "dev": "concurrently -n frontend,backend \"npm run dev:frontend\" \"npm run dev:backend\"",
         "dev:frontend": "npm run dev --workspace=frontend",
         "dev:backend": "npm run dev --workspace=backend",
+        "dev:rag": "npm run dev --workspace=rag-admin",
         "format": "npm run format --workspaces --if-present",
         "build": "npm run build --workspaces --if-present",
         "build:frontend": "npm run build --workspace=frontend",
