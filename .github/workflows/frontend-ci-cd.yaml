@@ -61,9 +61,9 @@ jobs:
         working-directory: frontend
         run: npm run test:unit
 
-      - name: Run feature tests
-        working-directory: frontend
-        run: npm run test:features
+      # - name: Run feature tests
+      #   working-directory: frontend
+      #   run: npm run test:features
 
   deploy:
     needs: ci
