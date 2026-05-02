@@ -183,7 +183,7 @@ describe('Ask Question Worker', () => {
 			.get('https://api.cloudflare.com')
 			.intercept({
 				method: 'POST',
-				path: '/client/v4/accounts/test-account-id/vectorize/v2/indexes/blog-chunks/query'
+				path: '/client/v4/accounts/test-account-id/vectorize/v2/indexes/kgdev-me-blog/query'
 			})
 			.reply(
 				200,
@@ -221,7 +221,7 @@ describe('Ask Question Worker', () => {
 
 		expect(response.status).toBe(200);
 		expect(env.AI.run).toHaveBeenCalledWith(
-			'@cf/baai/bge-base-en-v1.5',
+			'test-embedding-model',
 			expect.objectContaining({
 				text: ['what does this post say about retries']
 			})
