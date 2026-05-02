@@ -68,8 +68,10 @@ export async function buildPostSourcePayload(
 
 	const glossaryEntries = await getCollection('glossary');
 	const glossaryTerms: GlossaryTerm[] = (entry.data.glossaryTerms ?? [])
-		.map((slug) => {
-			const glossaryEntry = glossaryEntries.find((e) => e.slug === slug);
+		.map((slug: string) => {
+			const glossaryEntry = glossaryEntries.find(
+				(e: CollectionEntry<'glossary'>) => e.slug === slug
+			);
 			if (!glossaryEntry) return null;
 
 			const source = readGlossarySource(slug);
@@ -82,7 +84,7 @@ export async function buildPostSourcePayload(
 				sources: glossaryEntry.data.sources
 			};
 		})
-		.filter((t): t is GlossaryTerm => t !== null);
+		.filter((t: GlossaryTerm | null): t is GlossaryTerm => t !== null);
 
 	const glossaryForHashing = glossaryTerms.map((t) => ({
 		term: t.term,
@@ -130,7 +132,7 @@ export async function getAllPostSourcePayloads(): Promise<PostSourcePayload[]> {
 
 export async function getAllGlossaryTerms(): Promise<GlossaryTerm[]> {
 	const entries = await getCollection('glossary');
-	return entries.map((entry) => {
+	return entries.map((entry: CollectionEntry<'glossary'>) => {
 		const source = readGlossarySource(entry.slug);
 		const definition = stripFrontmatter(source).trim();
 		return {
