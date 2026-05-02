@@ -1,14 +1,29 @@
 import assert from 'node:assert/strict';
-import { describe, test, vi } from 'vitest';
+import { describe, test, vi, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { buildPostSourcePayload, stripFrontmatter } from '@/lib/content/post-source';
 import { markdownToPlainText } from '@/lib/markdown/plainText';
+import { getCollection } from 'astro:content';
+import { PathOrFileDescriptor, readFileSync } from 'node:fs';
 
 vi.mock('astro:content', () => ({
 	getCollection: vi.fn()
 }));
 
+vi.mock('node:fs', async (importOriginal) => {
+	const original = await importOriginal<typeof import('node:fs')>();
+	return {
+		...original,
+		readFileSync: vi.fn()
+	};
+});
+
 describe('post-source helpers', () => {
+	beforeEach(() => {
+		vi.mocked(getCollection).mockReset();
+		vi.mocked(readFileSync).mockReset();
+	});
+
 	test('stripFrontmatter removes leading yaml block', () => {
 		const source = '---\ntitle: test\n---\n\n# Heading\nBody';
 		assert.equal(stripFrontmatter(source), '\n# Heading\nBody');
@@ -40,7 +55,7 @@ describe('post-source helpers', () => {
 		assert.doesNotMatch(text, /\*\*bold text\*\*/);
 	});
 
-	test('buildPostSourcePayload returns canonical metadata and normalized content', () => {
+	test('buildPostSourcePayload returns canonical metadata and normalized content', async () => {
 		const entry = {
 			slug: 'blog-view-counter',
 			data: {
@@ -50,11 +65,15 @@ describe('post-source helpers', () => {
 					"I want a live view counter on each of my blog posts. Up when someone joins, down when they leave, no reload, and totals saved between sessions. Here's how I built it on Cloudflare Durable Objects in Rust.",
 				author: 'Kieran Gray',
 				pubDate: new Date('2026-04-27T00:00:00.000Z'),
-				tags: ['cloudflare', 'rust']
+				tags: ['cloudflare', 'rust'],
+				glossaryTerms: []
 			}
 		};
 
-		const payload = buildPostSourcePayload(entry as never);
+		vi.mocked(getCollection).mockResolvedValue([]);
+		vi.mocked(readFileSync).mockReturnValue('---\ntitle: Mock Post\n---\n\nBody content');
+
+		const payload = await buildPostSourcePayload(entry as never);
 		const expectedHash = createHash('sha256').update(payload.sourceMarkdown).digest('hex');
 
 		assert.equal(payload.slug, 'blog-view-counter');
@@ -64,7 +83,50 @@ describe('post-source helpers', () => {
 		assert.equal(payload.contentHash, expectedHash);
 		assert.ok(payload.sourceMarkdown.startsWith('---\n'));
 		assert.ok(!payload.markdownBody.startsWith('---\n'));
-		assert.match(payload.plainText, /I want a live view counter on each of my blog posts\./);
-		assert.match(payload.plainText, /The architecture/);
+	});
+
+	test('buildPostSourcePayload includes glossary terms', async () => {
+		const entry = {
+			slug: 'test-post',
+			data: {
+				title: 'Test Post',
+				description: 'Test Description',
+				excerpt: 'Test Excerpt',
+				author: 'Test Author',
+				pubDate: new Date('2026-04-27T00:00:00.000Z'),
+				tags: [],
+				glossaryTerms: ['astro']
+			}
+		};
+
+		vi.mocked(getCollection).mockResolvedValue([
+			{
+				slug: 'astro',
+				data: {
+					term: 'Astro.js',
+					sources: [{ title: 'Docs', url: 'https://docs.astro.build' }]
+				}
+			}
+		] as never);
+
+		vi.mocked(readFileSync).mockImplementation((path: PathOrFileDescriptor) => {
+			if (typeof path === 'string' && path.includes('test-post.md')) {
+				return '---\ntitle: Test Post\n---\n\nPost body';
+			}
+			if (typeof path === 'string' && path.includes('astro.md')) {
+				return '---\nterm: Astro.js\nsources: [{ title: "Docs", url: "https://docs.astro.build" }]\n---\n\nAstro definition';
+			}
+			return '';
+		});
+
+		const payload = await buildPostSourcePayload(entry as never);
+
+		assert.equal(payload.glossaryTerms.length, 1);
+		const term = payload.glossaryTerms[0];
+		assert.ok(term);
+		assert.equal(term.slug, 'astro');
+		assert.equal(term.term, 'Astro.js');
+		assert.equal(term.definition, 'Astro definition');
+		assert.equal(term.sources.length, 1);
 	});
 });

@@ -9,7 +9,7 @@ export async function getStaticPaths() {
 
 export const GET: APIRoute = async ({ props }) => {
 	const { entry } = props;
-	const payload = buildPostSourcePayload(entry);
+	const payload = await buildPostSourcePayload(entry);
 
 	return Response.json(payload, {
 		headers: {
