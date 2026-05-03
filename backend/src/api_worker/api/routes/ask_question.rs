@@ -19,7 +19,7 @@ pub async fn ask_question_handler(
         }
     };
 
-    if !ctx.data.config.allowed_blog_paths.contains(&page) {
+    if !ctx.data.config.security.allowed_blog_paths.contains(&page) {
         return Ok(Response::from(AppError::NotFound(format!(
             "Unknown post: {page}"
         ))));

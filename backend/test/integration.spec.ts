@@ -192,7 +192,7 @@ describe('Ask Question Worker', () => {
 					result: {
 						matches: [
 							{
-								score: 0.41,
+								score: 0.01,
 								metadata: {
 									chunk_id: 1,
 									heading: 'Intro',

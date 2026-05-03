@@ -90,8 +90,6 @@ impl AppState {
 
     pub async fn save_settings(&self, new_settings: SettingsDto) -> Result<(), SetupError> {
         validation::validate_local(&new_settings).map_err(SetupError::Config)?;
-        // Apply pending settings under a temporary swap so the embed probe
-        // and describe call route to the about-to-be-saved configuration.
         let previous = {
             let mut guard = self.settings.write().await;
             std::mem::replace(&mut *guard, new_settings.clone())

@@ -29,14 +29,14 @@ impl AppState {
         let http_client = Arc::new(WorkerHttpClient::new());
 
         let request_validation_service = CloudflareRequestValidationService::create(
-            &config.siteverify_url,
-            &config.turnstile_secret_key,
+            &config.security.siteverify_url,
+            &config.security.turnstile_secret_key,
             http_client.clone(),
         );
 
         let email_service = CloudflareEmailService::create(
-            config.cloudflare_account_id.clone(),
-            config.cloudflare_api_token.clone(),
+            config.cloudflare.account_id.clone(),
+            config.cloudflare.api_token.clone(),
             config.destination_email.clone(),
             http_client.clone(),
         );
@@ -49,14 +49,14 @@ impl AppState {
             .map_err(|_| SetupError::MissingVariable("AI".to_string()))?;
         let ai_service = WorkersAiService::create(
             ai_binding,
-            config.embedding_model.clone(),
-            config.generation_model.clone(),
+            config.ai.embedding_model.clone(),
+            config.ai.generation_model.clone(),
         );
 
         let vectorize_service = VectorizeRestService::create(
-            config.cloudflare_account_id.clone(),
-            config.cloudflare_vectorize_api_token.clone(),
-            config.vectorize_index_name.clone(),
+            config.cloudflare.account_id.clone(),
+            config.cloudflare.vectorize_api_token.clone(),
+            config.ai.vectorize_index_name.clone(),
             http_client.clone(),
         );
 
@@ -77,10 +77,10 @@ impl AppState {
             vectorize_service,
             qa_cache_service,
             qa_coordinator,
-            config.generation_model.clone(),
+            config.ai.generation_model.clone(),
             config.qa_daily_cap,
-            config.vectorize_top_k,
-            config.min_score,
+            config.ai.vectorize_top_k,
+            config.ai.min_score,
         );
 
         let view_counter_do_client = DurableObjectClient::new(
