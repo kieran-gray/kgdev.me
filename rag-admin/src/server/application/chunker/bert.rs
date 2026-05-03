@@ -1,9 +1,6 @@
 use super::common::{fence_marker_of, parse_heading, split_into_lines, strip_frontmatter};
 use super::ChunkOutput;
-
-const TARGET_CHARS: usize = 1600;
-const OVERLAP_CHARS: usize = 240;
-const MIN_CHARS: usize = 320;
+use crate::shared::ChunkingConfig;
 
 #[derive(Debug, Clone)]
 struct Segment {
@@ -14,11 +11,15 @@ struct Segment {
     atomic: bool,
 }
 
-pub fn chunk(source: &str) -> Vec<ChunkOutput> {
+pub fn chunk(config: ChunkingConfig, source: &str) -> Vec<ChunkOutput> {
+    let target = config.target_chars.max(1) as usize;
+    let overlap = config.overlap_chars as usize;
+    let min = config.min_chars as usize;
+
     let (body_chars, body_offset) = strip_frontmatter(source);
     let raw = parse_segments(&body_chars);
-    let packed = pack_segments(raw);
-    let split = split_oversized(packed);
+    let packed = pack_segments(raw, target);
+    let split = split_oversized(packed, target, overlap, min);
 
     split
         .into_iter()
@@ -152,7 +153,7 @@ fn parse_segments(body: &[char]) -> Vec<Segment> {
     segments
 }
 
-fn pack_segments(segments: Vec<Segment>) -> Vec<Segment> {
+fn pack_segments(segments: Vec<Segment>, target: usize) -> Vec<Segment> {
     let mut packed: Vec<Segment> = Vec::new();
     let mut current: Option<Segment> = None;
 
@@ -172,7 +173,7 @@ fn pack_segments(segments: Vec<Segment>) -> Vec<Segment> {
         }
 
         let merged_text = format!("{}\n{}", cur.text, seg.text);
-        if merged_text.chars().count() <= TARGET_CHARS {
+        if merged_text.chars().count() <= target {
             current = Some(Segment {
                 text: merged_text,
                 char_start: cur.char_start,
@@ -226,11 +227,16 @@ fn last_sentence_break(window: &[char]) -> Option<usize> {
     }
 }
 
-fn split_oversized(segments: Vec<Segment>) -> Vec<Segment> {
+fn split_oversized(
+    segments: Vec<Segment>,
+    target: usize,
+    overlap: usize,
+    min: usize,
+) -> Vec<Segment> {
     let mut out: Vec<Segment> = Vec::new();
     for seg in segments {
         let text_chars: Vec<char> = seg.text.chars().collect();
-        if seg.atomic || text_chars.len() <= TARGET_CHARS + OVERLAP_CHARS {
+        if seg.atomic || text_chars.len() <= target + overlap {
             out.push(seg);
             continue;
         }
@@ -241,22 +247,22 @@ fn split_oversized(segments: Vec<Segment>) -> Vec<Segment> {
             if start >= total {
                 break;
             }
-            let end = (start + TARGET_CHARS).min(total);
+            let end = (start + target).min(total);
             let mut break_at = end;
             if end < total {
                 let window = &text_chars[start..end];
                 let last_para = last_double_newline(window);
                 let last_sent = last_sentence_break(window);
                 if let Some(p) = last_para {
-                    if p > TARGET_CHARS / 2 {
+                    if p > target / 2 {
                         break_at = start + p;
                     } else if let Some(s) = last_sent {
-                        if s > TARGET_CHARS / 2 {
+                        if s > target / 2 {
                             break_at = start + s + 1;
                         }
                     }
                 } else if let Some(s) = last_sent {
-                    if s > TARGET_CHARS / 2 {
+                    if s > target / 2 {
                         break_at = start + s + 1;
                     }
                 }
@@ -266,7 +272,7 @@ fn split_oversized(segments: Vec<Segment>) -> Vec<Segment> {
             let piece_len = piece.chars().count();
             if !piece.is_empty() {
                 let last_atomic = out.last().map(|s| s.atomic).unwrap_or(true);
-                if piece_len < MIN_CHARS && !out.is_empty() && !last_atomic {
+                if piece_len < min && !out.is_empty() && !last_atomic {
                     let prev = out.last_mut().unwrap();
                     prev.text = format!("{}\n\n{}", prev.text, piece);
                     prev.char_end = seg.char_start + break_at;
@@ -283,7 +289,7 @@ fn split_oversized(segments: Vec<Segment>) -> Vec<Segment> {
             if break_at >= total {
                 break;
             }
-            let candidate = break_at.saturating_sub(OVERLAP_CHARS);
+            let candidate = break_at.saturating_sub(overlap);
             start = if candidate > start {
                 candidate
             } else {
@@ -297,11 +303,19 @@ fn split_oversized(segments: Vec<Segment>) -> Vec<Segment> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::ChunkStrategy;
+
+    fn cfg() -> ChunkingConfig {
+        ChunkingConfig {
+            strategy: ChunkStrategy::Bert,
+            ..Default::default()
+        }
+    }
 
     #[test]
     fn chunk_yields_sequential_ids() {
         let src = "## A\nfirst paragraph.\n\n## B\nsecond paragraph.";
-        let chunks = chunk(src);
+        let chunks = chunk(cfg(), src);
         assert!(!chunks.is_empty());
         for (i, c) in chunks.iter().enumerate() {
             assert_eq!(c.chunk_id as usize, i);
@@ -311,7 +325,7 @@ mod tests {
     #[test]
     fn chunk_preserves_heading_path() {
         let src = "# Top\n\nintro\n\n## Sub\n\ndetail";
-        let chunks = chunk(src);
+        let chunks = chunk(cfg(), src);
         let headings: Vec<&str> = chunks.iter().map(|c| c.heading.as_str()).collect();
         assert!(headings.iter().any(|h| h.contains("Top")));
         assert!(headings.iter().any(|h| h.contains("Sub")));
@@ -324,10 +338,33 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         let src = format!("## Code\n\n```rust\n{code}\n```\n");
-        let chunks = chunk(&src);
+        let chunks = chunk(cfg(), &src);
         for c in chunks.iter().filter(|c| c.text.contains("```")) {
             let opens = c.text.matches("```").count();
             assert_eq!(opens % 2, 0, "chunk {} has unbalanced fences", c.chunk_id);
         }
+    }
+
+    #[test]
+    fn smaller_target_yields_more_chunks() {
+        let para = "Lorem ipsum dolor sit amet. ".repeat(120);
+        let src = format!("## Big\n\n{para}");
+        let big = ChunkingConfig {
+            strategy: ChunkStrategy::Bert,
+            target_chars: 1600,
+            overlap_chars: 240,
+            min_chars: 320,
+            ..Default::default()
+        };
+        let small = ChunkingConfig {
+            strategy: ChunkStrategy::Bert,
+            target_chars: 600,
+            overlap_chars: 80,
+            min_chars: 120,
+            ..Default::default()
+        };
+        let big_chunks = chunk(big, &src);
+        let small_chunks = chunk(small, &src);
+        assert!(small_chunks.len() > big_chunks.len());
     }
 }

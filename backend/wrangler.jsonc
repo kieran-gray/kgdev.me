@@ -72,7 +72,9 @@
     "VECTORIZE_INDEX_NAME": "kgdev-me-blog",
     "EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b",
     "GENERATION_MODEL": "@cf/meta/llama-3.1-8b-instruct",
-    "QA_DAILY_CAP": "200"
+    "QA_DAILY_CAP": "200",
+    "VECTORIZE_TOP_K": "10",
+    "MIN_SCORE": "0.4"
   },
   "secrets": {
     "required": [
@@ -93,7 +95,9 @@
         "VECTORIZE_INDEX_NAME": "kgdev-me-blog",
         "EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b",
         "GENERATION_MODEL": "@cf/meta/llama-3.1-8b-instruct",
-        "QA_DAILY_CAP": "50"
+        "QA_DAILY_CAP": "50",
+        "VECTORIZE_TOP_K": "10",
+        "MIN_SCORE": "0.4"
       },
       "secrets": {
         "required": [

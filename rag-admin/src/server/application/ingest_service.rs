@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tokio::sync::{Mutex, RwLock};
 
-use crate::server::application::chunker::{self, ChunkOutput, MAX_SECTION_CHARS};
+use crate::server::application::chunker::{self, ChunkOutput};
 use crate::server::application::ingest_log::IngestLogEvent;
 use crate::server::application::job_registry::{Job, JobRegistry};
 use crate::server::application::ports::{
@@ -14,8 +14,8 @@ use crate::server::application::ports::{
 use crate::server::application::AppError;
 use crate::server::domain::{GlossaryTerm, ManifestEntry, VectorRecord};
 use crate::shared::{
-    ChunkPreview, ChunkStrategy, EmbedResult, GlossaryTermDto, IngestJobInfo, IngestOptions,
-    PostDetailDto, PostSummary, SettingsDto,
+    ChunkPreview, ChunkingConfig, EmbedResult, EmbeddingModel, GlossaryTermDto, IngestJobInfo,
+    IngestOptions, PostDetailDto, PostSummary, SettingsDto,
 };
 
 const EMBED_BATCH: usize = 50;
@@ -86,13 +86,19 @@ impl IngestService {
             .collect())
     }
 
-    pub async fn get_post_detail(&self, slug: &str) -> Result<PostDetailDto, AppError> {
+    pub async fn get_post_detail(
+        &self,
+        slug: &str,
+        chunking_override: Option<ChunkingConfig>,
+    ) -> Result<PostDetailDto, AppError> {
         let post = self.blog_source.fetch(slug).await?;
         let manifest = self.manifest_store.load().await?;
         let entry = manifest.posts.get(slug);
 
-        let strategy = self.settings.read().await.chunk_strategy;
-        let post_chunks = chunker::chunk(strategy, &post.source_markdown);
+        let default_chunking = self.settings.read().await.default_chunking;
+        let effective = chunking_override.unwrap_or(default_chunking);
+
+        let post_chunks = chunker::chunk(effective, &post.source_markdown);
         let glossary_chunks = build_glossary_chunks(&post.glossary_terms, post_chunks.len() as u32);
         let post_version = compute_post_version(&post.source_markdown, &post.glossary_terms);
 
@@ -121,11 +127,8 @@ impl IngestService {
             markdown_body_length: post.markdown_body.chars().count() as u32,
             plain_text_excerpt: excerpt(&post.plain_text, 400),
             embedding_token_limit: self.embedding_token_limit,
-            chunk_strategy: strategy,
-            chunk_size_limit: match strategy {
-                ChunkStrategy::Bert => self.embedding_token_limit,
-                ChunkStrategy::Section => MAX_SECTION_CHARS as u32,
-            },
+            effective_chunking: effective,
+            default_chunking,
             glossary_terms: post
                 .glossary_terms
                 .iter()
@@ -208,16 +211,25 @@ impl IngestService {
         let manifest = self.manifest_store.load().await?;
         let prev = manifest.posts.get(slug).cloned();
 
-        let (index_name, embedding_model, strategy) = {
+        let (vector_index, model, default_chunking) = {
             let s = self.settings.read().await;
             (
-                s.vectorize_index_name.clone(),
+                s.vector_index.clone(),
                 s.embedding_model.clone(),
-                s.chunk_strategy,
+                s.default_chunking,
             )
         };
+        let effective = options.chunking_override.unwrap_or(default_chunking);
 
-        let post_chunks = chunker::chunk(strategy, &post.source_markdown);
+        if let Some(o) = options.chunking_override {
+            job.emit(IngestLogEvent::info(format!(
+                "using one-shot chunking override: {}",
+                describe_chunking(o)
+            )))
+            .await;
+        }
+
+        let post_chunks = chunker::chunk(effective, &post.source_markdown);
         let glossary_chunks = build_glossary_chunks(&post.glossary_terms, post_chunks.len() as u32);
         let chunks: Vec<ChunkOutput> = post_chunks
             .iter()
@@ -227,8 +239,10 @@ impl IngestService {
         let chunk_count = chunks.len() as u32;
         let post_version = compute_post_version(&post.source_markdown, &post.glossary_terms);
 
-        let was_seen =
+        let unchanged_content =
             matches!((&prev, options.force), (Some(p), false) if p.post_version == post_version);
+        let chunking_unchanged = options.chunking_override.is_none();
+        let was_seen = unchanged_content && chunking_unchanged;
 
         if was_seen {
             job.emit(IngestLogEvent::info(format!(
@@ -275,13 +289,16 @@ impl IngestService {
         let texts: Vec<String> = chunks.iter().map(|c| c.text.clone()).collect();
         for (i, batch) in texts.chunks(EMBED_BATCH).enumerate() {
             job.emit(IngestLogEvent::info(format!(
-                "embedding batch {}/{} ({} chunks)…",
+                "embedding batch {}/{} ({} chunks) via {} ({})…",
                 i + 1,
                 texts.len().div_ceil(EMBED_BATCH),
-                batch.len()
+                batch.len(),
+                model.backend.as_str(),
+                model.id
             )))
             .await;
-            let vecs = self.embedder.embed_batch(&embedding_model, batch).await?;
+            let vecs = self.embedder.embed_batch(&model.id, batch).await?;
+            verify_dims(&model, &vecs)?;
             embeddings.extend(vecs);
         }
 
@@ -306,13 +323,14 @@ impl IngestService {
 
         for (i, batch) in records.chunks(UPSERT_BATCH).enumerate() {
             job.emit(IngestLogEvent::info(format!(
-                "upserting batch {}/{} ({} records)…",
+                "upserting batch {}/{} ({} records) → index '{}'…",
                 i + 1,
                 records.len().div_ceil(UPSERT_BATCH),
-                batch.len()
+                batch.len(),
+                vector_index.name()
             )))
             .await;
-            self.vector_store.upsert(&index_name, batch).await?;
+            self.vector_store.upsert(vector_index.name(), batch).await?;
         }
 
         if let Some(p) = &prev {
@@ -325,7 +343,9 @@ impl IngestService {
                     stale.len()
                 )))
                 .await;
-                self.vector_store.delete_ids(&index_name, &stale).await?;
+                self.vector_store
+                    .delete_ids(vector_index.name(), &stale)
+                    .await?;
             }
         }
 
@@ -390,6 +410,31 @@ impl IngestService {
             norm_b,
             similarity,
         })
+    }
+}
+
+fn verify_dims(model: &EmbeddingModel, vecs: &[Vec<f32>]) -> Result<(), AppError> {
+    if let Some(first) = vecs.first() {
+        if first.len() as u32 != model.dims {
+            return Err(AppError::Validation(format!(
+                "embedder returned dims={} but model '{}' declares dims={}",
+                first.len(),
+                model.id,
+                model.dims
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn describe_chunking(c: ChunkingConfig) -> String {
+    use crate::shared::ChunkStrategy;
+    match c.strategy {
+        ChunkStrategy::Bert => format!(
+            "bert · target={} · overlap={} · min={}",
+            c.target_chars, c.overlap_chars, c.min_chars
+        ),
+        ChunkStrategy::Section => format!("section · max_chars={}", c.max_section_chars),
     }
 }
 

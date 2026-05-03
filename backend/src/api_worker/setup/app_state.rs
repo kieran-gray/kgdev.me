@@ -79,6 +79,8 @@ impl AppState {
             qa_coordinator,
             config.generation_model.clone(),
             config.qa_daily_cap,
+            config.vectorize_top_k,
+            config.min_score,
         );
 
         let view_counter_do_client = DurableObjectClient::new(

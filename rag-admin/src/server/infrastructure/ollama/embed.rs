@@ -30,7 +30,7 @@ struct EmbedResult {
 #[async_trait]
 impl Embedder for OllamaEmbedder {
     async fn embed_batch(&self, model: &str, texts: &[String]) -> Result<Vec<Vec<f32>>, AppError> {
-        let dims = self.settings.read().await.embed_dimensions;
+        let dims = self.settings.read().await.embedding_model.dims;
         let url = format!("{}/api/embed", API_BASE);
         let body = json!({ "model": model, "input": texts, "dimensions": dims });
         let body_bytes = serde_json::to_vec(&body)

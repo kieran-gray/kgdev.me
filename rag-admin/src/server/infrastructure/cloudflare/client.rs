@@ -15,8 +15,6 @@ pub struct CloudflareCredentials {
     pub account_id: String,
     pub api_token: String,
     pub kv_namespace_id: String,
-    pub vectorize_index_name: String,
-    pub embedding_model: String,
 }
 
 impl CloudflareCredentials {
@@ -24,8 +22,6 @@ impl CloudflareCredentials {
         if s.cloudflare_account_id.is_empty()
             || s.cloudflare_api_token.is_empty()
             || s.kv_namespace_id.is_empty()
-            || s.vectorize_index_name.is_empty()
-            || s.embedding_model.is_empty()
         {
             return Err(AppError::Validation(
                 "Cloudflare settings incomplete; check Settings page".into(),
@@ -35,8 +31,6 @@ impl CloudflareCredentials {
             account_id: s.cloudflare_account_id.clone(),
             api_token: s.cloudflare_api_token.clone(),
             kv_namespace_id: s.kv_namespace_id.clone(),
-            vectorize_index_name: s.vectorize_index_name.clone(),
-            embedding_model: s.embedding_model.clone(),
         })
     }
 }

@@ -1,8 +1,8 @@
 use super::common::{fence_marker_of, parse_heading, split_into_lines, strip_frontmatter};
 use super::ChunkOutput;
+use crate::shared::ChunkingConfig;
 
 const SECTION_CUT_DEPTH: usize = 3;
-pub const MAX_SECTION_CHARS: usize = 8000;
 
 #[derive(Debug, Clone)]
 struct Section {
@@ -12,10 +12,13 @@ struct Section {
     heading: String,
 }
 
-pub fn chunk(source: &str) -> Vec<ChunkOutput> {
+pub fn chunk(config: ChunkingConfig, source: &str) -> Vec<ChunkOutput> {
+    let max_chars = config.max_section_chars.max(1) as usize;
     let (body_chars, body_offset) = strip_frontmatter(source);
     let sections = parse_sections(&body_chars);
-    let split = sections.into_iter().flat_map(split_oversized);
+    let split = sections
+        .into_iter()
+        .flat_map(|s| split_oversized(s, max_chars));
 
     split
         .filter(|s| !s.text.trim().is_empty())
@@ -139,9 +142,9 @@ fn parse_sections(body: &[char]) -> Vec<Section> {
     sections
 }
 
-fn split_oversized(section: Section) -> Vec<Section> {
+fn split_oversized(section: Section, max_chars: usize) -> Vec<Section> {
     let chars: Vec<char> = section.text.chars().collect();
-    if chars.len() <= MAX_SECTION_CHARS {
+    if chars.len() <= max_chars {
         return vec![section];
     }
 
@@ -149,7 +152,7 @@ fn split_oversized(section: Section) -> Vec<Section> {
     let total = chars.len();
     let mut start = 0usize;
     while start < total {
-        let end = (start + MAX_SECTION_CHARS).min(total);
+        let end = (start + max_chars).min(total);
         let break_at = if end < total {
             last_double_newline(&chars[start..end])
                 .map(|p| start + p)
@@ -193,10 +196,14 @@ fn last_double_newline(window: &[char]) -> Option<usize> {
 mod tests {
     use super::*;
 
+    fn cfg() -> ChunkingConfig {
+        ChunkingConfig::default()
+    }
+
     #[test]
     fn one_chunk_per_h2() {
         let src = "## A\n\nfirst paragraph.\n\n## B\n\nsecond paragraph.";
-        let chunks = chunk(src);
+        let chunks = chunk(cfg(), src);
         assert_eq!(chunks.len(), 2);
         assert!(chunks[0].text.contains("first paragraph"));
         assert!(chunks[1].text.contains("second paragraph"));
@@ -205,7 +212,7 @@ mod tests {
     #[test]
     fn h4_does_not_cut() {
         let src = "## Top\n\nintro\n\n#### Deep\n\nstill same chunk.";
-        let chunks = chunk(src);
+        let chunks = chunk(cfg(), src);
         assert_eq!(chunks.len(), 1);
         assert!(chunks[0].text.contains("Deep"));
         assert!(chunks[0].text.contains("still same chunk"));
@@ -214,16 +221,17 @@ mod tests {
     #[test]
     fn fenced_heading_does_not_cut() {
         let src = "## A\n\n```md\n## not a real heading\n```\n\nbody";
-        let chunks = chunk(src);
+        let chunks = chunk(cfg(), src);
         assert_eq!(chunks.len(), 1);
         assert!(chunks[0].text.contains("## not a real heading"));
     }
 
     #[test]
     fn oversized_section_splits() {
-        let para = "x".repeat(MAX_SECTION_CHARS / 2);
+        let max = cfg().max_section_chars as usize;
+        let para = "x".repeat(max / 2);
         let src = format!("## Big\n\n{para}\n\n{para}\n\n{para}");
-        let chunks = chunk(&src);
+        let chunks = chunk(cfg(), &src);
         assert!(
             chunks.len() > 1,
             "expected fallback split, got {} chunks",
@@ -235,9 +243,26 @@ mod tests {
     }
 
     #[test]
+    fn smaller_max_section_chars_increases_splits() {
+        let para = "x".repeat(2000);
+        let src = format!("## Big\n\n{para}\n\n{para}\n\n{para}");
+        let big = ChunkingConfig {
+            max_section_chars: 8000,
+            ..Default::default()
+        };
+        let small = ChunkingConfig {
+            max_section_chars: 2500,
+            ..Default::default()
+        };
+        let big_chunks = chunk(big, &src);
+        let small_chunks = chunk(small, &src);
+        assert!(small_chunks.len() > big_chunks.len());
+    }
+
+    #[test]
     fn heading_path_preserved() {
         let src = "# Top\n\nintro\n\n## Sub\n\ndetail";
-        let chunks = chunk(src);
+        let chunks = chunk(cfg(), src);
         let headings: Vec<&str> = chunks.iter().map(|c| c.heading.as_str()).collect();
         assert!(headings.iter().any(|h| h.contains("Top")));
         assert!(headings.iter().any(|h| h.contains("Sub")));
@@ -247,7 +272,7 @@ mod tests {
     #[test]
     fn skipped_heading_levels() {
         let src = "# Top\n\n### Deep";
-        let chunks = chunk(src);
+        let chunks = chunk(cfg(), src);
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].heading, "Top");
         assert_eq!(chunks[1].heading, "Top > Deep");

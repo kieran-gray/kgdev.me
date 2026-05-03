@@ -15,22 +15,26 @@ use crate::api_worker::{
     domain::Question,
 };
 
-const VECTORIZE_TOP_K: u32 = 10;
-const RESULTS_PER_POST: usize = 4;
-const MIN_SCORE: f32 = 0.65;
-const SYSTEM_PROMPT: &str = concat!(
-    "You answer questions about a blog post. The excerpts you receive are either ",
-    "passages from the post or authoritative reference definitions for technical ",
-    "terms (these are headed \"Glossary: ...\"). ",
-    "Treat both as valid context. However: ",
-    "do NOT refer to excerpts by number or any index (e.g. \"[1]\", \"excerpt 2\"). ",
-    "do NOT imply that glossary content is part of the blog post. ",
-    "When using glossary content, clearly indicate it is a definition. ",
-    "If a question asks about a term and a Glossary excerpt covers it, you may explain ",
-    "the term in full from that excerpt. ",
-    "If the answer is not present in any excerpt, say \"I don't see that in this post.\" ",
-    "Be concise. Quote briefly when it helps. Do not invent facts."
-);
+const SYSTEM_PROMPT: &str = r#"You are a strict text-extraction assistant answering questions about a blog post.
+
+The context provided to you contains two types of excerpts:
+1. Passages directly from the blog post.
+2. Authoritative reference definitions for technical terms (these begin with "Glossary:").
+
+Treat both as valid context to answer the user's question. You must follow these strict rules:
+
+FORMATTING RULES:
+- Synthesize the answer in your own words using ONLY the facts provided in the text.
+- Do NOT copy-paste large blocks of text verbatim.
+- Be concise. Get straight to the point in 1-3 sentences.
+- Do NOT refer to excerpts by number, index, or internal citation (e.g., never say "[1]", "in excerpt 2", or "according to the first passage").
+- If you use a Glossary definition to explain a term, clearly indicate that you are providing a technical definition.
+- Do NOT imply that the glossary content was written by the blog post author.
+
+STRICT GROUNDING RULES (ANTI-HALLUCINATION):
+- UNDER NO CIRCUMSTANCES are you allowed to use general knowledge, outside information, or your base training data to answer the question.
+- If the provided excerpts do not explicitly contain the answer, your ONLY output must be exactly: "I don't see that in this post."
+- Do NOT apologize. Do NOT suggest possible answers. Do NOT say "However, generally speaking...". If the answer is not in the provided text, you do not know it."#;
 
 pub type AnswerStream = Pin<Box<dyn Stream<Item = SseEvent>>>;
 
@@ -46,9 +50,12 @@ pub struct BlogQaService {
     pub coordinator: Arc<dyn QaCoordinatorTrait + Send + Sync>,
     pub generation_model: String,
     pub daily_cap: u32,
+    pub vectorize_top_k: u32,
+    pub min_score: f32,
 }
 
 impl BlogQaService {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ai: Arc<dyn AiInferenceServiceTrait + Send + Sync>,
         vectorize: Arc<dyn VectorizeServiceTrait + Send + Sync>,
@@ -56,6 +63,8 @@ impl BlogQaService {
         coordinator: Arc<dyn QaCoordinatorTrait + Send + Sync>,
         generation_model: String,
         daily_cap: u32,
+        vectorize_top_k: u32,
+        min_score: f32,
     ) -> Arc<Self> {
         Arc::new(Self {
             ai,
@@ -64,6 +73,8 @@ impl BlogQaService {
             coordinator,
             generation_model,
             daily_cap,
+            vectorize_top_k,
+            min_score,
         })
     }
 }
@@ -115,6 +126,8 @@ impl BlogQaServiceTrait for BlogQaService {
         let cache = Arc::clone(&self.cache);
         let coordinator = Arc::clone(&self.coordinator);
         let generation_model = self.generation_model.clone();
+        let vectorize_top_k = self.vectorize_top_k;
+        let min_score = self.min_score;
 
         let s = stream! {
             if let Some(cached) = match cache.get(&slug, &post_version, &hash).await {
@@ -182,7 +195,7 @@ impl BlogQaServiceTrait for BlogQaService {
             };
 
             let mut matches = match vectorize
-                .query(&embedding, &slug, &post_version, VECTORIZE_TOP_K)
+                .query(&embedding, &slug, &post_version, vectorize_top_k)
                 .await
             {
                 Ok(m) => m,
@@ -191,8 +204,7 @@ impl BlogQaServiceTrait for BlogQaService {
                     return;
                 }
             };
-            matches.retain(|m| m.score >= MIN_SCORE);
-            matches.truncate(RESULTS_PER_POST);
+            matches.retain(|m| m.score >= min_score);
 
             let sources: Vec<CachedSource> = matches
                 .iter()

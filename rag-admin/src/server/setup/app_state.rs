@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::server::application::ports::Embedder;
+use crate::server::application::ports::{Embedder, VectorStore};
 use crate::server::application::{AppError, IngestService, JobRegistry};
 use crate::server::infrastructure::cloudflare::client::CloudflareApi;
 use crate::server::infrastructure::ollama::client::OllamaApi;
@@ -16,12 +16,15 @@ use crate::server::setup::config::{
     load_settings, manifest_path, save_settings, settings_path, tokenizer_path,
 };
 use crate::server::setup::exceptions::SetupError;
-use crate::shared::SettingsDto;
+use crate::server::setup::validation;
+use crate::shared::{EmbedderBackend, SettingsDto};
 
 pub struct AppState {
     pub settings: Arc<RwLock<SettingsDto>>,
     pub ingest_service: Arc<IngestService>,
     pub job_registry: Arc<JobRegistry>,
+    pub vector_store: Arc<dyn VectorStore>,
+    pub embedder: Arc<dyn Embedder>,
 }
 
 impl AppState {
@@ -39,13 +42,13 @@ impl AppState {
         let cf_api = Arc::new(CloudflareApi::new(http.clone(), settings.clone()));
         let ollama_api = Arc::new(OllamaApi::new(http.clone()));
 
-        let embedder: Arc<dyn Embedder> = Arc::new(DynEmbedder {
-            ollama: OllamaEmbedder::new(ollama_api, settings.clone()),
+        let embedder: Arc<dyn Embedder> = Arc::new(BackendEmbedder {
             cloudflare: WorkersAiEmbedder::new(cf_api.clone()),
+            ollama: OllamaEmbedder::new(ollama_api, settings.clone()),
             settings: settings.clone(),
         });
 
-        let vector_store = CloudflareVectorStore::new(cf_api.clone());
+        let vector_store: Arc<dyn VectorStore> = CloudflareVectorStore::new(cf_api.clone());
         let kv_store = CloudflareKvStore::new(cf_api.clone());
 
         let manifest_store = FileManifestStore::new(manifest_path());
@@ -56,8 +59,8 @@ impl AppState {
 
         let ingest_service = IngestService::new(
             blog_source,
-            embedder,
-            vector_store,
+            embedder.clone(),
+            vector_store.clone(),
             kv_store,
             manifest_store,
             tokenizer,
@@ -66,11 +69,19 @@ impl AppState {
             job_registry.clone(),
         );
 
-        Ok(Self {
+        let state = Self {
             settings,
             ingest_service,
             job_registry,
-        })
+            vector_store,
+            embedder,
+        };
+
+        if let Err(e) = state.validate_active_settings().await {
+            tracing::warn!("settings invariant check: {e}");
+        }
+
+        Ok(state)
     }
 
     pub async fn settings_snapshot(&self) -> SettingsDto {
@@ -78,25 +89,39 @@ impl AppState {
     }
 
     pub async fn save_settings(&self, new_settings: SettingsDto) -> Result<(), SetupError> {
-        save_settings(&settings_path(), &new_settings).await?;
-        *self.settings.write().await = new_settings;
+        validation::validate_local(&new_settings).map_err(SetupError::Config)?;
+        // Apply pending settings under a temporary swap so the embed probe
+        // and describe call route to the about-to-be-saved configuration.
+        let previous = {
+            let mut guard = self.settings.write().await;
+            std::mem::replace(&mut *guard, new_settings.clone())
+        };
+        if let Err(e) = save_settings(&settings_path(), &new_settings).await {
+            *self.settings.write().await = previous;
+            return Err(e);
+        }
         Ok(())
+    }
+
+    async fn validate_active_settings(&self) -> Result<(), String> {
+        let snapshot = self.settings_snapshot().await;
+        validation::validate_local(&snapshot)
     }
 }
 
-struct DynEmbedder {
-    ollama: Arc<dyn Embedder>,
+struct BackendEmbedder {
     cloudflare: Arc<dyn Embedder>,
+    ollama: Arc<dyn Embedder>,
     settings: Arc<RwLock<SettingsDto>>,
 }
 
 #[async_trait]
-impl Embedder for DynEmbedder {
+impl Embedder for BackendEmbedder {
     async fn embed_batch(&self, model: &str, texts: &[String]) -> Result<Vec<Vec<f32>>, AppError> {
-        if self.settings.read().await.embedder_backend == "ollama" {
-            self.ollama.embed_batch(model, texts).await
-        } else {
-            self.cloudflare.embed_batch(model, texts).await
+        let backend = self.settings.read().await.embedding_model.backend;
+        match backend {
+            EmbedderBackend::Cloudflare => self.cloudflare.embed_batch(model, texts).await,
+            EmbedderBackend::Ollama => self.ollama.embed_batch(model, texts).await,
         }
     }
 }

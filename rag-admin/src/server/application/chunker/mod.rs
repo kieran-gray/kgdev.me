@@ -1,10 +1,8 @@
-use crate::shared::ChunkStrategy;
+use crate::shared::{ChunkStrategy, ChunkingConfig};
 
 mod bert;
 mod common;
 mod section;
-
-pub use section::MAX_SECTION_CHARS;
 
 #[derive(Debug, Clone)]
 pub struct ChunkOutput {
@@ -15,9 +13,9 @@ pub struct ChunkOutput {
     pub char_end: u32,
 }
 
-pub fn chunk(strategy: ChunkStrategy, source: &str) -> Vec<ChunkOutput> {
-    match strategy {
-        ChunkStrategy::Bert => bert::chunk(source),
-        ChunkStrategy::Section => section::chunk(source),
+pub fn chunk(config: ChunkingConfig, source: &str) -> Vec<ChunkOutput> {
+    match config.strategy {
+        ChunkStrategy::Bert => bert::chunk(config, source),
+        ChunkStrategy::Section => section::chunk(config, source),
     }
 }

@@ -1,25 +1,32 @@
+use std::time::Duration;
+
 use leptos::prelude::*;
+use leptos::prelude::{set_timeout_with_handle, TimeoutHandle};
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_params_map;
 
 use crate::components::log_panel::LogPanel;
 use crate::server_fns::{get_post_detail, start_ingest};
 use crate::shared::{
-    ChunkPreview, ChunkStrategy, IngestOptions, LogEvent, LogLevel, PostDetailDto,
+    ChunkPreview, ChunkStrategy, ChunkingConfig, IngestOptions, LogEvent, LogLevel, PostDetailDto,
 };
+
+const OVERRIDE_DEBOUNCE_MS: u64 = 400;
 
 #[component]
 pub fn PostDetailPage() -> impl IntoView {
     let params = use_params_map();
     let slug = Memo::new(move |_| params.with(|p| p.get("slug").unwrap_or_default().to_string()));
 
+    let (override_config, set_override_config) = signal::<Option<ChunkingConfig>>(None);
+
     let detail = Resource::new(
-        move || slug.get(),
-        move |s| async move {
+        move || (slug.get(), override_config.get()),
+        move |(s, ov)| async move {
             if s.is_empty() {
                 return Err("missing slug".to_string());
             }
-            get_post_detail(s).await.map_err(|e| e.to_string())
+            get_post_detail(s, ov).await.map_err(|e| e.to_string())
         },
     );
 
@@ -30,7 +37,13 @@ pub fn PostDetailPage() -> impl IntoView {
                     detail
                         .get()
                         .map(|res| match res {
-                            Ok(d) => view! { <PostDetailView detail=d /> }.into_any(),
+                            Ok(d) => view! {
+                                <PostDetailView
+                                    detail=d
+                                    override_config=override_config
+                                    set_override_config=set_override_config
+                                />
+                            }.into_any(),
                             Err(e) => {
                                 view! {
                                     <div class="card-outer p-4 log-line-error font-mono text-sm">
@@ -47,12 +60,26 @@ pub fn PostDetailPage() -> impl IntoView {
 }
 
 #[component]
-fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
+fn PostDetailView(
+    detail: PostDetailDto,
+    override_config: ReadSignal<Option<ChunkingConfig>>,
+    set_override_config: WriteSignal<Option<ChunkingConfig>>,
+) -> impl IntoView {
     let slug = StoredValue::new(detail.slug.clone());
     let (events, set_events) = signal::<Vec<LogEvent>>(Vec::new());
     let (running, set_running) = signal(false);
     let (dialog_open, set_dialog_open) = signal(false);
     let (pending_options, set_pending_options) = signal::<Option<IngestOptions>>(None);
+
+    let default_chunking = detail.default_chunking;
+    let effective_chunking = detail.effective_chunking;
+    let token_limit = detail.embedding_token_limit;
+
+    let make_options = move |force: bool, dry_run: bool| IngestOptions {
+        force,
+        dry_run,
+        chunking_override: override_config.get(),
+    };
 
     let open_dialog = move |options: IngestOptions| {
         set_pending_options.set(Some(options));
@@ -71,8 +98,14 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
         set_events.set(vec![LogEvent {
             level: LogLevel::Info,
             message: format!(
-                "INIT_PROCESS: force_mode={}, dry_run={}...",
-                options.force, options.dry_run
+                "INIT_PROCESS: force_mode={}, dry_run={}, override={}...",
+                options.force,
+                options.dry_run,
+                if options.chunking_override.is_some() {
+                    "yes"
+                } else {
+                    "no"
+                }
             ),
         }]);
         let slug_value = slug.get_value();
@@ -137,12 +170,7 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
     let body_len = detail.markdown_body_length;
     let glossary = detail.glossary_terms.clone();
     let chunks = detail.chunk_preview.clone();
-    let strategy = detail.chunk_strategy;
-    let size_limit = detail.chunk_size_limit;
-    let strategy_label = match strategy {
-        ChunkStrategy::Bert => format!("STRATEGY: BERT · TOKEN_LIMIT: {size_limit}"),
-        ChunkStrategy::Section => format!("STRATEGY: SECTION · MAX_CHARS: {size_limit}"),
-    };
+    let size_limit = effective_chunking.size_limit_for_display(token_limit);
 
     view! {
         // Confirmation dialog overlay
@@ -172,7 +200,6 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
                                 </p>
                             }.into_any()
                         } else {
-                            let _: () = view! { <></> };
                             ().into_any()
                         }
                     }}
@@ -247,24 +274,29 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
                     <div class="grid grid-cols-1 gap-2">
                         <button
                             class="btn btn-primary w-full justify-center"
-                            on:click=move |_| open_dialog(IngestOptions { force: false, dry_run: false })
+                            on:click=move |_| open_dialog(make_options(false, false))
                         >
                             "EXECUTE_INGEST"
                         </button>
                         <button
                             class="btn w-full justify-center"
-                            on:click=move |_| open_dialog(IngestOptions { force: true, dry_run: false })
+                            on:click=move |_| open_dialog(make_options(true, false))
                         >
                             "FORCE_REBUILD"
                         </button>
                         <button
                             class="btn w-full justify-center"
-                            on:click=move |_| open_dialog(IngestOptions { force: false, dry_run: true })
+                            on:click=move |_| open_dialog(make_options(false, true))
                         >
                             "DRY_RUN"
                         </button>
                     </div>
                 </section>
+
+                <ChunkingOverridePanel
+                    default_config=default_chunking
+                    set_committed=set_override_config
+                />
 
                 <section class="card-outer p-4 space-y-4">
                     <div class="flex flex-col">
@@ -308,18 +340,216 @@ fn PostDetailView(detail: PostDetailDto) -> impl IntoView {
                         <span class="tech-label">"data.preview"</span>
                         <h2 class="text-lg font-bold">{format!("CHUNK_STREAM [{:02}]", chunks.len())}</h2>
                         <span class="tech-label opacity-50 mt-1">
-                            {strategy_label}
+                            {strategy_label(effective_chunking, size_limit)}
                         </span>
+                        {move || {
+                            if override_config.get().is_some() {
+                                view! {
+                                    <span class="tech-label !text-amber-400 mt-1">
+                                        "PREVIEW USES ONE-SHOT OVERRIDE"
+                                    </span>
+                                }.into_any()
+                            } else {
+                                ().into_any()
+                            }
+                        }}
                     </div>
                     <div class="space-y-4">
                         {chunks
                             .into_iter()
-                            .map(|c| view! { <ChunkCard chunk=c strategy=strategy size_limit=size_limit /> })
+                            .map(|c| view! { <ChunkCard chunk=c strategy=effective_chunking.strategy size_limit=size_limit /> })
                             .collect_view()}
                     </div>
                 </section>
             </div>
         </div>
+    }
+}
+
+fn strategy_label(c: ChunkingConfig, size_limit: u32) -> String {
+    match c.strategy {
+        ChunkStrategy::Bert => format!(
+            "STRATEGY: BERT · TOKEN_LIMIT: {} · TARGET: {} · OVERLAP: {} · MIN: {}",
+            size_limit, c.target_chars, c.overlap_chars, c.min_chars
+        ),
+        ChunkStrategy::Section => format!("STRATEGY: SECTION · MAX_CHARS: {}", c.max_section_chars),
+    }
+}
+
+#[component]
+fn ChunkingOverridePanel(
+    default_config: ChunkingConfig,
+    set_committed: WriteSignal<Option<ChunkingConfig>>,
+) -> impl IntoView {
+    let (working, set_working) = signal(default_config);
+
+    let timer: StoredValue<Option<TimeoutHandle>> = StoredValue::new(None);
+    let first_run: StoredValue<bool> = StoredValue::new(true);
+
+    Effect::new(move |_| {
+        let val = working.get();
+        if first_run.get_value() {
+            first_run.set_value(false);
+            return;
+        }
+        if let Some(Some(h)) = timer.try_get_value() {
+            h.clear();
+        }
+        let h = set_timeout_with_handle(
+            move || {
+                if val == default_config {
+                    set_committed.set(None);
+                } else {
+                    set_committed.set(Some(val));
+                }
+            },
+            Duration::from_millis(OVERRIDE_DEBOUNCE_MS),
+        )
+        .ok();
+        timer.set_value(h);
+    });
+
+    on_cleanup(move || {
+        if let Some(Some(h)) = timer.try_get_value() {
+            h.clear();
+        }
+    });
+
+    let strategy_value = move || match working.get().strategy {
+        ChunkStrategy::Bert => "bert",
+        ChunkStrategy::Section => "section",
+    };
+
+    let is_overridden = move || working.get() != default_config;
+
+    let update = move |f: Box<dyn Fn(&mut ChunkingConfig)>| {
+        set_working.update(|c| f(c));
+    };
+
+    let reset = move |_| {
+        if let Some(Some(h)) = timer.try_get_value() {
+            h.clear();
+        }
+        set_working.set(default_config);
+        set_committed.set(None);
+    };
+
+    view! {
+        <section class="card-outer p-4 space-y-4">
+            <div class="flex flex-col">
+                <span class="tech-label">"action.tuning"</span>
+                <h2 class="text-lg font-bold">"CHUNKING_OVERRIDE"</h2>
+                <p class="tech-label opacity-50 mt-1">
+                    "Tune chunking for this post only. \
+                     Preview updates ~400ms after the last edit; ingest applies the override one-shot \
+                     (forces re-embed regardless of post version)."
+                </p>
+            </div>
+
+            <div class="space-y-3">
+                <SmallField label="STRATEGY">
+                    <select
+                        class="input font-mono text-xs"
+                        prop:value=strategy_value
+                        on:change=move |e| {
+                            let v = event_target_value(&e);
+                            update(Box::new(move |c| {
+                                c.strategy = match v.as_str() {
+                                    "section" => ChunkStrategy::Section,
+                                    _ => ChunkStrategy::Bert,
+                                };
+                            }));
+                        }
+                    >
+                        <option value="bert">"bert"</option>
+                        <option value="section">"section"</option>
+                    </select>
+                </SmallField>
+
+                {move || match working.get().strategy {
+                    ChunkStrategy::Section => view! {
+                        <SmallField label="MAX_SECTION_CHARS">
+                            <input
+                                class="input font-mono text-xs"
+                                type="number"
+                                min="1"
+                                prop:value=move || working.get().max_section_chars.to_string()
+                                on:input=move |e| {
+                                    let v: u32 = event_target_value(&e).parse().unwrap_or(0);
+                                    update(Box::new(move |c| c.max_section_chars = v));
+                                }
+                            />
+                        </SmallField>
+                    }.into_any(),
+                    ChunkStrategy::Bert => view! {
+                        <div class="space-y-3">
+                            <SmallField label="TARGET_CHARS">
+                                <input
+                                    class="input font-mono text-xs"
+                                    type="number"
+                                    min="1"
+                                    prop:value=move || working.get().target_chars.to_string()
+                                    on:input=move |e| {
+                                        let v: u32 = event_target_value(&e).parse().unwrap_or(0);
+                                        update(Box::new(move |c| c.target_chars = v));
+                                    }
+                                />
+                            </SmallField>
+                            <SmallField label="OVERLAP_CHARS">
+                                <input
+                                    class="input font-mono text-xs"
+                                    type="number"
+                                    min="0"
+                                    prop:value=move || working.get().overlap_chars.to_string()
+                                    on:input=move |e| {
+                                        let v: u32 = event_target_value(&e).parse().unwrap_or(0);
+                                        update(Box::new(move |c| c.overlap_chars = v));
+                                    }
+                                />
+                            </SmallField>
+                            <SmallField label="MIN_CHARS">
+                                <input
+                                    class="input font-mono text-xs"
+                                    type="number"
+                                    min="0"
+                                    prop:value=move || working.get().min_chars.to_string()
+                                    on:input=move |e| {
+                                        let v: u32 = event_target_value(&e).parse().unwrap_or(0);
+                                        update(Box::new(move |c| c.min_chars = v));
+                                    }
+                                />
+                            </SmallField>
+                        </div>
+                    }.into_any(),
+                }}
+            </div>
+
+            <div class="flex items-center justify-between pt-2 border-t border-[var(--color-border)]">
+                <span class=move || {
+                    if is_overridden() { "tech-label !text-amber-400" } else { "tech-label opacity-40" }
+                }>
+                    {move || if is_overridden() { "USING OVERRIDE" } else { "USING DEFAULT" }}
+                </span>
+                <button
+                    type="button"
+                    class="btn"
+                    disabled=move || !is_overridden()
+                    on:click=reset
+                >
+                    "RESET"
+                </button>
+            </div>
+        </section>
+    }
+}
+
+#[component]
+fn SmallField(label: &'static str, children: Children) -> impl IntoView {
+    view! {
+        <label class="block space-y-1">
+            <div class="tech-label opacity-70">{label}</div>
+            {children()}
+        </label>
     }
 }
 

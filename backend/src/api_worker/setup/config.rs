@@ -17,6 +17,8 @@ pub struct Config {
     pub embedding_model: String,
     pub generation_model: String,
     pub qa_daily_cap: u32,
+    pub vectorize_top_k: u32,
+    pub min_score: f32,
 }
 
 impl Config {
@@ -33,6 +35,8 @@ impl Config {
         let embedding_model = Config::parse(env, "EMBEDDING_MODEL")?;
         let generation_model = Config::parse(env, "GENERATION_MODEL")?;
         let qa_daily_cap = Config::parse(env, "QA_DAILY_CAP")?;
+        let vectorize_top_k = Config::parse(env, "VECTORIZE_TOP_K")?;
+        let min_score = Config::parse(env, "MIN_SCORE")?;
 
         Ok(Config {
             siteverify_url,
@@ -47,6 +51,8 @@ impl Config {
             embedding_model,
             generation_model,
             qa_daily_cap,
+            vectorize_top_k,
+            min_score,
         })
     }
 
