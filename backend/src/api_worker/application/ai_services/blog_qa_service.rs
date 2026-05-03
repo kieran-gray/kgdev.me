@@ -116,7 +116,7 @@ impl BlogQaServiceTrait for BlogQaService {
 
         let post_version = self.cache.get_post_version(slug).await?.ok_or_else(|| {
             warn!(slug, "no post_version in KV; ingest may not have run");
-            AppError::InternalError("This post is not indexed yet. Try again later.".to_string())
+            AppError::NotFound("This post is not indexed yet. Try again later.".to_string())
         })?;
 
         let daily_cap = self.daily_cap;
@@ -215,14 +215,12 @@ impl BlogQaServiceTrait for BlogQaService {
                 })
                 .collect();
 
-            let references = dedupe_references(&matches);
-
             if matches.is_empty() {
                 warn!(slug = slug.as_str(), "no relevant chunks");
                 let answer = "I don't see that in this post.".to_string();
                 yield SseEvent::Meta {
                     sources,
-                    references,
+                    references: vec![],
                     cached: false,
                     model: generation_model.clone(),
                 };
@@ -230,6 +228,8 @@ impl BlogQaServiceTrait for BlogQaService {
                 yield SseEvent::Done;
                 return;
             }
+
+            let references = dedupe_references(&matches);
 
             yield SseEvent::Meta {
                 sources: sources.clone(),

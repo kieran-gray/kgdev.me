@@ -91,7 +91,7 @@
         "CLOUDFLARE_SITEVERIFY_URL": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
         "DESTINATION_EMAIL": "gray.kieran@protonmail.com",
         "ALLOWED_ORIGINS": "",
-        "ALLOWED_BLOG_PATHS": "blog-view-counter,event-sourcing-cloudflare,quest-exactly-once-p1,quest-exactly-once-p2",
+        "ALLOWED_BLOG_PATHS": "blog-view-counter,event-sourcing-cloudflare,quest-exactly-once-p1,quest-exactly-once-p2,ask-the-blog-ai",
         "VECTORIZE_INDEX_NAME": "kgdev-me-blog",
         "EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b",
         "GENERATION_MODEL": "@cf/meta/llama-3.1-8b-instruct",
