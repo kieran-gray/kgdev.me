@@ -22,7 +22,7 @@
         "format": "npm run format --workspaces --if-present",
         "build": "npm run build --workspaces --if-present",
         "build:frontend": "npm run build --workspace=frontend",
-        "build:backend": "npm run build --workspace=backend",
+        "build:backend": "npm run export:backend-manifest --workspace=frontend && npm run build --workspace=backend",
         "lint": "npm run lint --workspaces --if-present",
         "test": "npm run test --workspaces --if-present",
         "test:frontend": "npm run test --workspace=frontend",
