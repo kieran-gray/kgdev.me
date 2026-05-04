@@ -43,6 +43,20 @@ Post chunks and `post_version:{slug}` keys are produced by the ingest job in `fr
 - `DESTINATION_EMAIL` sets the contact-form recipient.
 - `CLOUDFLARE_TURNSTILE_SECRET_KEY`, `CLOUDFLARE_EMAIL_API_TOKEN`, and `CLOUDFLARE_ACCOUNT_ID` are required secrets.
 - `CLOUDFLARE_VECTORIZE_API_TOKEN` is required for the ask-the-blog Vectorize REST queries.
+- `EMBEDDING_MODEL` and `GENERATION_MODEL` select the inference models used by ask-the-blog.
+
+### Local LLM development
+
+Production builds use Cloudflare Workers AI. Local Ollama support is development-only and is compiled behind the `ollama` Cargo feature.
+
+To run ask-the-blog generation against a local Ollama server, build the backend with the `ollama` feature and set:
+
+- `AI_PROVIDER=ollama`
+- `OLLAMA_URL=http://localhost:11434`
+- `EMBEDDING_MODEL=<local embedding model>`
+- `GENERATION_MODEL=<local generation model>`
+
+If `AI_PROVIDER` is omitted in an `ollama` feature build, the backend defaults to Cloudflare Workers AI. In normal builds, `AI_PROVIDER` and `OLLAMA_URL` are ignored because the Ollama provider is not compiled.
 
 ## Stack
 
