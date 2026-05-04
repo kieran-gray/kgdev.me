@@ -54,4 +54,3 @@ pub(super) fn parse_heading(line: &str) -> Option<(usize, String)> {
     }
     Some((depth, text))
 }
-

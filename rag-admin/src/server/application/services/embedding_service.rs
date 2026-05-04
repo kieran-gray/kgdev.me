@@ -114,10 +114,7 @@ mod tests {
         let embedder = Arc::new(MockEmbedder::new(4).with_actual_dims(3));
         let svc = EmbeddingService::new(embedder);
 
-        let err = svc
-            .embed_batch(&model(4), &["x".into()])
-            .await
-            .unwrap_err();
+        let err = svc.embed_batch(&model(4), &["x".into()]).await.unwrap_err();
         assert!(matches!(err, AppError::Validation(_)));
     }
 
@@ -127,10 +124,7 @@ mod tests {
             Arc::new(MockEmbedder::new(4).with_failure(AppError::Upstream("boom".into())));
         let svc = EmbeddingService::new(embedder);
 
-        let err = svc
-            .embed_batch(&model(4), &["x".into()])
-            .await
-            .unwrap_err();
+        let err = svc.embed_batch(&model(4), &["x".into()]).await.unwrap_err();
         assert!(matches!(err, AppError::Upstream(_)));
     }
 

@@ -277,10 +277,7 @@ impl ManifestStore for MockManifestStore {
             .unwrap()
             .posts
             .insert(slug.to_string(), entry.clone());
-        self.records
-            .lock()
-            .unwrap()
-            .push((slug.to_string(), entry));
+        self.records.lock().unwrap().push((slug.to_string(), entry));
         Ok(())
     }
 }

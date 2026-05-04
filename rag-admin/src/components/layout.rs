@@ -5,7 +5,6 @@ use leptos_router::components::A;
 pub fn Layout(children: Children) -> impl IntoView {
     view! {
         <div class="min-h-screen flex flex-col relative">
-            <div class="fixed bottom-2 right-2 tech-label pointer-events-none z-50">"admin.kgdev.me"</div>
             <header class="card-outer border-x-0 border-t-0 px-6 py-4 flex items-center justify-between z-10">
                 <div class="flex items-center gap-8 w-full max-w-6xl mx-auto">
                     <div class="flex flex-col">

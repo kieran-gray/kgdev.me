@@ -1,4 +1,7 @@
-use crate::{server::domain::Chunk, shared::{ChunkStrategy, ChunkingConfig}};
+use crate::{
+    server::domain::Chunk,
+    shared::{ChunkStrategy, ChunkingConfig},
+};
 
 mod bert;
 mod common;

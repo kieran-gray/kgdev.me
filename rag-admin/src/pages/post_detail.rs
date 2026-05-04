@@ -1,7 +1,4 @@
-use std::time::Duration;
-
 use leptos::prelude::*;
-use leptos::prelude::{set_timeout_with_handle, TimeoutHandle};
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_params_map;
 
@@ -11,7 +8,6 @@ use crate::shared::{
     ChunkPreview, ChunkStrategy, ChunkingConfig, IngestOptions, LogEvent, LogLevel, PostDetailDto,
 };
 
-const OVERRIDE_DEBOUNCE_MS: u64 = 400;
 const GLOSSARY_DEFINITION_PREVIEW_CHARS: usize = 300;
 
 fn truncate_chars(value: &str, max_chars: usize) -> String {
@@ -307,6 +303,7 @@ fn PostDetailView(
 
                 <ChunkingOverridePanel
                     default_config=default_chunking
+                    committed=override_config
                     set_committed=set_override_config
                 />
 
@@ -394,39 +391,16 @@ fn strategy_label(c: ChunkingConfig, size_limit: u32) -> String {
 #[component]
 fn ChunkingOverridePanel(
     default_config: ChunkingConfig,
+    committed: ReadSignal<Option<ChunkingConfig>>,
     set_committed: WriteSignal<Option<ChunkingConfig>>,
 ) -> impl IntoView {
-    let (working, set_working) = signal(default_config);
-
-    let timer: StoredValue<Option<TimeoutHandle>> = StoredValue::new(None);
-    let first_run: StoredValue<bool> = StoredValue::new(true);
+    let initial = committed.get_untracked().unwrap_or(default_config);
+    let (working, set_working) = signal(initial);
 
     Effect::new(move |_| {
-        let val = working.get();
-        if first_run.get_value() {
-            first_run.set_value(false);
-            return;
-        }
-        if let Some(Some(h)) = timer.try_get_value() {
-            h.clear();
-        }
-        let h = set_timeout_with_handle(
-            move || {
-                if val == default_config {
-                    set_committed.set(None);
-                } else {
-                    set_committed.set(Some(val));
-                }
-            },
-            Duration::from_millis(OVERRIDE_DEBOUNCE_MS),
-        )
-        .ok();
-        timer.set_value(h);
-    });
-
-    on_cleanup(move || {
-        if let Some(Some(h)) = timer.try_get_value() {
-            h.clear();
+        let next = committed.get().unwrap_or(default_config);
+        if working.get_untracked() != next {
+            set_working.set(next);
         }
     });
 
@@ -435,16 +409,23 @@ fn ChunkingOverridePanel(
         ChunkStrategy::Section => "section",
     };
 
-    let is_overridden = move || working.get() != default_config;
+    let is_overridden = move || committed.get().is_some();
+    let has_unsaved_changes = move || working.get() != committed.get().unwrap_or(default_config);
 
     let update = move |f: Box<dyn Fn(&mut ChunkingConfig)>| {
         set_working.update(|c| f(c));
     };
 
-    let reset = move |_| {
-        if let Some(Some(h)) = timer.try_get_value() {
-            h.clear();
+    let save = move |_| {
+        let next = working.get_untracked();
+        if next == default_config {
+            set_committed.set(None);
+        } else {
+            set_committed.set(Some(next));
         }
+    };
+
+    let reset = move |_| {
         set_working.set(default_config);
         set_committed.set(None);
     };
@@ -455,9 +436,8 @@ fn ChunkingOverridePanel(
                 <span class="tech-label">"action.tuning"</span>
                 <h2 class="text-lg font-bold">"CHUNKING_OVERRIDE"</h2>
                 <p class="tech-label opacity-50 mt-1">
-                    "Tune chunking for this post only. \
-                     Preview updates ~400ms after the last edit; ingest applies the override one-shot \
-                     (forces re-embed regardless of post version)."
+                    "Tune chunking for this post only. Save to apply the override to preview and ingest. \
+                     Ingest applies the override one-shot and forces re-embed regardless of post version."
                 </p>
             </div>
 
@@ -539,20 +519,57 @@ fn ChunkingOverridePanel(
                 }}
             </div>
 
-            <div class="flex items-center justify-between pt-2 border-t border-[var(--color-border)]">
+            <div class="flex flex-col items-center justify-between pt-2 border-t border-[var(--color-border)]">
                 <span class=move || {
-                    if is_overridden() { "tech-label !text-amber-400" } else { "tech-label opacity-40" }
+                    if has_unsaved_changes() {
+                        "tech-label !text-amber-400 py-2"
+                    } else if is_overridden() {
+                        "tech-label !text-emerald-400 py-2"
+                    } else {
+                        "tech-label opacity-40 py-2"
+                    }
                 }>
-                    {move || if is_overridden() { "USING OVERRIDE" } else { "USING DEFAULT" }}
+                    {move || {
+                        if has_unsaved_changes() {
+                            "UNSAVED_CHANGES"
+                        } else if is_overridden() {
+                            "USING OVERRIDE"
+                        } else {
+                            "USING DEFAULT"
+                        }
+                    }}
                 </span>
-                <button
-                    type="button"
-                    class="btn"
-                    disabled=move || !is_overridden()
-                    on:click=reset
-                >
-                    "RESET"
-                </button>
+                <span class="flex gap-2">
+                {move ||
+                    view! {
+                        <Show when=move || {has_unsaved_changes()}>
+                            <button
+                                type="button"
+                                class="btn btn-primary"
+                                disabled=move || !has_unsaved_changes()
+                                on:click=save
+                            >
+                                "SAVE_OVERRIDE"
+                            </button>
+                        </Show>
+                    }
+                }
+                {move ||
+                    view! {
+                        <Show when=move || {is_overridden()}>
+                            <button
+                                type="button"
+                                class="btn"
+                                disabled=move || !is_overridden() && !has_unsaved_changes()
+                                on:click=reset
+                            >
+                                "RESET"
+                            </button>
+                        </Show>
+                    }
+
+                }
+                </span>
             </div>
         </section>
     }

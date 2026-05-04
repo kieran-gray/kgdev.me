@@ -289,8 +289,7 @@ mod tests {
 
     #[test]
     fn metadata_for_glossary_chunk_includes_sources() {
-        let p =
-            Post::try_new(blog("s", "t", "body", vec![term("g", "G")])).unwrap();
+        let p = Post::try_new(blog("s", "t", "body", vec![term("g", "G")])).unwrap();
         let chunks = p.glossary_chunks(0);
         let meta = p.metadata_for(&chunks[0]);
         assert!(meta.get("sources").is_some());

@@ -8,7 +8,7 @@ use crate::server::application::chunker::{self};
 use crate::server::application::ingest_log::IngestLogEvent;
 use crate::server::application::job_registry::{Job, JobRegistry};
 use crate::server::application::ports::{BlogSource, KvStore, ManifestStore, VectorStore};
-use crate::server::application::{AppError, services::EmbeddingService};
+use crate::server::application::{services::EmbeddingService, AppError};
 use crate::server::domain::{Chunk, ManifestEntry, Post, VectorRecord};
 use crate::shared::{ChunkingConfig, IngestJobInfo, IngestOptions, SettingsDto};
 
@@ -258,7 +258,6 @@ impl IngestService {
 
         Ok(())
     }
-
 }
 
 fn describe_chunking(c: ChunkingConfig) -> String {

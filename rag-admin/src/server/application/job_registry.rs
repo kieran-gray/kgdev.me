@@ -34,7 +34,7 @@ impl Job {
             sender,
         })
     }
-    
+
     pub async fn emit(&self, event: IngestLogEvent) {
         let mut inner = self.inner.lock().await;
         inner.buffered.push(event.clone());
