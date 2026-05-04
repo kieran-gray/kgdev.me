@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 
 use crate::server::setup::exceptions::SetupError;
-use crate::shared::{ChunkStrategy, SettingsDto};
+use crate::shared::{ChunkingConfig, EmbeddingModel, SettingsDto, VectorIndexConfig};
 
 pub fn data_dir() -> PathBuf {
     std::env::current_dir()
@@ -26,14 +26,12 @@ pub fn tokenizer_path() -> PathBuf {
 pub fn defaults() -> SettingsDto {
     SettingsDto {
         blog_url: "http://localhost:4321".into(),
-        vectorize_index_name: "blog-chunks".into(),
-        embedding_model: "@cf/qwen/qwen3-embedding-0.6b".into(),
         cloudflare_account_id: String::new(),
         cloudflare_api_token: String::new(),
         kv_namespace_id: String::new(),
-        embedder_backend: "cloudflare".into(),
-        embed_dimensions: 1024,
-        chunk_strategy: ChunkStrategy::Section,
+        vector_index: VectorIndexConfig::default(),
+        embedding_model: EmbeddingModel::default(),
+        default_chunking: ChunkingConfig::default(),
     }
 }
 
@@ -72,16 +70,6 @@ fn overlay_env(s: &mut SettingsDto) {
     if let Ok(v) = std::env::var("BLOG_URL") {
         if !v.is_empty() {
             s.blog_url = v;
-        }
-    }
-    if let Ok(v) = std::env::var("VECTORIZE_INDEX_NAME") {
-        if !v.is_empty() {
-            s.vectorize_index_name = v;
-        }
-    }
-    if let Ok(v) = std::env::var("EMBEDDING_MODEL") {
-        if !v.is_empty() {
-            s.embedding_model = v;
         }
     }
     if let Ok(v) = std::env::var("CLOUDFLARE_ACCOUNT_ID") {

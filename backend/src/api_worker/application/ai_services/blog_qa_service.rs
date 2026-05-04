@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use async_stream::stream;
 use async_trait::async_trait;
+use chrono::Utc;
 use futures_util::{Stream, StreamExt};
 use tracing::{info, warn};
 
@@ -15,22 +16,7 @@ use crate::api_worker::{
     domain::Question,
 };
 
-const VECTORIZE_TOP_K: u32 = 10;
-const RESULTS_PER_POST: usize = 4;
-const MIN_SCORE: f32 = 0.65;
-const SYSTEM_PROMPT: &str = concat!(
-    "You answer questions about a blog post. The excerpts you receive are either ",
-    "passages from the post or authoritative reference definitions for technical ",
-    "terms (these are headed \"Glossary: ...\"). ",
-    "Treat both as valid context. However: ",
-    "do NOT refer to excerpts by number or any index (e.g. \"[1]\", \"excerpt 2\"). ",
-    "do NOT imply that glossary content is part of the blog post. ",
-    "When using glossary content, clearly indicate it is a definition. ",
-    "If a question asks about a term and a Glossary excerpt covers it, you may explain ",
-    "the term in full from that excerpt. ",
-    "If the answer is not present in any excerpt, say \"I don't see that in this post.\" ",
-    "Be concise. Quote briefly when it helps. Do not invent facts."
-);
+const SYSTEM_PROMPT: &str = include_str!("prompts/blog_qa_system_prompt.txt");
 
 pub type AnswerStream = Pin<Box<dyn Stream<Item = SseEvent>>>;
 
@@ -46,9 +32,12 @@ pub struct BlogQaService {
     pub coordinator: Arc<dyn QaCoordinatorTrait + Send + Sync>,
     pub generation_model: String,
     pub daily_cap: u32,
+    pub vectorize_top_k: u32,
+    pub min_score: f32,
 }
 
 impl BlogQaService {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ai: Arc<dyn AiInferenceServiceTrait + Send + Sync>,
         vectorize: Arc<dyn VectorizeServiceTrait + Send + Sync>,
@@ -56,6 +45,8 @@ impl BlogQaService {
         coordinator: Arc<dyn QaCoordinatorTrait + Send + Sync>,
         generation_model: String,
         daily_cap: u32,
+        vectorize_top_k: u32,
+        min_score: f32,
     ) -> Arc<Self> {
         Arc::new(Self {
             ai,
@@ -64,6 +55,8 @@ impl BlogQaService {
             coordinator,
             generation_model,
             daily_cap,
+            vectorize_top_k,
+            min_score,
         })
     }
 }
@@ -105,7 +98,7 @@ impl BlogQaServiceTrait for BlogQaService {
 
         let post_version = self.cache.get_post_version(slug).await?.ok_or_else(|| {
             warn!(slug, "no post_version in KV; ingest may not have run");
-            AppError::InternalError("This post is not indexed yet. Try again later.".to_string())
+            AppError::NotFound("This post is not indexed yet. Try again later.".to_string())
         })?;
 
         let daily_cap = self.daily_cap;
@@ -115,8 +108,10 @@ impl BlogQaServiceTrait for BlogQaService {
         let cache = Arc::clone(&self.cache);
         let coordinator = Arc::clone(&self.coordinator);
         let generation_model = self.generation_model.clone();
+        let vectorize_top_k = self.vectorize_top_k;
+        let min_score = self.min_score;
 
-        let s = stream! {
+        let stream = stream! {
             if let Some(cached) = match cache.get(&slug, &post_version, &hash).await {
                 Ok(c) => c,
                 Err(e) => {
@@ -158,23 +153,8 @@ impl BlogQaServiceTrait for BlogQaService {
                 }
             }
 
-            let embedding = match cache.get_embedding(&hash).await {
-                Ok(Some(e)) => {
-                    info!(hash = hash.as_str(), "embedding cache hit");
-                    e
-                }
-                Ok(None) => match ai.embed(question.as_str()).await {
-                    Ok(fresh) => {
-                        if let Err(e) = cache.put_embedding(&hash, &fresh).await {
-                            warn!(error = %e, "embedding cache write failed");
-                        }
-                        fresh
-                    }
-                    Err(e) => {
-                        yield SseEvent::Error { message: e.to_string() };
-                        return;
-                    }
-                },
+            let embedding = match ai.embed(question.as_str()).await {
+                Ok(embedding) => embedding,
                 Err(e) => {
                     yield SseEvent::Error { message: e.to_string() };
                     return;
@@ -182,7 +162,7 @@ impl BlogQaServiceTrait for BlogQaService {
             };
 
             let mut matches = match vectorize
-                .query(&embedding, &slug, &post_version, VECTORIZE_TOP_K)
+                .query(&embedding, &slug, &post_version, vectorize_top_k)
                 .await
             {
                 Ok(m) => m,
@@ -191,8 +171,7 @@ impl BlogQaServiceTrait for BlogQaService {
                     return;
                 }
             };
-            matches.retain(|m| m.score >= MIN_SCORE);
-            matches.truncate(RESULTS_PER_POST);
+            matches.retain(|m| m.score >= min_score);
 
             let sources: Vec<CachedSource> = matches
                 .iter()
@@ -203,14 +182,12 @@ impl BlogQaServiceTrait for BlogQaService {
                 })
                 .collect();
 
-            let references = dedupe_references(&matches);
-
             if matches.is_empty() {
                 warn!(slug = slug.as_str(), "no relevant chunks");
                 let answer = "I don't see that in this post.".to_string();
                 yield SseEvent::Meta {
                     sources,
-                    references,
+                    references: vec![],
                     cached: false,
                     model: generation_model.clone(),
                 };
@@ -218,6 +195,8 @@ impl BlogQaServiceTrait for BlogQaService {
                 yield SseEvent::Done;
                 return;
             }
+
+            let references = dedupe_references(&matches);
 
             yield SseEvent::Meta {
                 sources: sources.clone(),
@@ -260,7 +239,7 @@ impl BlogQaServiceTrait for BlogQaService {
                 sources: sources.clone(),
                 references: references.clone(),
                 model: generation_model.clone(),
-                ts: now_ms(),
+                ts: Utc::now().timestamp_millis(),
             };
             if let Err(e) = cache.put(&slug, &post_version, &hash, &cached_answer).await {
                 warn!(error = %e, "qa cache write failed");
@@ -268,12 +247,8 @@ impl BlogQaServiceTrait for BlogQaService {
             yield SseEvent::Done;
         };
 
-        Ok(Box::pin(s))
+        Ok(Box::pin(stream))
     }
-}
-
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
 }
 
 fn dedupe_references(matches: &[ScoredChunk]) -> Vec<Reference> {

@@ -23,152 +23,210 @@ interface ErrorResponse {
 	error: string;
 }
 
+interface SseFrame {
+	event: string;
+	data: string;
+}
+
+interface Elements {
+	root: HTMLElement;
+	openBtn: HTMLButtonElement;
+	dialog: HTMLDialogElement;
+	closeBtn: HTMLButtonElement;
+	form: HTMLFormElement;
+	input: HTMLTextAreaElement;
+	submitBtn: HTMLButtonElement;
+	submitLabel: HTMLSpanElement;
+	charCount: HTMLSpanElement;
+	resultBox: HTMLDivElement;
+	statusEl: HTMLDivElement;
+	answerEl: HTMLDivElement;
+	sourcesWrap: HTMLDetailsElement;
+	sourcesList: HTMLUListElement;
+	referencesWrap: HTMLDivElement;
+	referencesList: HTMLUListElement;
+}
+
+const selectors = {
+	openBtn: '#blog-qa-open',
+	dialog: '#blog-qa-dialog',
+	closeBtn: '#blog-qa-close',
+	form: '#blog-qa-form',
+	input: '#blog-qa-input',
+	submitBtn: '#blog-qa-submit',
+	submitLabel: '.blog-qa-submit-label',
+	charCount: '#blog-qa-charcount',
+	resultBox: '#blog-qa-result',
+	statusEl: '#blog-qa-status',
+	answerEl: '#blog-qa-answer',
+	sourcesWrap: '#blog-qa-sources-wrap',
+	sourcesList: '#blog-qa-sources',
+	referencesWrap: '#blog-qa-references-wrap',
+	referencesList: '#blog-qa-references'
+} as const;
+
+function findElements(root: HTMLElement): Elements | null {
+	const result: any = { root };
+
+	for (const [key, sel] of Object.entries(selectors)) {
+		const el = root.querySelector(sel);
+		if (!el) return null;
+		result[key] = el;
+	}
+
+	return result as Elements;
+}
+
+function parseSseFrame(block: string): SseFrame | null {
+	let event = 'message';
+	const dataLines: string[] = [];
+	for (const line of block.split('\n')) {
+		if (line.startsWith('event:')) event = line.slice(6).trim();
+		else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+	}
+	if (dataLines.length === 0) return null;
+	return { event, data: dataLines.join('\n') };
+}
+
+async function* readSseFrames(stream: ReadableStream<Uint8Array>): AsyncGenerator<SseFrame> {
+	const reader = stream.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	function* drainComplete(): Generator<SseFrame> {
+		while (true) {
+			const idx = buffer.indexOf('\n\n');
+			if (idx === -1) break;
+			const block = buffer.slice(0, idx);
+			buffer = buffer.slice(idx + 2);
+			const frame = parseSseFrame(block);
+			if (frame) yield frame;
+		}
+	}
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		buffer += decoder.decode(value, { stream: true }).replace(/\r\n?/g, '\n');
+		yield* drainComplete();
+	}
+	buffer += decoder.decode().replace(/\r\n?/g, '\n');
+	yield* drainComplete();
+
+	const tail = buffer.replace(/^\n+|\n+$/g, '');
+	if (tail.length > 0) {
+		const frame = parseSseFrame(tail);
+		if (frame) yield frame;
+	}
+}
+
 let cleanup: (() => void) | null = null;
 
 function teardown() {
-	if (cleanup) {
-		cleanup();
-		cleanup = null;
-	}
+	cleanup?.();
+	cleanup = null;
 }
 
 function setup() {
 	teardown();
 
-	const root = document.getElementById('blog-qa') as HTMLElement | null;
+	const root = document.getElementById('blog-qa');
 	if (!root) return;
 
-	const slug = root.dataset.slug;
-	const endpoint = root.dataset.endpoint;
+	const { slug, endpoint } = root.dataset;
 	if (!slug || !endpoint) return;
 
-	const openBtn = root.querySelector<HTMLButtonElement>('#blog-qa-open');
-	const dialog = root.querySelector<HTMLDialogElement>('#blog-qa-dialog');
-	const closeBtn = root.querySelector<HTMLButtonElement>('#blog-qa-close');
-	const form = root.querySelector<HTMLFormElement>('#blog-qa-form');
-	const input = root.querySelector<HTMLTextAreaElement>('#blog-qa-input');
-	const submitBtn = root.querySelector<HTMLButtonElement>('#blog-qa-submit');
-	const submitLabel = root.querySelector<HTMLSpanElement>('.blog-qa-submit-label');
-	const charCount = root.querySelector<HTMLSpanElement>('#blog-qa-charcount');
-	const resultBox = root.querySelector<HTMLDivElement>('#blog-qa-result');
-	const statusEl = root.querySelector<HTMLDivElement>('#blog-qa-status');
-	const answerEl = root.querySelector<HTMLDivElement>('#blog-qa-answer');
-	const sourcesWrap = root.querySelector<HTMLDetailsElement>('#blog-qa-sources-wrap');
-	const sourcesList = root.querySelector<HTMLUListElement>('#blog-qa-sources');
-	const referencesWrap = root.querySelector<HTMLDivElement>('#blog-qa-references-wrap');
-	const referencesList = root.querySelector<HTMLUListElement>('#blog-qa-references');
+	const found = findElements(root);
+	if (!found) return;
+	const els: Elements = found;
 
-	if (
-		!openBtn ||
-		!dialog ||
-		!closeBtn ||
-		!form ||
-		!input ||
-		!submitBtn ||
-		!submitLabel ||
-		!charCount ||
-		!resultBox ||
-		!statusEl ||
-		!answerEl ||
-		!sourcesWrap ||
-		!sourcesList ||
-		!referencesWrap ||
-		!referencesList
-	) {
-		return;
-	}
+	document.body.appendChild(els.dialog);
 
-	document.body.appendChild(dialog);
+	const disposers: Array<() => void> = [];
+	const on = <T extends EventTarget>(target: T, event: string, handler: (e: any) => void) => {
+		target.addEventListener(event, handler);
+		disposers.push(() => target.removeEventListener(event, handler));
+	};
 
 	let abortController: AbortController | null = null;
 	let removeViewportListeners: (() => void) | null = null;
 
-	function teardownViewportTracking() {
-		if (removeViewportListeners) {
-			removeViewportListeners();
-			removeViewportListeners = null;
-		}
-		dialog!.style.removeProperty('--blog-qa-viewport-top');
-		dialog!.style.removeProperty('--blog-qa-viewport-left');
-		dialog!.style.removeProperty('--blog-qa-viewport-width');
-		dialog!.style.removeProperty('--blog-qa-viewport-height');
-	}
-
-	function syncDialogViewport() {
+	function setViewportVars() {
 		const viewport = window.visualViewport;
 		const height = viewport?.height ?? window.innerHeight;
 		const width = viewport?.width ?? window.innerWidth;
 		const top = (viewport?.offsetTop ?? 0) + height / 2;
 		const left = (viewport?.offsetLeft ?? 0) + width / 2;
-
-		dialog!.style.setProperty('--blog-qa-viewport-top', `${top}px`);
-		dialog!.style.setProperty('--blog-qa-viewport-left', `${left}px`);
-		dialog!.style.setProperty('--blog-qa-viewport-width', `${width}px`);
-		dialog!.style.setProperty('--blog-qa-viewport-height', `${height}px`);
+		els.dialog.style.setProperty('--blog-qa-viewport-top', `${top}px`);
+		els.dialog.style.setProperty('--blog-qa-viewport-left', `${left}px`);
+		els.dialog.style.setProperty('--blog-qa-viewport-width', `${width}px`);
+		els.dialog.style.setProperty('--blog-qa-viewport-height', `${height}px`);
 	}
 
-	function setupViewportTracking() {
-		teardownViewportTracking();
-		syncDialogViewport();
-
+	function startViewportTracking() {
+		stopViewportTracking();
+		setViewportVars();
 		const viewport = window.visualViewport;
 		if (!viewport) return;
-
-		const onViewportChange = () => syncDialogViewport();
-		viewport.addEventListener('resize', onViewportChange);
-		viewport.addEventListener('scroll', onViewportChange);
-
+		const onChange = () => setViewportVars();
+		viewport.addEventListener('resize', onChange);
+		viewport.addEventListener('scroll', onChange);
 		removeViewportListeners = () => {
-			viewport.removeEventListener('resize', onViewportChange);
-			viewport.removeEventListener('scroll', onViewportChange);
+			viewport.removeEventListener('resize', onChange);
+			viewport.removeEventListener('scroll', onChange);
 		};
 	}
 
-	function setBusy(busy: boolean) {
-		submitBtn!.disabled = busy;
-		submitLabel!.textContent = busy ? 'Thinking…' : 'Ask';
+	function stopViewportTracking() {
+		removeViewportListeners?.();
+		removeViewportListeners = null;
+		els.dialog.style.removeProperty('--blog-qa-viewport-top');
+		els.dialog.style.removeProperty('--blog-qa-viewport-left');
+		els.dialog.style.removeProperty('--blog-qa-viewport-width');
+		els.dialog.style.removeProperty('--blog-qa-viewport-height');
 	}
 
-	function abortInFlight() {
-		abortController?.abort();
+	function setBusy(busy: boolean) {
+		els.submitBtn.disabled = busy;
+		els.submitLabel.textContent = busy ? 'Thinking…' : 'Ask';
 	}
 
 	function showStatus(state: 'loading' | 'ok' | 'error', message?: string) {
-		resultBox!.hidden = false;
-		statusEl!.textContent = message ?? '';
-		statusEl!.dataset.state = state;
+		els.resultBox.hidden = false;
+		els.statusEl.textContent = message ?? '';
+		els.statusEl.dataset.state = state;
 	}
 
 	function clearResult() {
-		resultBox!.hidden = true;
-		statusEl!.textContent = '';
-		statusEl!.removeAttribute('data-state');
-		answerEl!.textContent = '';
-		sourcesList!.innerHTML = '';
-		sourcesWrap!.hidden = true;
-		referencesList!.innerHTML = '';
-		referencesWrap!.hidden = true;
+		els.resultBox.hidden = true;
+		els.statusEl.textContent = '';
+		els.statusEl.removeAttribute('data-state');
+		els.answerEl.textContent = '';
+		els.sourcesList.innerHTML = '';
+		els.sourcesWrap.hidden = true;
+		els.referencesList.innerHTML = '';
+		els.referencesWrap.hidden = true;
 	}
 
 	function renderSources(sources: Source[]) {
-		sourcesList!.innerHTML = '';
+		els.sourcesList.innerHTML = '';
 		if (sources.length === 0) {
-			sourcesWrap!.hidden = true;
+			els.sourcesWrap.hidden = true;
 			return;
 		}
 		for (const s of sources) {
 			const li = document.createElement('li');
 			const heading = s.heading || '(intro)';
 			li.textContent = `${heading} — ${(s.score * 100).toFixed(0)}%`;
-			sourcesList!.appendChild(li);
+			els.sourcesList.appendChild(li);
 		}
-		sourcesWrap!.hidden = false;
+		els.sourcesWrap.hidden = false;
 	}
 
 	function renderReferences(references: Reference[]) {
-		referencesList!.innerHTML = '';
+		els.referencesList.innerHTML = '';
 		if (references.length === 0) {
-			referencesWrap!.hidden = true;
+			els.referencesWrap.hidden = true;
 			return;
 		}
 		for (const r of references) {
@@ -179,100 +237,64 @@ function setup() {
 			a.rel = 'noopener noreferrer';
 			a.textContent = r.title;
 			li.appendChild(a);
-			referencesList!.appendChild(li);
+			els.referencesList.appendChild(li);
 		}
-		referencesWrap!.hidden = false;
+		els.referencesWrap.hidden = false;
 	}
 
-	function appendDelta(text: string) {
-		answerEl!.textContent = (answerEl!.textContent ?? '') + text;
+	function handleFrame(frame: SseFrame): { done: boolean } {
+		switch (frame.event) {
+			case 'meta': {
+				const meta = JSON.parse(frame.data) as MetaPayload;
+				showStatus('ok', meta.cached ? 'Cached answer' : 'Drafting answer…');
+				renderSources(meta.sources);
+				renderReferences(meta.references ?? []);
+				return { done: false };
+			}
+			case 'delta': {
+				const { text } = JSON.parse(frame.data) as { text: string };
+				els.answerEl.textContent = (els.answerEl.textContent ?? '') + text;
+				return { done: false };
+			}
+			case 'done': {
+				if (els.statusEl.dataset.state !== 'error') showStatus('ok', 'Done');
+				return { done: true };
+			}
+			case 'error': {
+				const { message } = JSON.parse(frame.data) as { message: string };
+				showStatus('error', message);
+				return { done: false };
+			}
+			default:
+				return { done: false };
+		}
+	}
+
+	async function consumeStream(body: ReadableStream<Uint8Array>) {
+		let sawDone = false;
+		for await (const frame of readSseFrames(body)) {
+			if (handleFrame(frame).done) sawDone = true;
+		}
+		if (!sawDone && !els.answerEl.textContent) {
+			showStatus('error', 'Stream ended without a response.');
+		}
+	}
+
+	function abortInFlight() {
+		abortController?.abort();
 	}
 
 	function openDialog() {
 		clearResult();
-		dialog!.showModal();
-		setupViewportTracking();
-		input!.focus();
+		els.dialog.showModal();
+		startViewportTracking();
+		els.input.focus();
 	}
 
 	function closeDialog() {
 		abortInFlight();
-		teardownViewportTracking();
-		if (dialog!.open) dialog!.close();
-	}
-
-	function parseSseBlock(block: string): { event: string; data: string } | null {
-		const lines = block.split('\n');
-		let event = 'message';
-		const dataLines: string[] = [];
-		for (const line of lines) {
-			if (line.startsWith('event:')) {
-				event = line.slice(6).trim();
-			} else if (line.startsWith('data:')) {
-				dataLines.push(line.slice(5).trim());
-			}
-		}
-		if (dataLines.length === 0) return null;
-		return { event, data: dataLines.join('\n') };
-	}
-
-	async function consumeSseStream(body: ReadableStream<Uint8Array>): Promise<void> {
-		const reader = body.getReader();
-		const decoder = new TextDecoder();
-		let buffer = '';
-		let sawDone = false;
-
-		const handleBlock = (block: string) => {
-			const parsed = parseSseBlock(block);
-			if (!parsed) return;
-
-			if (parsed.event === 'meta') {
-				const meta = JSON.parse(parsed.data) as MetaPayload;
-				showStatus('ok', meta.cached ? 'Cached answer' : 'Drafting answer…');
-				renderSources(meta.sources);
-				renderReferences(meta.references ?? []);
-			} else if (parsed.event === 'delta') {
-				const payload = JSON.parse(parsed.data) as { text: string };
-				appendDelta(payload.text);
-			} else if (parsed.event === 'done') {
-				sawDone = true;
-				showStatus(
-					'ok',
-					statusEl!.dataset.state === 'error' ? (statusEl!.textContent ?? '') : 'Done'
-				);
-			} else if (parsed.event === 'error') {
-				const payload = JSON.parse(parsed.data) as { message: string };
-				showStatus('error', payload.message);
-			}
-		};
-
-		const flushFramedBlocks = () => {
-			while (true) {
-				const idx = buffer.indexOf('\n\n');
-				if (idx === -1) break;
-				const block = buffer.slice(0, idx);
-				buffer = buffer.slice(idx + 2);
-				handleBlock(block);
-			}
-		};
-
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true }).replace(/\r\n?/g, '\n');
-			flushFramedBlocks();
-		}
-
-		buffer += decoder.decode().replace(/\r\n?/g, '\n');
-		flushFramedBlocks();
-		const trailing = buffer.replace(/^\n+|\n+$/g, '');
-		if (trailing.length > 0) {
-			handleBlock(trailing);
-		}
-
-		if (!sawDone && !answerEl!.textContent) {
-			showStatus('error', 'Stream ended without a response.');
-		}
+		stopViewportTracking();
+		if (els.dialog.open) els.dialog.close();
 	}
 
 	async function submit(question: string) {
@@ -292,7 +314,6 @@ function setup() {
 			});
 
 			const contentType = res.headers.get('content-type') ?? '';
-
 			if (!res.ok || contentType.includes('application/json')) {
 				let message = `Request failed (${res.status})`;
 				try {
@@ -310,7 +331,7 @@ function setup() {
 				return;
 			}
 
-			await consumeSseStream(res.body);
+			await consumeStream(res.body);
 		} catch (err) {
 			if (signal.aborted) return;
 			showStatus('error', err instanceof Error ? err.message : 'Network error');
@@ -322,44 +343,30 @@ function setup() {
 		}
 	}
 
-	const onOpen = () => openDialog();
-	const onClose = () => closeDialog();
-	const onCancel = () => {
-		abortInFlight();
-	};
-	const onBackdropClick = (e: MouseEvent) => {
-		if (e.target === dialog) closeDialog();
-	};
-	const onInput = () => {
-		const len = input.value.length;
-		charCount.textContent = `${len} / 500`;
-	};
-	const onSubmit = (e: Event) => {
+	on(els.openBtn, 'click', () => openDialog());
+	on(els.closeBtn, 'click', () => closeDialog());
+	on(els.dialog, 'cancel', () => abortInFlight());
+	on(els.dialog, 'click', (e: MouseEvent) => {
+		if (e.target === els.dialog) closeDialog();
+	});
+	on(els.input, 'input', () => {
+		els.charCount.textContent = `${els.input.value.length} / 500`;
+	});
+	on(els.form, 'submit', (e: Event) => {
 		e.preventDefault();
-		const value = input.value.trim();
+		const value = els.input.value.trim();
 		if (value.length === 0) return;
 		void submit(value);
-	};
+	});
 
-	openBtn.addEventListener('click', onOpen);
-	closeBtn.addEventListener('click', onClose);
-	dialog.addEventListener('cancel', onCancel);
-	dialog.addEventListener('click', onBackdropClick);
-	input.addEventListener('input', onInput);
-	form.addEventListener('submit', onSubmit);
-	onInput();
+	els.charCount.textContent = `${els.input.value.length} / 500`;
 
 	cleanup = () => {
 		abortInFlight();
-		teardownViewportTracking();
-		openBtn.removeEventListener('click', onOpen);
-		closeBtn.removeEventListener('click', onClose);
-		dialog.removeEventListener('cancel', onCancel);
-		dialog.removeEventListener('click', onBackdropClick);
-		input.removeEventListener('input', onInput);
-		form.removeEventListener('submit', onSubmit);
-		if (dialog.open) dialog.close();
-		root.appendChild(dialog);
+		stopViewportTracking();
+		for (const dispose of disposers) dispose();
+		if (els.dialog.open) els.dialog.close();
+		els.root.appendChild(els.dialog);
 	};
 }
 

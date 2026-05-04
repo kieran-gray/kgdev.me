@@ -35,9 +35,6 @@ impl Job {
         })
     }
 
-    /// Lock + push to buffer + broadcast in a single critical section so that
-    /// SSE subscribers can take a consistent snapshot of `buffered` and
-    /// subscribe to the broadcaster without missing or duplicating events.
     pub async fn emit(&self, event: IngestLogEvent) {
         let mut inner = self.inner.lock().await;
         inner.buffered.push(event.clone());

@@ -1,28 +1,3 @@
-pub(super) fn strip_frontmatter(source: &str) -> (Vec<char>, usize) {
-    let chars: Vec<char> = source.chars().collect();
-    let prefix = ['-', '-', '-', '\n'];
-    if chars.len() < 4 || chars[..4] != prefix {
-        return (chars, 0);
-    }
-    let needle = ['\n', '-', '-', '-', '\n'];
-    let mut end_idx: Option<usize> = None;
-    let max_start = chars.len().saturating_sub(needle.len());
-    let mut i = 4usize;
-    while i <= max_start {
-        if chars[i..i + needle.len()] == needle {
-            end_idx = Some(i);
-            break;
-        }
-        i += 1;
-    }
-    let Some(end) = end_idx else {
-        return (chars, 0);
-    };
-    let body_offset = end + 5;
-    let body = chars[body_offset..].to_vec();
-    (body, body_offset)
-}
-
 pub(super) fn split_into_lines(body: &[char]) -> Vec<String> {
     let mut lines = Vec::new();
     let mut buf = String::new();
@@ -78,27 +53,4 @@ pub(super) fn parse_heading(line: &str) -> Option<(usize, String)> {
         return None;
     }
     Some((depth, text))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn strip_frontmatter_no_block() {
-        let (chars, off) = strip_frontmatter("no frontmatter at all");
-        assert_eq!(chars.iter().collect::<String>(), "no frontmatter at all");
-        assert_eq!(off, 0);
-    }
-
-    #[test]
-    fn strip_frontmatter_yaml_block() {
-        let src = "---\ntitle: 'x'\n---\nbody here";
-        let (chars, off) = strip_frontmatter(src);
-        let body: String = chars.iter().collect();
-        assert_eq!(body, "body here");
-        let src_chars: Vec<char> = src.chars().collect();
-        let reslice: String = src_chars[off..].iter().collect();
-        assert_eq!(reslice, "body here");
-    }
 }

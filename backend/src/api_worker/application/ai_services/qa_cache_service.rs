@@ -30,13 +30,6 @@ struct PostVersion {
     v: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct EmbeddingEntry {
-    e: Vec<f32>,
-}
-
-const EMBEDDING_TTL_SECONDS: u64 = 60 * 60 * 24 * 90;
-
 #[async_trait(?Send)]
 pub trait QaCacheServiceTrait {
     async fn get(
@@ -53,8 +46,6 @@ pub trait QaCacheServiceTrait {
         answer: &CachedAnswer,
     ) -> Result<(), AppError>;
     async fn get_post_version(&self, slug: &str) -> Result<Option<String>, AppError>;
-    async fn get_embedding(&self, hash: &str) -> Result<Option<Vec<f32>>, AppError>;
-    async fn put_embedding(&self, hash: &str, embedding: &[f32]) -> Result<(), AppError>;
 }
 
 pub struct QaCacheService<C: CacheTrait + Send + Sync> {
@@ -72,10 +63,6 @@ impl<C: CacheTrait + Send + Sync + 'static> QaCacheService<C> {
 
     fn post_version_key(slug: &str) -> String {
         format!("post_version:{slug}")
-    }
-
-    fn embedding_key(hash: &str) -> String {
-        format!("emb:{hash}")
     }
 }
 
@@ -117,27 +104,5 @@ impl<C: CacheTrait + Send + Sync + 'static> QaCacheServiceTrait for QaCacheServi
             .await
             .map_err(map_cache_err)?;
         Ok(entry.map(|e| e.v))
-    }
-
-    async fn get_embedding(&self, hash: &str) -> Result<Option<Vec<f32>>, AppError> {
-        let entry = self
-            .cache
-            .get::<EmbeddingEntry>(Self::embedding_key(hash))
-            .await
-            .map_err(map_cache_err)?;
-        Ok(entry.map(|e| e.e))
-    }
-
-    async fn put_embedding(&self, hash: &str, embedding: &[f32]) -> Result<(), AppError> {
-        self.cache
-            .set_with_ttl(
-                Self::embedding_key(hash),
-                EmbeddingEntry {
-                    e: embedding.to_vec(),
-                },
-                EMBEDDING_TTL_SECONDS,
-            )
-            .await
-            .map_err(map_cache_err)
     }
 }

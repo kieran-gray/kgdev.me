@@ -16,7 +16,7 @@ pub async fn handle_websocket_connect(
         }
     };
 
-    if !ctx.data.config.allowed_blog_paths.contains(&page) {
+    if !ctx.data.config.security.allowed_blog_paths.contains(&page) {
         let error = format!("Path not allowed: {page}");
         error!(error);
         return Response::error(error, 403);

@@ -12,7 +12,7 @@ where
     F: Fn(Request, RouteContext<AppState>) -> Fut,
     Fut: std::future::Future<Output = Result<Response>>,
 {
-    let cors_context = CorsContext::new(ctx.data.config.allowed_origins.clone(), &req);
+    let cors_context = CorsContext::new(ctx.data.config.security.allowed_origins.clone(), &req);
     if let Err(response) = cors_context.validate(&req) {
         return Ok(response);
     }
@@ -24,7 +24,7 @@ pub fn create_options_handler(
     req: Request,
     ctx: RouteContext<AppState>,
 ) -> worker::Result<Response> {
-    let cors_context = CorsContext::new(ctx.data.config.allowed_origins, &req);
+    let cors_context = CorsContext::new(ctx.data.config.security.allowed_origins, &req);
     match cors_context.validate(&req) {
         Ok(_) => cors_context.preflight_response(),
         Err(response) => Ok(response),

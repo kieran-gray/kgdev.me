@@ -2,7 +2,8 @@ use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::shared::{
-    EmbedResult, IngestJobInfo, IngestOptions, PostDetailDto, PostSummary, SettingsDto,
+    ChunkingConfig, EmbedResult, IngestJobInfo, IngestOptions, PostDetailDto, PostSummary,
+    SettingsDto,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,22 +19,25 @@ pub async fn list_posts() -> Result<Vec<PostSummary>, ServerFnError> {
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .ingest_service
+        .post_service
         .list_posts()
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
 #[server(name = GetPostDetail, prefix = "/api", endpoint = "get_post_detail")]
-pub async fn get_post_detail(slug: String) -> Result<PostDetailDto, ServerFnError> {
+pub async fn get_post_detail(
+    slug: String,
+    chunking_override: Option<ChunkingConfig>,
+) -> Result<PostDetailDto, ServerFnError> {
     use crate::server::setup::AppState;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .ingest_service
-        .get_post_detail(&slug)
+        .post_service
+        .get_post_detail(&slug, chunking_override)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
@@ -67,7 +71,7 @@ pub async fn embed_texts(
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .ingest_service
+        .embedding_service
         .embed_texts(&model, &text_a, &text_b)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
