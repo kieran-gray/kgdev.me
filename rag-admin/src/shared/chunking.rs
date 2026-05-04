@@ -36,4 +36,8 @@ impl ChunkingConfig {
             ChunkStrategy::Section => self.max_section_chars,
         }
     }
+
+    pub fn max_section_chars(&self) -> usize {
+        self.max_section_chars.max(1) as usize
+    }
 }

@@ -1,4 +1,4 @@
-use super::common::{fence_marker_of, parse_heading, split_into_lines, strip_frontmatter};
+use super::common::{fence_marker_of, parse_heading, split_into_lines};
 use super::ChunkOutput;
 use crate::shared::ChunkingConfig;
 
@@ -11,12 +11,12 @@ struct Segment {
     atomic: bool,
 }
 
-pub fn chunk(config: ChunkingConfig, source: &str) -> Vec<ChunkOutput> {
+pub fn chunk(config: ChunkingConfig, body: &str) -> Vec<ChunkOutput> {
     let target = config.target_chars.max(1) as usize;
     let overlap = config.overlap_chars as usize;
     let min = config.min_chars as usize;
 
-    let (body_chars, body_offset) = strip_frontmatter(source);
+    let body_chars: Vec<char> = body.chars().collect();
     let raw = parse_segments(&body_chars);
     let packed = pack_segments(raw, target);
     let split = split_oversized(packed, target, overlap, min);
@@ -29,8 +29,8 @@ pub fn chunk(config: ChunkingConfig, source: &str) -> Vec<ChunkOutput> {
             chunk_id: i as u32,
             heading: s.heading,
             text: s.text.trim().to_string(),
-            char_start: (s.char_start + body_offset) as u32,
-            char_end: (s.char_end + body_offset) as u32,
+            char_start: s.char_start as u32,
+            char_end: s.char_end as u32,
         })
         .collect()
 }

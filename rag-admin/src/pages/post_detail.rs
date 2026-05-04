@@ -12,6 +12,18 @@ use crate::shared::{
 };
 
 const OVERRIDE_DEBOUNCE_MS: u64 = 400;
+const GLOSSARY_DEFINITION_PREVIEW_CHARS: usize = 300;
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    let mut chars = value.chars();
+    let truncated: String = chars.by_ref().take(max_chars).collect();
+
+    if chars.next().is_some() {
+        format!("{truncated}...")
+    } else {
+        truncated
+    }
+}
 
 #[component]
 pub fn PostDetailPage() -> impl IntoView {
@@ -321,7 +333,10 @@ fn PostDetailView(
                                                     <span class="tech-label opacity-40">{g.slug}</span>
                                                 </div>
                                                 <p class="text-[10px] leading-relaxed opacity-70">
-                                                    {g.definition_excerpt}
+                                                    {truncate_chars(
+                                                        &g.definition,
+                                                        GLOSSARY_DEFINITION_PREVIEW_CHARS,
+                                                    )}
                                                 </p>
                                             </li>
                                         }
@@ -556,7 +571,7 @@ fn SmallField(label: &'static str, children: Children) -> impl IntoView {
 #[component]
 fn Stat(label: &'static str, value: String) -> impl IntoView {
     view! {
-        <div class="p-3 border-r border-b border-[var(--color-border)] bg-[var(--color-card-inner)]/50">
+        <div class="p-3 border-r border-b border-[var(--color-border)] bg-[var(--color-card-inner)]/50 backdrop-blur-sm">
             <div class="tech-label opacity-50 mb-1">{label}</div>
             <div class="font-mono text-xs font-bold truncate tracking-wider">{value}</div>
         </div>

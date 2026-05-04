@@ -1,4 +1,4 @@
-use crate::shared::{ChunkStrategy, ChunkingConfig};
+use crate::{server::domain::Chunk, shared::{ChunkStrategy, ChunkingConfig}};
 
 mod bert;
 mod common;
@@ -11,6 +11,20 @@ pub struct ChunkOutput {
     pub text: String,
     pub char_start: u32,
     pub char_end: u32,
+}
+
+impl From<ChunkOutput> for Chunk {
+    fn from(value: ChunkOutput) -> Chunk {
+        Chunk {
+            chunk_id: value.chunk_id,
+            heading: value.heading,
+            text: value.text,
+            char_start: value.char_start,
+            char_end: value.char_end,
+            sources: Vec::new(),
+            is_glossary: false,
+        }
+    }
 }
 
 pub fn chunk(config: ChunkingConfig, source: &str) -> Vec<ChunkOutput> {

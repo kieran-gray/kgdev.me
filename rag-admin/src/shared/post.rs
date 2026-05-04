@@ -6,7 +6,6 @@ use super::chunking::ChunkingConfig;
 pub struct PostSummary {
     pub slug: String,
     pub title: String,
-    pub content_hash: String,
     pub published_at: String,
     pub manifest_post_version: Option<String>,
     pub manifest_chunk_count: Option<u32>,
@@ -25,7 +24,6 @@ pub struct PostDetailDto {
     pub manifest_ingested_at: Option<String>,
     pub is_dirty: bool,
     pub markdown_body_length: u32,
-    pub plain_text_excerpt: String,
     pub embedding_token_limit: u32,
     pub effective_chunking: ChunkingConfig,
     pub default_chunking: ChunkingConfig,
@@ -37,7 +35,7 @@ pub struct PostDetailDto {
 pub struct GlossaryTermDto {
     pub slug: String,
     pub term: String,
-    pub definition_excerpt: String,
+    pub definition: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

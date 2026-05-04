@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use async_stream::stream;
 use async_trait::async_trait;
+use chrono::Utc;
 use futures_util::{Stream, StreamExt};
 use tracing::{info, warn};
 
@@ -15,26 +16,7 @@ use crate::api_worker::{
     domain::Question,
 };
 
-const SYSTEM_PROMPT: &str = r#"You are a strict text-extraction assistant answering questions about a blog post.
-
-The context provided to you contains two types of excerpts:
-1. Passages directly from the blog post.
-2. Authoritative reference definitions for technical terms (these begin with "Glossary:").
-
-Treat both as valid context to answer the user's question. You must follow these strict rules:
-
-FORMATTING RULES:
-- Synthesize the answer in your own words using ONLY the facts provided in the text.
-- Do NOT copy-paste large blocks of text verbatim.
-- Be concise. Get straight to the point in 1-3 sentences.
-- Do NOT refer to excerpts by number, index, or internal citation (e.g., never say "[1]", "in excerpt 2", or "according to the first passage").
-- If you use a Glossary definition to explain a term, clearly indicate that you are providing a technical definition.
-- Do NOT imply that the glossary content was written by the blog post author.
-
-STRICT GROUNDING RULES (ANTI-HALLUCINATION):
-- UNDER NO CIRCUMSTANCES are you allowed to use general knowledge, outside information, or your base training data to answer the question.
-- If the provided excerpts do not explicitly contain the answer, your ONLY output must be exactly: "I don't see that in this post."
-- Do NOT apologize. Do NOT suggest possible answers. Do NOT say "However, generally speaking...". If the answer is not in the provided text, you do not know it."#;
+const SYSTEM_PROMPT: &str = include_str!("prompts/blog_qa_system_prompt.txt");
 
 pub type AnswerStream = Pin<Box<dyn Stream<Item = SseEvent>>>;
 
@@ -129,7 +111,7 @@ impl BlogQaServiceTrait for BlogQaService {
         let vectorize_top_k = self.vectorize_top_k;
         let min_score = self.min_score;
 
-        let s = stream! {
+        let stream = stream! {
             if let Some(cached) = match cache.get(&slug, &post_version, &hash).await {
                 Ok(c) => c,
                 Err(e) => {
@@ -171,23 +153,8 @@ impl BlogQaServiceTrait for BlogQaService {
                 }
             }
 
-            let embedding = match cache.get_embedding(&hash).await {
-                Ok(Some(e)) => {
-                    info!(hash = hash.as_str(), "embedding cache hit");
-                    e
-                }
-                Ok(None) => match ai.embed(question.as_str()).await {
-                    Ok(fresh) => {
-                        if let Err(e) = cache.put_embedding(&hash, &fresh).await {
-                            warn!(error = %e, "embedding cache write failed");
-                        }
-                        fresh
-                    }
-                    Err(e) => {
-                        yield SseEvent::Error { message: e.to_string() };
-                        return;
-                    }
-                },
+            let embedding = match ai.embed(question.as_str()).await {
+                Ok(embedding) => embedding,
                 Err(e) => {
                     yield SseEvent::Error { message: e.to_string() };
                     return;
@@ -272,7 +239,7 @@ impl BlogQaServiceTrait for BlogQaService {
                 sources: sources.clone(),
                 references: references.clone(),
                 model: generation_model.clone(),
-                ts: now_ms(),
+                ts: Utc::now().timestamp_millis(),
             };
             if let Err(e) = cache.put(&slug, &post_version, &hash, &cached_answer).await {
                 warn!(error = %e, "qa cache write failed");
@@ -280,12 +247,8 @@ impl BlogQaServiceTrait for BlogQaService {
             yield SseEvent::Done;
         };
 
-        Ok(Box::pin(s))
+        Ok(Box::pin(stream))
     }
-}
-
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
 }
 
 fn dedupe_references(matches: &[ScoredChunk]) -> Vec<Reference> {

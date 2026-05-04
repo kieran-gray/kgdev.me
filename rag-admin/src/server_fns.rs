@@ -19,7 +19,7 @@ pub async fn list_posts() -> Result<Vec<PostSummary>, ServerFnError> {
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .ingest_service
+        .post_service
         .list_posts()
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
@@ -36,7 +36,7 @@ pub async fn get_post_detail(
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .ingest_service
+        .post_service
         .get_post_detail(&slug, chunking_override)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
@@ -71,7 +71,7 @@ pub async fn embed_texts(
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .ingest_service
+        .embedding_service
         .embed_texts(&model, &text_a, &text_b)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))

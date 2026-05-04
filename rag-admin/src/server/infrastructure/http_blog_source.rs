@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 
 use crate::server::application::ports::BlogSource;
 use crate::server::application::AppError;
-use crate::server::domain::{BlogPost, BlogPostSummary, GlossarySource, GlossaryTerm};
+use crate::server::domain::{BlogPost, BlogPostSummary, GlossarySource, GlossaryTerm, PostVersion};
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
 use crate::shared::SettingsDto;
 
@@ -101,7 +101,7 @@ impl BlogSource for HttpBlogSource {
                 slug: p.slug,
                 title: p.title,
                 published_at: p.published_at,
-                content_hash: p.content_hash,
+                post_version: PostVersion::from_hex(p.content_hash),
             })
             .collect())
     }

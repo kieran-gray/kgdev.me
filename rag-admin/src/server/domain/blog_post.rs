@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+use super::PostVersion;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlogPostSummary {
     pub slug: String,
     pub title: String,
     pub published_at: String,
-    pub content_hash: String,
+    pub post_version: PostVersion,
 }
 
 #[derive(Debug, Clone)]

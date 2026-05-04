@@ -1,4 +1,4 @@
-use super::common::{fence_marker_of, parse_heading, split_into_lines, strip_frontmatter};
+use super::common::{fence_marker_of, parse_heading, split_into_lines};
 use super::ChunkOutput;
 use crate::shared::ChunkingConfig;
 
@@ -12,9 +12,9 @@ struct Section {
     heading: String,
 }
 
-pub fn chunk(config: ChunkingConfig, source: &str) -> Vec<ChunkOutput> {
-    let max_chars = config.max_section_chars.max(1) as usize;
-    let (body_chars, body_offset) = strip_frontmatter(source);
+pub fn chunk(config: ChunkingConfig, body: &str) -> Vec<ChunkOutput> {
+    let max_chars = config.max_section_chars();
+    let body_chars: Vec<char> = body.chars().collect();
     let sections = parse_sections(&body_chars);
     let split = sections
         .into_iter()
@@ -27,8 +27,8 @@ pub fn chunk(config: ChunkingConfig, source: &str) -> Vec<ChunkOutput> {
             chunk_id: i as u32,
             heading: s.heading,
             text: s.text.trim().to_string(),
-            char_start: (s.char_start + body_offset) as u32,
-            char_end: (s.char_end + body_offset) as u32,
+            char_start: s.char_start as u32,
+            char_end: s.char_end as u32,
         })
         .collect()
 }

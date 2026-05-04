@@ -4,7 +4,10 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 
 use crate::server::application::ports::{Embedder, VectorStore};
-use crate::server::application::{AppError, IngestService, JobRegistry};
+use crate::server::application::{
+    services::{EmbeddingService, IngestService, PostService},
+    AppError, JobRegistry,
+};
 use crate::server::infrastructure::cloudflare::client::CloudflareApi;
 use crate::server::infrastructure::ollama::client::OllamaApi;
 use crate::server::infrastructure::{
@@ -22,6 +25,8 @@ use crate::shared::{EmbedderBackend, SettingsDto};
 pub struct AppState {
     pub settings: Arc<RwLock<SettingsDto>>,
     pub ingest_service: Arc<IngestService>,
+    pub post_service: Arc<PostService>,
+    pub embedding_service: Arc<EmbeddingService>,
     pub job_registry: Arc<JobRegistry>,
     pub vector_store: Arc<dyn VectorStore>,
     pub embedder: Arc<dyn Embedder>,
@@ -57,21 +62,31 @@ impl AppState {
             .map_err(|e| SetupError::Internal(format!("tokenizer: {e}")))?;
         let job_registry = Arc::new(JobRegistry::new());
 
+        let embedding_service = EmbeddingService::new(embedder.clone());
+
         let ingest_service = IngestService::new(
-            blog_source,
-            embedder.clone(),
+            blog_source.clone(),
+            embedding_service.clone(),
             vector_store.clone(),
             kv_store,
+            manifest_store.clone(),
+            settings.clone(),
+            job_registry.clone(),
+        );
+
+        let post_service = PostService::new(
+            blog_source,
             manifest_store,
             tokenizer,
             EMBEDDING_TOKEN_LIMIT,
             settings.clone(),
-            job_registry.clone(),
         );
 
         let state = Self {
             settings,
             ingest_service,
+            post_service,
+            embedding_service,
             job_registry,
             vector_store,
             embedder,
