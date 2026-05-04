@@ -28,5 +28,8 @@ worker = { workspace = true }
 tokio = { workspace = true }
 wiremock = { workspace = true }
 
+[features]
+ollama = []
+
 [package.metadata.cargo-machete]
 ignored = ["wasm-bindgen"]

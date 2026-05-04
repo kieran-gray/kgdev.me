@@ -4,16 +4,19 @@ use worker::Env;
 
 use crate::api_worker::{
     application::{
-        BlogQaService, BlogQaServiceTrait, ContactMessageService, ContactMessageServiceTrait,
-        QaCacheService,
+        AiInferenceServiceTrait, BlogQaService, BlogQaServiceTrait, ContactMessageService,
+        ContactMessageServiceTrait, QaCacheService,
     },
     infrastructure::{
-        CloudflareEmailService, CloudflareRequestValidationService, KVCache,
+        CloudflareEmailService, CloudflareRequestValidationService, HttpClientTrait, KVCache,
         QaCoordinatorDoService, VectorizeRestService, WorkerHttpClient, WorkersAiService,
         durable_object_client::DurableObjectClient,
     },
-    setup::{Config, exceptions::SetupError},
+    setup::{Config, config::InferenceConfig, exceptions::SetupError},
 };
+
+#[cfg(feature = "ollama")]
+use crate::api_worker::infrastructure::OllamaInferenceService;
 
 const QA_CACHE_TTL_SECONDS: u64 = 60 * 60 * 24 * 30;
 
@@ -26,7 +29,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn from_env(env: &Env, config: Config) -> Result<Self, SetupError> {
-        let http_client = Arc::new(WorkerHttpClient::new());
+        let http_client: Arc<dyn HttpClientTrait> = Arc::new(WorkerHttpClient::new());
 
         let request_validation_service = CloudflareRequestValidationService::create(
             &config.security.siteverify_url,
@@ -44,14 +47,9 @@ impl AppState {
         let contact_message_service =
             ContactMessageService::create(request_validation_service, email_service);
 
-        let ai_binding = env
-            .ai("AI")
-            .map_err(|_| SetupError::MissingVariable("AI".to_string()))?;
-        let ai_service = WorkersAiService::create(
-            ai_binding,
-            config.ai.embedding_model.clone(),
-            config.ai.generation_model.clone(),
-        );
+        let ai_service =
+            create_inference_service(env, &config.ai.inference, Arc::clone(&http_client));
+        let ai_service = ai_service?;
 
         let vectorize_service = VectorizeRestService::create(
             config.cloudflare.account_id.clone(),
@@ -77,7 +75,7 @@ impl AppState {
             vectorize_service,
             qa_cache_service,
             qa_coordinator,
-            config.ai.generation_model.clone(),
+            config.ai.inference.generation_model().to_string(),
             config.qa_daily_cap,
             config.ai.vectorize_top_k,
             config.ai.min_score,
@@ -94,5 +92,39 @@ impl AppState {
             blog_qa_service,
             view_counter_do_client,
         })
+    }
+}
+
+fn create_inference_service(
+    env: &Env,
+    config: &InferenceConfig,
+    _http_client: Arc<dyn HttpClientTrait>,
+) -> Result<Arc<dyn AiInferenceServiceTrait + Send + Sync>, SetupError> {
+    match config {
+        InferenceConfig::Cloudflare {
+            embedding_model,
+            generation_model,
+        } => {
+            let ai_binding = env
+                .ai("AI")
+                .map_err(|_| SetupError::MissingVariable("AI".to_string()))?;
+            Ok(WorkersAiService::create(
+                ai_binding,
+                embedding_model.clone(),
+                generation_model.clone(),
+            ))
+        }
+
+        #[cfg(feature = "ollama")]
+        InferenceConfig::Ollama {
+            url,
+            embedding_model,
+            generation_model,
+        } => Ok(OllamaInferenceService::create(
+            _http_client,
+            embedding_model.clone(),
+            generation_model.clone(),
+            url.clone(),
+        )),
     }
 }

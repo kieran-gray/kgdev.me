@@ -63,28 +63,100 @@ impl FromEnv for CloudflareConfig {
 
 #[derive(Clone)]
 pub struct AiConfig {
-    pub embedding_model: String,
-    pub generation_model: String,
+    pub inference: InferenceConfig,
     pub vectorize_index_name: String,
     pub vectorize_top_k: u32,
     pub min_score: f32,
+}
+
+#[derive(Clone)]
+pub enum InferenceConfig {
+    Cloudflare {
+        embedding_model: String,
+        generation_model: String,
+    },
+
+    #[cfg(feature = "ollama")]
+    Ollama {
+        url: String,
+        embedding_model: String,
+        generation_model: String,
+    },
+}
+
+impl InferenceConfig {
+    pub fn generation_model(&self) -> &str {
+        match self {
+            Self::Cloudflare {
+                generation_model, ..
+            } => generation_model,
+            #[cfg(feature = "ollama")]
+            Self::Ollama {
+                generation_model, ..
+            } => generation_model,
+        }
+    }
 }
 
 impl FromEnv for AiConfig {
     fn from_env(env: &Env) -> Result<Self, SetupError> {
         let embedding_model = Config::parse(env, "EMBEDDING_MODEL")?;
         let generation_model = Config::parse(env, "GENERATION_MODEL")?;
+        let inference = InferenceConfig::from_env(env, embedding_model, generation_model)?;
         let vectorize_index_name = Config::parse(env, "VECTORIZE_INDEX_NAME")?;
         let vectorize_top_k = Config::parse(env, "VECTORIZE_TOP_K")?;
         let min_score = Config::parse(env, "MIN_SCORE")?;
 
         Ok(Self {
-            embedding_model,
-            generation_model,
+            inference,
             vectorize_index_name,
             vectorize_top_k,
             min_score,
         })
+    }
+}
+
+impl InferenceConfig {
+    #[cfg(not(feature = "ollama"))]
+    fn from_env(
+        _env: &Env,
+        embedding_model: String,
+        generation_model: String,
+    ) -> Result<Self, SetupError> {
+        Ok(Self::Cloudflare {
+            embedding_model,
+            generation_model,
+        })
+    }
+
+    #[cfg(feature = "ollama")]
+    fn from_env(
+        env: &Env,
+        embedding_model: String,
+        generation_model: String,
+    ) -> Result<Self, SetupError> {
+        let provider = env
+            .var("AI_PROVIDER")
+            .map(|v| v.to_string())
+            .unwrap_or_else(|_| "cloudflare".to_string());
+
+        match provider.as_str() {
+            "cloudflare" => Ok(Self::Cloudflare {
+                embedding_model,
+                generation_model,
+            }),
+            "ollama" => {
+                let url = Config::parse(env, "OLLAMA_HOST")?;
+                Ok(Self::Ollama {
+                    url,
+                    embedding_model,
+                    generation_model,
+                })
+            }
+            other => Err(SetupError::InvalidVariable(format!(
+                "AI_PROVIDER should be cloudflare or ollama, got {other}"
+            ))),
+        }
     }
 }
 

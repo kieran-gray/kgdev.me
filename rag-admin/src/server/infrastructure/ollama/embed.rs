@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use reqwest::Method;
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::server::application::ports::Embedder;
@@ -22,6 +21,13 @@ impl OllamaEmbedder {
     }
 }
 
+#[derive(Serialize)]
+struct EmbedRequest {
+    model: String,
+    input: Vec<String>,
+    dimensions: u32,
+}
+
 #[derive(Debug, Deserialize)]
 struct EmbedResult {
     embeddings: Vec<Vec<f32>>,
@@ -32,8 +38,12 @@ impl Embedder for OllamaEmbedder {
     async fn embed_batch(&self, model: &str, texts: &[String]) -> Result<Vec<Vec<f32>>, AppError> {
         let dims = self.settings.read().await.embedding_model.dims;
         let url = format!("{}/api/embed", API_BASE);
-        let body = json!({ "model": model, "input": texts, "dimensions": dims });
-        let body_bytes = serde_json::to_vec(&body)
+        let request = EmbedRequest {
+            model: model.to_string(),
+            input: texts.to_vec(),
+            dimensions: dims,
+        };
+        let body_bytes = serde_json::to_vec(&request)
             .map_err(|e| AppError::Internal(format!("encode embed body: {e}")))?;
         let resp = self
             .api
