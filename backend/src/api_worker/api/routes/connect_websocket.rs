@@ -1,14 +1,17 @@
 use tracing::error;
 use worker::{Request, Response, RouteContext};
 
-use crate::api_worker::AppState;
+use crate::api_worker::{AppState, application::AppError, domain::PostSlug};
 
 pub async fn handle_websocket_connect(
     req: Request,
     ctx: RouteContext<AppState>,
 ) -> worker::Result<Response> {
-    let page = match ctx.param("page") {
-        Some(p) => p.to_string(),
+    let slug = match ctx.param("page") {
+        Some(p) => match PostSlug::parse(p) {
+            Ok(slug) => slug,
+            Err(e) => return Ok(Response::from(AppError::ValidationError(e.to_string()))),
+        },
         None => {
             let error = "No page provided";
             error!(error);
@@ -16,8 +19,8 @@ pub async fn handle_websocket_connect(
         }
     };
 
-    if !ctx.data.config.security.allowed_blog_paths.contains(&page) {
-        let error = format!("Path not allowed: {page}");
+    if !ctx.data.config.security.allowed_blog_paths.contains(&slug) {
+        let error = format!("Path not allowed: {slug}");
         error!(error);
         return Response::error(error, 403);
     }
@@ -30,7 +33,7 @@ pub async fn handle_websocket_connect(
     let response = ctx
         .data
         .view_counter_do_client
-        .websocket_upgrade(&page)
+        .websocket_upgrade(slug.as_str())
         .await
         .map_err(|e| format!("Failed to connect to durable object: {e}"))?;
 

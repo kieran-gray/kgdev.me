@@ -168,10 +168,48 @@ describe("WebSocket connect", () => {
   });
 });
 
-describe('Ask Question Worker', () => {
-	it('streams a fallback answer with a mocked AI embedding', async () => {
-		await (env as any).BLOG_POST_QA_CACHE.put(
-			'post_version:my-post',
+	describe('Ask Question Worker', () => {
+		it('rejects invalid post slugs before opening an SSE stream', async () => {
+			const response = await SELF.fetch('http://example.com/api/v1/ask/BadSlug', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Origin: 'http://localhost:5173'
+				},
+				body: JSON.stringify({
+					question: 'What does this post say about retries?'
+				})
+			});
+
+			const body = await response.json();
+
+			expect(response.status).toBe(400);
+			expect(response.headers.get('Content-Type')).toContain('application/json');
+			expect(body).toMatchObject({ success: false });
+		});
+
+		it('returns a normal 404 when a post is allowed but not indexed', async () => {
+			const response = await SELF.fetch('http://example.com/api/v1/ask/my-post', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Origin: 'http://localhost:5173'
+				},
+				body: JSON.stringify({
+					question: 'What does this post say about retries?'
+				})
+			});
+
+			const body = await response.json();
+
+			expect(response.status).toBe(404);
+			expect(response.headers.get('Content-Type')).toContain('application/json');
+			expect(body).toMatchObject({ success: false });
+		});
+
+		it('streams a fallback answer with a mocked AI embedding', async () => {
+			await (env as any).BLOG_POST_QA_CACHE.put(
+				'post_version:my-post',
 			JSON.stringify({ v: 'test-version-1' })
 		);
 

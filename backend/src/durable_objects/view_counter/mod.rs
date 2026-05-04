@@ -9,7 +9,7 @@ use worker::{
     WebSocketIncomingMessage, durable_object,
 };
 
-use crate::view_counter::{
+use crate::durable_objects::view_counter::{
     storage::{flush_count, init_schema, load_count},
     websocket::{broadcast_after_close, broadcast_state, upgrade_websocket},
 };

@@ -7,8 +7,10 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 use worker::{DurableObject, Env, Request, Response, Result, SqlStorage, State, durable_object};
 
-use crate::blog_post_qa::state::TokenBucket;
-use crate::blog_post_qa::storage::{check_and_increment_daily, init_schema, record_hit};
+use crate::durable_objects::blog_post_qa::state::TokenBucket;
+use crate::durable_objects::blog_post_qa::storage::{
+    check_and_increment_daily, init_schema, record_hit,
+};
 
 const BUCKET_CAPACITY: f64 = 6.0;
 const BUCKET_REFILL_PER_HOUR: f64 = 30.0;

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use worker::Env;
 
-use crate::api_worker::setup::exceptions::SetupError;
+use crate::api_worker::{domain::PostSlug, setup::exceptions::SetupError};
 
 trait FromEnv: Sized {
     fn from_env(env: &Env) -> Result<Self, SetupError>;
@@ -21,7 +21,7 @@ pub struct SecurityConfig {
     pub siteverify_url: String,
     pub turnstile_secret_key: String,
     pub allowed_origins: Vec<String>,
-    pub allowed_blog_paths: Vec<String>,
+    pub allowed_blog_paths: Vec<PostSlug>,
 }
 
 impl FromEnv for SecurityConfig {
@@ -29,7 +29,7 @@ impl FromEnv for SecurityConfig {
         let siteverify_url = Config::parse(env, "CLOUDFLARE_SITEVERIFY_URL")?;
         let turnstile_secret_key = Config::parse(env, "CLOUDFLARE_TURNSTILE_SECRET_KEY")?;
         let allowed_origins = Config::parse_csv(env, "ALLOWED_ORIGINS")?;
-        let allowed_blog_paths = Config::parse_csv(env, "ALLOWED_BLOG_PATHS")?;
+        let allowed_blog_paths = Config::parse_slug_csv(env, "ALLOWED_BLOG_PATHS")?;
 
         Ok(Self {
             siteverify_url,
@@ -199,5 +199,15 @@ impl Config {
             .filter(|s| !s.is_empty())
             .collect();
         Ok(env_var)
+    }
+
+    fn parse_slug_csv(env: &Env, var: &str) -> Result<Vec<PostSlug>, SetupError> {
+        Self::parse_csv(env, var)?
+            .into_iter()
+            .map(|slug| {
+                PostSlug::parse(&slug)
+                    .map_err(|err| SetupError::InvalidVariable(format!("{var}: {err}")))
+            })
+            .collect()
     }
 }

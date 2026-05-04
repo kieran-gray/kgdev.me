@@ -1,6 +1,5 @@
 pub mod api_worker;
-pub mod blog_post_qa;
-pub mod view_counter;
+pub mod durable_objects;
 
 use tracing::{Instrument, error, info, info_span};
 use uuid::Uuid;

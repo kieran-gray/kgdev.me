@@ -3,15 +3,18 @@ use tracing::{error, info};
 use worker::{Request, Response, ResponseBuilder, RouteContext};
 
 use crate::api_worker::{
-    AppState, api::schema::requests::AskQuestionRequest, application::AppError,
+    AppState, api::schema::requests::AskQuestionRequest, application::AppError, domain::PostSlug,
 };
 
 pub async fn ask_question_handler(
     mut req: Request,
     ctx: RouteContext<AppState>,
 ) -> worker::Result<Response> {
-    let page = match ctx.param("page") {
-        Some(p) => p.to_string(),
+    let slug = match ctx.param("page") {
+        Some(p) => match PostSlug::parse(p) {
+            Ok(slug) => slug,
+            Err(e) => return Ok(Response::from(AppError::ValidationError(e.to_string()))),
+        },
         None => {
             return Ok(Response::from(AppError::ValidationError(
                 "No page provided".into(),
@@ -19,9 +22,9 @@ pub async fn ask_question_handler(
         }
     };
 
-    if !ctx.data.config.security.allowed_blog_paths.contains(&page) {
+    if !ctx.data.config.security.allowed_blog_paths.contains(&slug) {
         return Ok(Response::from(AppError::NotFound(format!(
-            "Unknown post: {page}"
+            "Unknown post: {slug}"
         ))));
     }
 
@@ -38,7 +41,7 @@ pub async fn ask_question_handler(
     let event_stream = match ctx
         .data
         .blog_qa_service
-        .answer_stream(&page, &payload.question)
+        .answer_stream(&slug, &payload.question)
         .await
     {
         Ok(s) => s,
@@ -48,7 +51,7 @@ pub async fn ask_question_handler(
         }
     };
 
-    info!(slug = %page, "Ask a question stream opened");
+    info!(slug = %slug, "Ask a question stream opened");
     let byte_stream = event_stream.map(|event| Ok::<Vec<u8>, worker::Error>(event.encode()));
 
     ResponseBuilder::new()

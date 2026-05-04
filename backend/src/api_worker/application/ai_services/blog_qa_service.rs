@@ -10,10 +10,10 @@ use tracing::{info, warn};
 use crate::api_worker::{
     application::{
         AiInferenceServiceTrait, AppError, CachedAnswer, CachedSource, ChargeOutcome,
-        QaCacheServiceTrait, QaCoordinatorTrait, Reference, ScoredChunk, SseEvent,
+        QaCacheServiceTrait, QaCoordinatorTrait, Reference, ScoredChunk, SseEvent, TokenStream,
         VectorizeServiceTrait,
     },
-    domain::Question,
+    domain::{PostSlug, Question},
 };
 
 const SYSTEM_PROMPT: &str = include_str!("prompts/blog_qa_system_prompt.txt");
@@ -22,7 +22,11 @@ pub type AnswerStream = Pin<Box<dyn Stream<Item = SseEvent>>>;
 
 #[async_trait(?Send)]
 pub trait BlogQaServiceTrait {
-    async fn answer_stream(&self, slug: &str, question: &str) -> Result<AnswerStream, AppError>;
+    async fn answer_stream(
+        &self,
+        slug: &PostSlug,
+        question: &str,
+    ) -> Result<AnswerStream, AppError>;
 }
 
 pub struct BlogQaService {
@@ -59,6 +63,16 @@ impl BlogQaService {
             min_score,
         })
     }
+
+    async fn get_post_version(&self, slug_str: &str) -> Result<String, AppError> {
+        self.cache.get_post_version(slug_str).await?.ok_or_else(|| {
+            warn!(
+                slug = slug_str,
+                "no post_version in KV; ingest may not have run"
+            );
+            AppError::NotFound("This post is not indexed yet. Try again later.".to_string())
+        })
+    }
 }
 
 fn build_prompt(question: &str, chunks: &[ScoredChunk]) -> (String, String) {
@@ -88,90 +102,69 @@ fn build_prompt(question: &str, chunks: &[ScoredChunk]) -> (String, String) {
     (system, user)
 }
 
+enum PreparedAnswer {
+    Cached {
+        answer: CachedAnswer,
+    },
+    Fallback {
+        sources: Vec<CachedSource>,
+        answer: String,
+        model: String,
+    },
+    Generate {
+        slug: String,
+        post_version: String,
+        hash: String,
+        token_stream: TokenStream,
+        sources: Vec<CachedSource>,
+        references: Vec<Reference>,
+        model: String,
+        cache: Arc<dyn QaCacheServiceTrait + Send + Sync>,
+    },
+}
+
 #[async_trait(?Send)]
 impl BlogQaServiceTrait for BlogQaService {
-    async fn answer_stream(&self, slug: &str, question: &str) -> Result<AnswerStream, AppError> {
+    async fn answer_stream(
+        &self,
+        slug: &PostSlug,
+        question: &str,
+    ) -> Result<AnswerStream, AppError> {
         let question =
             Question::create(question).map_err(|e| AppError::ValidationError(e.to_string()))?;
 
         let hash = question.hash();
+        let slug_str = slug.as_str();
 
-        let post_version = self.cache.get_post_version(slug).await?.ok_or_else(|| {
-            warn!(slug, "no post_version in KV; ingest may not have run");
-            AppError::NotFound("This post is not indexed yet. Try again later.".to_string())
-        })?;
+        let post_version = self.get_post_version(slug_str).await?;
 
-        let daily_cap = self.daily_cap;
-        let slug = slug.to_string();
-        let ai = Arc::clone(&self.ai);
-        let vectorize = Arc::clone(&self.vectorize);
-        let cache = Arc::clone(&self.cache);
-        let coordinator = Arc::clone(&self.coordinator);
-        let generation_model = self.generation_model.clone();
-        let vectorize_top_k = self.vectorize_top_k;
-        let min_score = self.min_score;
-
-        let stream = stream! {
-            if let Some(cached) = match cache.get(&slug, &post_version, &hash).await {
-                Ok(c) => c,
-                Err(e) => {
-                    yield SseEvent::Error { message: e.to_string() };
-                    return;
-                }
-            } {
-                info!(slug = slug.as_str(), hash = hash.as_str(), "qa cache hit");
-                let _ = coordinator.record_hit(&slug, &hash).await;
-                yield SseEvent::Meta {
-                    sources: cached.sources,
-                    references: cached.references,
-                    cached: true,
-                    model: cached.model,
-                };
-                yield SseEvent::Delta { text: cached.answer };
-                yield SseEvent::Done;
-                return;
-            }
-
-            match coordinator.charge(&slug, daily_cap).await {
-                Ok(ChargeOutcome::Ok) => {}
-                Ok(ChargeOutcome::RateLimited { retry_after_ms }) => {
+        let prepared = if let Some(cached) = self.cache.get(slug_str, &post_version, &hash).await? {
+            info!(slug = slug_str, hash = hash.as_str(), "qa cache hit");
+            let _ = self.coordinator.record_hit(slug_str, &hash).await;
+            PreparedAnswer::Cached { answer: cached }
+        } else {
+            match self.coordinator.charge(slug_str, self.daily_cap).await? {
+                ChargeOutcome::Ok => {}
+                ChargeOutcome::RateLimited { retry_after_ms } => {
                     let secs = retry_after_ms.div_ceil(1000).max(1);
-                    yield SseEvent::Error {
-                        message: format!("Too many questions for this post. Try again in ~{secs}s."),
-                    };
-                    return;
+                    return Err(AppError::RateLimited(format!(
+                        "Too many questions for this post. Try again in ~{secs}s."
+                    )));
                 }
-                Ok(ChargeOutcome::DailyCapExceeded) => {
-                    yield SseEvent::Error {
-                        message: "Daily question budget reached. Try again tomorrow.".to_string(),
-                    };
-                    return;
-                }
-                Err(e) => {
-                    yield SseEvent::Error { message: e.to_string() };
-                    return;
+                ChargeOutcome::DailyCapExceeded => {
+                    return Err(AppError::RateLimited(
+                        "Daily question budget reached. Try again tomorrow.".to_string(),
+                    ));
                 }
             }
 
-            let embedding = match ai.embed(question.as_str()).await {
-                Ok(embedding) => embedding,
-                Err(e) => {
-                    yield SseEvent::Error { message: e.to_string() };
-                    return;
-                }
-            };
+            let embedding = self.ai.embed(question.as_str()).await?;
 
-            let mut matches = match vectorize
-                .query(&embedding, &slug, &post_version, vectorize_top_k)
-                .await
-            {
-                Ok(m) => m,
-                Err(e) => {
-                    yield SseEvent::Error { message: e.to_string() };
-                    return;
-                }
-            };
-            matches.retain(|m| m.score >= min_score);
+            let mut matches = self
+                .vectorize
+                .query(&embedding, slug_str, &post_version, self.vectorize_top_k)
+                .await?;
+            matches.retain(|m| m.score >= self.min_score);
 
             let sources: Vec<CachedSource> = matches
                 .iter()
@@ -183,68 +176,106 @@ impl BlogQaServiceTrait for BlogQaService {
                 .collect();
 
             if matches.is_empty() {
-                warn!(slug = slug.as_str(), "no relevant chunks");
-                let answer = "I don't see that in this post.".to_string();
-                yield SseEvent::Meta {
+                warn!(slug = slug_str, "no relevant chunks");
+                PreparedAnswer::Fallback {
                     sources,
-                    references: vec![],
-                    cached: false,
-                    model: generation_model.clone(),
-                };
-                yield SseEvent::Delta { text: answer };
-                yield SseEvent::Done;
-                return;
-            }
-
-            let references = dedupe_references(&matches);
-
-            yield SseEvent::Meta {
-                sources: sources.clone(),
-                references: references.clone(),
-                cached: false,
-                model: generation_model.clone(),
-            };
-
-            let (system, user) = build_prompt(question.as_str(), &matches);
-            let mut token_stream = match ai.generate_stream(&system, &user).await {
-                Ok(s) => s,
-                Err(e) => {
-                    yield SseEvent::Error { message: e.to_string() };
-                    return;
+                    answer: "I don't see that in this post.".to_string(),
+                    model: self.generation_model.clone(),
                 }
-            };
+            } else {
+                let references = dedupe_references(&matches);
+                let (system, user) = build_prompt(question.as_str(), &matches);
+                let token_stream = self.ai.generate_stream(&system, &user).await?;
 
-            let mut answer = String::new();
-            let mut errored = false;
-            while let Some(item) = token_stream.next().await {
-                match item {
-                    Ok(token) => {
-                        answer.push_str(&token);
-                        yield SseEvent::Delta { text: token };
-                    }
-                    Err(e) => {
-                        errored = true;
-                        yield SseEvent::Error { message: e.to_string() };
-                        break;
-                    }
+                PreparedAnswer::Generate {
+                    slug: slug_str.to_string(),
+                    post_version,
+                    hash,
+                    token_stream,
+                    sources,
+                    references,
+                    model: self.generation_model.clone(),
+                    cache: Arc::clone(&self.cache),
                 }
             }
+        };
 
-            if errored {
-                return;
-            }
+        let stream = stream! {
+            match prepared {
+                PreparedAnswer::Cached { answer } => {
+                    yield SseEvent::Meta {
+                        sources: answer.sources,
+                        references: answer.references,
+                        cached: true,
+                        model: answer.model,
+                    };
+                    yield SseEvent::Delta { text: answer.answer };
+                    yield SseEvent::Done;
+                }
+                PreparedAnswer::Fallback {
+                    sources,
+                    answer,
+                    model,
+                } => {
+                    yield SseEvent::Meta {
+                        sources,
+                        references: vec![],
+                        cached: false,
+                        model,
+                    };
+                    yield SseEvent::Delta { text: answer };
+                    yield SseEvent::Done;
+                }
+                PreparedAnswer::Generate {
+                    slug,
+                    post_version,
+                    hash,
+                    mut token_stream,
+                    sources,
+                    references,
+                    model,
+                    cache,
+                } => {
+                    yield SseEvent::Meta {
+                        sources: sources.clone(),
+                        references: references.clone(),
+                        cached: false,
+                        model: model.clone(),
+                    };
 
-            let cached_answer = CachedAnswer {
-                answer: answer.clone(),
-                sources: sources.clone(),
-                references: references.clone(),
-                model: generation_model.clone(),
-                ts: Utc::now().timestamp_millis(),
-            };
-            if let Err(e) = cache.put(&slug, &post_version, &hash, &cached_answer).await {
-                warn!(error = %e, "qa cache write failed");
+                    let mut answer = String::new();
+                    let mut errored = false;
+                    while let Some(item) = token_stream.next().await {
+                        match item {
+                        Ok(token) => {
+                            answer.push_str(&token);
+                            yield SseEvent::Delta { text: token };
+                        }
+                        Err(e) => {
+                            errored = true;
+                            yield SseEvent::Error { message: e.to_string() };
+                            break;
+                        }
+                            }
+                    }
+
+                    if errored {
+                        return;
+                    }
+
+                    let cached_answer = CachedAnswer {
+                        answer: answer.clone(),
+                        sources: sources.clone(),
+                        references: references.clone(),
+                        model,
+                        ts: Utc::now().timestamp_millis(),
+                    };
+                    if let Err(e) = cache.put(&slug, &post_version, &hash, &cached_answer).await {
+                        warn!(error = %e, "qa cache write failed");
+                    }
+                    yield SseEvent::Done;
+                }
             }
-            yield SseEvent::Done;
         };
 
         Ok(Box::pin(stream))
