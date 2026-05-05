@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "posts": {
+    "blog-view-counter": {
+      "strategy": "bert",
+      "max_section_chars": 8000,
+      "target_chars": 1200,
+      "overlap_chars": 120,
+      "min_chars": 320
+    }
+  }
+}

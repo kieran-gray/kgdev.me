@@ -27,6 +27,7 @@ pub struct PostDetailDto {
     pub embedding_token_limit: u32,
     pub effective_chunking: ChunkingConfig,
     pub default_chunking: ChunkingConfig,
+    pub post_chunking_config: Option<ChunkingConfig>,
     pub glossary_terms: Vec<GlossaryTermDto>,
     pub chunk_preview: Vec<ChunkPreview>,
 }

@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 
 use crate::server::setup::exceptions::SetupError;
-use crate::shared::{ChunkingConfig, EmbeddingModel, SettingsDto, VectorIndexConfig};
+use crate::shared::{
+    ChunkingConfig, EmbeddingModel, EvaluationSettings, SettingsDto, VectorIndexConfig,
+};
 
 pub fn data_dir() -> PathBuf {
     std::env::current_dir()
@@ -19,8 +21,16 @@ pub fn manifest_path() -> PathBuf {
     data_dir().join("manifest.json")
 }
 
+pub fn post_chunking_config_path() -> PathBuf {
+    data_dir().join("post-chunking.json")
+}
+
 pub fn tokenizer_path() -> PathBuf {
     data_dir().join("tokenizer.json")
+}
+
+pub fn evaluations_dir() -> PathBuf {
+    data_dir().join("evaluations")
 }
 
 pub fn defaults() -> SettingsDto {
@@ -32,6 +42,7 @@ pub fn defaults() -> SettingsDto {
         vector_index: VectorIndexConfig::default(),
         embedding_model: EmbeddingModel::default(),
         default_chunking: ChunkingConfig::default(),
+        evaluation: EvaluationSettings::default(),
     }
 }
 

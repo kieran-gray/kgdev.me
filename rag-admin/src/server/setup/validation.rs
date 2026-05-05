@@ -1,4 +1,6 @@
-use crate::shared::{catalog_for_backend, EmbedderBackend, SettingsDto};
+use crate::shared::{
+    catalog_for_backend, EmbedderBackend, EvaluationGenerationBackend, SettingsDto,
+};
 
 pub fn validate_local(s: &SettingsDto) -> Result<(), String> {
     if s.embedding_model.id.is_empty() {
@@ -37,6 +39,34 @@ pub fn validate_local(s: &SettingsDto) -> Result<(), String> {
             s.embedding_model.id,
             backend.as_str()
         ));
+    }
+
+    if s.evaluation.generation_model.trim().is_empty() {
+        return Err("evaluation generation model is empty".into());
+    }
+    if s.evaluation.question_count == 0 {
+        return Err("evaluation question count must be > 0".into());
+    }
+    if s.evaluation.top_k == 0 {
+        return Err("evaluation top_k must be > 0".into());
+    }
+    if s.evaluation.excerpt_similarity_threshold_milli > 1000 {
+        return Err("evaluation excerpt similarity threshold must be <= 1000".into());
+    }
+    if s.evaluation.duplicate_similarity_threshold_milli > 1000 {
+        return Err("evaluation duplicate similarity threshold must be <= 1000".into());
+    }
+    if s.evaluation.min_score_milli > 1000 {
+        return Err("evaluation min score must be <= 1000".into());
+    }
+    if matches!(
+        s.evaluation.generation_backend,
+        EvaluationGenerationBackend::Ollama
+    ) {
+        let url = s.evaluation.ollama_base_url.trim();
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
+            return Err("evaluation Ollama base URL must start with http:// or https://".into());
+        }
     }
 
     Ok(())

@@ -1,0 +1,3 @@
+pub mod file_post_chunking_config_store;
+
+pub use file_post_chunking_config_store::FilePostChunkingConfigStore;

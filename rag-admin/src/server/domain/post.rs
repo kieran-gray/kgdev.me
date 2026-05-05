@@ -249,6 +249,8 @@ mod tests {
             post_version: "deadbeef".into(),
             chunk_count: 1,
             ingested_at: "2026-01-01".into(),
+            chunking_config: None,
+            embedding_model: None,
         };
         assert!(p.is_dirty(Some(&entry)));
     }
@@ -260,6 +262,8 @@ mod tests {
             post_version: p.version().as_str().to_string(),
             chunk_count: 1,
             ingested_at: "2026-01-01".into(),
+            chunking_config: None,
+            embedding_model: None,
         };
         assert!(!p.is_dirty(Some(&entry)));
     }

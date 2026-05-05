@@ -1,0 +1,57 @@
+{
+  "slug": "blog-view-counter",
+  "post_version": "aa2f3726102d7a8579950027675125300c0b9f27b7e1c2ef7b669159b79f085e",
+  "generated_at": "2026-05-05T14:26:23.924938018Z",
+  "questions": [
+    {
+      "question": "What mechanism does the Durable Object use to ensure that view counts are accurately updated when a reader disconnects?",
+      "references": [
+        {
+          "content": "When a reader navigates away or closes the tab, the socket closes and `websocket_close` fires. The DO broadcasts a new count to whoever is still connected.",
+          "char_start": 2960,
+          "char_end": 3115
+        },
+        {
+          "content": "One subtle thing: when `websocket_close` fires, the closing socket is still counted in the socket list. If you just count sockets, you'll get **N instead of N-1**. The fix is to subtract one when broadcasting from the close handler.",
+          "char_start": 3117,
+          "char_end": 3349
+        }
+      ]
+    },
+    {
+      "question": "What happens when a reader navigates away or closes the tab, triggering a socket close?",
+      "references": [
+        {
+          "content": "When a reader navigates away or closes the tab, the socket closes and `websocket_close` fires.",
+          "char_start": 2960,
+          "char_end": 3054
+        },
+        {
+          "content": "The DO broadcasts a new count to whoever is still connected.",
+          "char_start": 3055,
+          "char_end": 3115
+        },
+        {
+          "content": "One subtle thing: when `websocket_close` fires, the closing socket is still counted in the socket list. If you just count sockets, you'll get **N instead of N-1**. The fix is to subtract one when broadcasting from the close handler.",
+          "char_start": 3117,
+          "char_end": 3349
+        }
+      ]
+    },
+    {
+      "question": "What basic server-side validation and edge controls are implemented to ensure only legitimate requests are processed and to prevent abuse?",
+      "references": [
+        {
+          "content": "I have added some basic server-side validation and edge controls to ensure only legitimate requests are processed and to prevent abuse.",
+          "char_start": 4200,
+          "char_end": 4335
+        },
+        {
+          "content": "The API Worker enforces a basic CORS policy on incoming requests.",
+          "char_start": 4347,
+          "char_end": 4412
+        }
+      ]
+    }
+  ]
+}

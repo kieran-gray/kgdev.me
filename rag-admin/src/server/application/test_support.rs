@@ -1,17 +1,21 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use serde_json::Value;
 
+use crate::server::application::blog::ports::{BlogSource, PostChunkingConfigStore};
+use crate::server::application::embedding::ports::Embedder;
+use crate::server::application::ingest::ports::{KvStore, ManifestStore, VectorStore};
 use crate::server::application::ports::{
-    BlogSource, Embedder, KvStore, ManifestStore, Tokenized, Tokenizer, VectorStore,
+    ChatClient, ChatRequest, ChatResponse, Tokenized, Tokenizer,
 };
 use crate::server::application::AppError;
 use crate::server::domain::{
     BlogPost, BlogPostSummary, GlossarySource, GlossaryTerm, Manifest, ManifestEntry, PostVersion,
     VectorRecord,
 };
+use crate::shared::ChunkingConfig;
 
 pub fn make_blog_post(slug: &str, title: &str, body: &str) -> BlogPost {
     BlogPost {
@@ -265,6 +269,56 @@ impl MockManifestStore {
     }
 }
 
+pub struct MockPostChunkingConfigStore {
+    configs: Mutex<HashMap<String, ChunkingConfig>>,
+}
+
+impl MockPostChunkingConfigStore {
+    pub fn new() -> Self {
+        Self {
+            configs: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub fn with_config(self, slug: &str, config: ChunkingConfig) -> Self {
+        self.configs
+            .lock()
+            .unwrap()
+            .insert(slug.to_string(), config);
+        self
+    }
+}
+
+#[async_trait]
+impl PostChunkingConfigStore for MockPostChunkingConfigStore {
+    async fn all(&self) -> Result<std::collections::BTreeMap<String, ChunkingConfig>, AppError> {
+        Ok(self
+            .configs
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect())
+    }
+
+    async fn get(&self, slug: &str) -> Result<Option<ChunkingConfig>, AppError> {
+        Ok(self.configs.lock().unwrap().get(slug).copied())
+    }
+
+    async fn save(&self, slug: &str, config: ChunkingConfig) -> Result<(), AppError> {
+        self.configs
+            .lock()
+            .unwrap()
+            .insert(slug.to_string(), config);
+        Ok(())
+    }
+
+    async fn clear(&self, slug: &str) -> Result<(), AppError> {
+        self.configs.lock().unwrap().remove(slug);
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl ManifestStore for MockManifestStore {
     async fn load(&self) -> Result<Manifest, AppError> {
@@ -295,5 +349,22 @@ impl Tokenizer for MockTokenizer {
         let tokens: Vec<String> = text.split_whitespace().map(|s| s.to_string()).collect();
         let count = tokens.len() as u32;
         Ok(Tokenized { tokens, count })
+    }
+}
+
+pub struct NullChatClient;
+
+impl NullChatClient {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self)
+    }
+}
+
+#[async_trait]
+impl ChatClient for NullChatClient {
+    async fn chat(&self, _request: ChatRequest) -> Result<ChatResponse, AppError> {
+        panic!(
+            "NullChatClient: LLM chunker strategy was used in a test - provide a real client or avoid LLM strategy"
+        )
     }
 }

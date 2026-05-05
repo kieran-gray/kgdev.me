@@ -1,7 +1,10 @@
-pub mod chunker;
+pub mod blog;
+pub mod chunking;
+pub mod embedding;
+pub mod evaluation;
 pub mod exceptions;
-pub mod ingest_log;
-pub mod job_registry;
+pub mod ingest;
+pub mod job;
 pub mod ports;
 pub mod services;
 
@@ -9,5 +12,4 @@ pub mod services;
 pub mod test_support;
 
 pub use exceptions::AppError;
-pub use ingest_log::{IngestLogEvent, IngestLogLevel};
-pub use job_registry::{Job, JobRegistry};
+pub use job::{IngestLogEvent, IngestLogLevel, Job, JobMessage, JobRegistry};
