@@ -20,6 +20,7 @@ pub async fn list_posts() -> Result<Vec<PostSummary>, ServerFnError> {
 pub async fn get_post_detail(
     slug: String,
     chunking_override: Option<ChunkingConfig>,
+    force_chunk_preview: bool,
 ) -> Result<PostDetailDto, ServerFnError> {
     use crate::server::setup::AppState;
     use std::sync::Arc;
@@ -28,7 +29,7 @@ pub async fn get_post_detail(
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
         .post_service
-        .get_post_detail(&slug, chunking_override)
+        .get_post_detail(&slug, chunking_override, force_chunk_preview)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }

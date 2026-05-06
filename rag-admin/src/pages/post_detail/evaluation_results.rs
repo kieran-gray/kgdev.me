@@ -186,7 +186,6 @@ fn EvaluationResultRow(
     let options_for_save = options.clone();
     let config = variant.variant.config;
     let label = display_variant_label(variant.variant.label, &config);
-    let selected = variant.selected;
     let chunk_count = variant.chunk_count;
     let average_retrieved_tokens = variant.average_retrieved_tokens;
     let missed_questions = variant
@@ -242,7 +241,6 @@ fn EvaluationResultRow(
                             </span>
                             {is_best.then(|| view! { <span class="badge !text-emerald-300 !border-emerald-500 !bg-emerald-950/70">"BEST"</span> })}
                             {is_current.then(|| view! { <span class="badge !text-sky-300 !border-sky-500 !bg-sky-950/70">"CURRENT"</span> })}
-                            {selected.then(|| view! { <span class="badge !text-emerald-300 !border-emerald-500 !bg-emerald-950/70">"SELECTED"</span> })}
                         </div>
                         <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button type="button" class="tech-label !text-emerald-500 hover:underline" on:click=preview>

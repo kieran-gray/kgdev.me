@@ -35,14 +35,17 @@ pub fn PostDetailPage() -> impl IntoView {
     let slug = Memo::new(move |_| params.with(|p| p.get("slug").unwrap_or_default().to_string()));
 
     let (override_config, set_override_config) = signal::<Option<ChunkingConfig>>(None);
+    let (force_chunk_preview, set_force_chunk_preview) = signal(false);
 
     let detail = Resource::new(
-        move || (slug.get(), override_config.get()),
-        move |(s, ov)| async move {
+        move || (slug.get(), override_config.get(), force_chunk_preview.get()),
+        move |(s, ov, force_preview)| async move {
             if s.is_empty() {
                 return Err("missing slug".to_string());
             }
-            get_post_detail(s, ov).await.map_err(|e| e.to_string())
+            get_post_detail(s, ov, force_preview)
+                .await
+                .map_err(|e| e.to_string())
         },
     );
 
@@ -58,6 +61,7 @@ pub fn PostDetailPage() -> impl IntoView {
                                     detail=d
                                     override_config=override_config
                                     set_override_config=set_override_config
+                                    set_force_chunk_preview=set_force_chunk_preview
                                 />
                             }.into_any(),
                             Err(e) => {
@@ -87,6 +91,7 @@ fn PostDetailView(
     detail: PostDetailDto,
     override_config: ReadSignal<Option<ChunkingConfig>>,
     set_override_config: WriteSignal<Option<ChunkingConfig>>,
+    set_force_chunk_preview: WriteSignal<bool>,
 ) -> impl IntoView {
     let slug = StoredValue::new(detail.slug.clone());
     let (active_tab, set_active_tab) = signal(Tab::Refinement);
@@ -171,6 +176,10 @@ fn PostDetailView(
                 Err(e) => set_save_status.set(Some((false, format!("CLEAR_FAULT: {e}")))),
             }
         });
+    };
+
+    let generate_chunk_preview = move |_| {
+        set_force_chunk_preview.set(true);
     };
 
     let dirty_badge = if detail.is_dirty {
@@ -338,9 +347,9 @@ fn PostDetailView(
             <div class="pt-4">
                 {move || match active_tab.get() {
                     Tab::Refinement => view! {
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div class="lg:col-span-1 space-y-6">
-                                <section class="card-outer p-4 space-y-4">
+                        <div class="space-y-6">
+                            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
+                                <section class="card-outer p-4 space-y-4 h-full flex flex-col">
                                     <div class="flex flex-col">
                                         <span class="tech-label">"action.evaluation"</span>
                                         <h2 class="text-lg font-bold">"EVALUATION_LAB"</h2>
@@ -348,26 +357,29 @@ fn PostDetailView(
                                             "Open the laboratory to generate synthetic datasets and run performance sweeps."
                                         </p>
                                     </div>
-                                    <button
-                                        class="btn btn-primary w-full justify-center"
-                                        on:click=move |_| set_eval_dialog_open.set(true)
-                                    >
-                                        "OPEN_EVALUATION_LAB"
-                                    </button>
-                                    <button
-                                        class="btn w-full justify-center"
-                                        on:click=clear_saved
-                                    >
-                                        "CLEAR_SAVED_CONFIG"
-                                    </button>
-                                    {move || {
-                                        save_status
-                                            .get()
-                                            .map(|(ok, msg)| {
-                                                let cls = if ok { "text-emerald-500" } else { "text-red-500" };
-                                                view! { <div class=format!("tech-label mt-2 {}", cls)>{msg}</div> }
-                                            })
-                                    }}
+                                    <div class="flex-1"></div>
+                                    <div class="space-y-4">
+                                        <button
+                                            class="btn btn-primary w-full justify-center"
+                                            on:click=move |_| set_eval_dialog_open.set(true)
+                                        >
+                                            "OPEN_EVALUATION_LAB"
+                                        </button>
+                                        <button
+                                            class="btn w-full justify-center"
+                                            on:click=clear_saved
+                                        >
+                                            "CLEAR_SAVED_CONFIG"
+                                        </button>
+                                        {move || {
+                                            save_status
+                                                .get()
+                                                .map(|(ok, msg)| {
+                                                    let cls = if ok { "text-emerald-500" } else { "text-red-500" };
+                                                    view! { <div class=format!("tech-label mt-2 {}", cls)>{msg}</div> }
+                                                })
+                                        }}
+                                    </div>
                                 </section>
 
                                 <TuningPanel
@@ -375,74 +387,72 @@ fn PostDetailView(
                                     committed=override_config
                                     set_committed=set_override_config
                                 />
-
                             </div>
 
-                            <div class="lg:col-span-2 space-y-6">
-                                <section class="card-outer p-4 space-y-3">
-                                    <div class="flex items-center justify-between gap-3">
-                                        <div class="flex flex-col">
-                                            <span class="tech-label">"evaluation.history"</span>
-                                            <span class="tech-label opacity-50">"SAVED_RUNS"</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            class="btn px-3 py-1 text-xs"
-                                            on:click=move |_| set_history_refresh.update(|v| *v += 1)
-                                        >
-                                            "↻"
-                                        </button>
+                            <section class="card-outer p-4 space-y-3">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="flex flex-col">
+                                        <span class="tech-label">"evaluation.history"</span>
+                                        <span class="tech-label opacity-50">"SAVED_RUNS"</span>
                                     </div>
-                                    <Suspense fallback=|| view! { <p class="tech-label animate-pulse">"LOADING_HISTORY..."</p> }>
-                                        {move || {
-                                            evaluation_history
-                                                .get()
-                                                .map(|res| match res {
-                                                    Ok(history) => view! {
-                                                        <EvaluationHistory
-                                                            slug=slug.get_value()
-                                                            history=history
-                                                            set_eval_result=set_eval_result
-                                                        />
-                                                    }.into_any(),
-                                                    Err(e) => view! {
-                                                        <div class="tech-label log-line-error">
-                                                            {format!("EVALUATION_HISTORY_FAULT: {e}")}
-                                                        </div>
-                                                    }.into_any(),
-                                                })
-                                        }}
-                                    </Suspense>
-                                </section>
-                                {move || {
-                                    eval_result
-                                        .get()
-                                        .map(|res| match res {
-                                            Ok(result) => view! {
-                                                <section class="card-outer p-4 space-y-4">
-                                                    <EvaluationResults
-                                                        result=result
+                                    <button
+                                        type="button"
+                                        class="btn px-3 py-1 text-xs"
+                                        on:click=move |_| set_history_refresh.update(|v| *v += 1)
+                                    >
+                                        "↻"
+                                    </button>
+                                </div>
+                                <Suspense fallback=|| view! { <p class="tech-label animate-pulse">"LOADING_HISTORY..."</p> }>
+                                    {move || {
+                                        evaluation_history
+                                            .get()
+                                            .map(|res| match res {
+                                                Ok(history) => view! {
+                                                    <EvaluationHistory
                                                         slug=slug.get_value()
-                                                        current_config=effective_chunking
-                                                        set_override_config=set_override_config
-                                                        set_save_status=set_save_status
+                                                        history=history
+                                                        set_eval_result=set_eval_result
                                                     />
-                                                </section>
-                                            }.into_any(),
-                                            Err(e) => view! {
-                                                <div class="tech-label log-line-error card-outer p-4">
-                                                    {format!("EVALUATION_FAULT: {e}")}
-                                                </div>
-                                            }.into_any(),
-                                        })
-                                        .unwrap_or_else(|| view! {
-                                            <div class="card-outer p-8 flex flex-col items-center justify-center border-dashed opacity-50">
-                                                <span class="tech-label mb-2">"NO_RECENT_EVALUATION"</span>
-                                                <p class="text-xs text-center">"Run an evaluation in the laboratory to see comparative metrics here."</p>
+                                                }.into_any(),
+                                                Err(e) => view! {
+                                                    <div class="tech-label log-line-error">
+                                                        {format!("EVALUATION_HISTORY_FAULT: {e}")}
+                                                    </div>
+                                                }.into_any(),
+                                            })
+                                    }}
+                                </Suspense>
+                            </section>
+
+                            {move || {
+                                eval_result
+                                    .get()
+                                    .map(|res| match res {
+                                        Ok(result) => view! {
+                                            <section class="card-outer p-4 space-y-4">
+                                                <EvaluationResults
+                                                    result=result
+                                                    slug=slug.get_value()
+                                                    current_config=effective_chunking
+                                                    set_override_config=set_override_config
+                                                    set_save_status=set_save_status
+                                                />
+                                            </section>
+                                        }.into_any(),
+                                        Err(e) => view! {
+                                            <div class="tech-label log-line-error card-outer p-4">
+                                                {format!("EVALUATION_FAULT: {e}")}
                                             </div>
-                                        }.into_any())
-                                }}
-                            </div>
+                                        }.into_any(),
+                                    })
+                                    .unwrap_or_else(|| view! {
+                                        <div class="card-outer p-8 flex flex-col items-center justify-center border-dashed opacity-50">
+                                            <span class="tech-label mb-2">"NO_RECENT_EVALUATION"</span>
+                                            <p class="text-xs text-center">"Run an evaluation in the laboratory to see comparative metrics here."</p>
+                                        </div>
+                                    }.into_any())
+                            }}
                         </div>
                     }.into_any(),
 
@@ -461,9 +471,23 @@ fn PostDetailView(
                                 })}
                             </div>
                             {chunk_preview_notice.clone().map(|notice| view! {
-                                <div class="card-outer p-4 tech-label !text-amber-400 border-amber-400/50">
-                                    {notice}
-                                </div>
+                                <section class="card-outer p-4 border-l-2 border-l-amber-400">
+                                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                        <div class="min-w-0 space-y-1">
+                                            <div class="tech-label !text-amber-400">"LLM_PREVIEW_UNAVAILABLE"</div>
+                                            <p class="text-xs opacity-70 max-w-3xl">
+                                                {notice}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="btn px-4 self-start lg:self-center shrink-0"
+                                            on:click=generate_chunk_preview
+                                        >
+                                            "GENERATE_WITH_CURRENT_CONFIG"
+                                        </button>
+                                    </div>
+                                </section>
                             })}
                             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {chunks

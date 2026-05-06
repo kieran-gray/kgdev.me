@@ -84,6 +84,7 @@ impl PostService {
         &self,
         slug: &str,
         chunking_override: Option<ChunkingConfig>,
+        force_chunk_preview: bool,
     ) -> Result<PostDetailDto, AppError> {
         let blog_post = self.blog_source.fetch(slug).await?;
         let post = Post::try_new(blog_post)?;
@@ -104,8 +105,9 @@ impl PostService {
             })
             .unwrap_or(true);
 
-        let skip_saved_llm_preview =
-            chunking_override.is_none() && effective.strategy == ChunkStrategy::Llm;
+        let skip_saved_llm_preview = !force_chunk_preview
+            && chunking_override.is_none()
+            && effective.strategy == ChunkStrategy::Llm;
         let (chunked_post, chunk_preview_notice) = if skip_saved_llm_preview {
             (
                 crate::server::application::chunking::ChunkedPost {
@@ -346,7 +348,7 @@ mod tests {
             post_chunking_service(),
         );
 
-        let detail = svc.get_post_detail("a", None).await.unwrap();
+        let detail = svc.get_post_detail("a", None, false).await.unwrap();
 
         assert_eq!(detail.slug, "a");
         assert!(detail.is_dirty);
@@ -371,7 +373,7 @@ mod tests {
             post_chunking_service(),
         );
 
-        let detail = svc.get_post_detail("a", None).await.unwrap();
+        let detail = svc.get_post_detail("a", None, false).await.unwrap();
 
         let glossary_previews: Vec<_> = detail
             .chunk_preview
@@ -404,7 +406,10 @@ mod tests {
             max_section_tokens: 100,
             ..ChunkingConfig::default()
         };
-        let detail = svc.get_post_detail("a", Some(override_cfg)).await.unwrap();
+        let detail = svc
+            .get_post_detail("a", Some(override_cfg), false)
+            .await
+            .unwrap();
         assert_eq!(detail.effective_chunking, override_cfg);
         assert!(detail.chunk_preview.len() > 1);
     }
@@ -427,7 +432,7 @@ mod tests {
             post_chunking_service(),
         );
 
-        let detail = svc.get_post_detail("a", None).await.unwrap();
+        let detail = svc.get_post_detail("a", None, false).await.unwrap();
 
         assert_eq!(detail.effective_chunking, llm_config);
         assert_eq!(detail.post_chunking_config, Some(llm_config));
@@ -453,7 +458,7 @@ mod tests {
             post_chunking_service(),
         );
 
-        let detail = svc.get_post_detail("a", None).await.unwrap();
+        let detail = svc.get_post_detail("a", None, false).await.unwrap();
         assert!(!detail.is_dirty);
     }
 
@@ -472,7 +477,10 @@ mod tests {
             post_chunking_service(),
         );
 
-        let err = svc.get_post_detail("absent", None).await.unwrap_err();
+        let err = svc
+            .get_post_detail("absent", None, false)
+            .await
+            .unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
     }
 }
