@@ -3,13 +3,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::server::application::chunking::{
-    ChunkOutput, MarkdownBackedChunker, TextChunker, TokenBudget,
-};
-use crate::server::application::markdown::TextUnit;
-use crate::server::application::ports::{
-    ChatClient, ChatRequest, ChatResponseFormat, MarkdownParser, Tokenizer,
-};
+use crate::server::application::chunking::{ChunkOutput, DocumentChunker, TokenBudget};
+use crate::server::application::markdown::{Document, TextUnit};
+use crate::server::application::ports::{ChatClient, ChatRequest, ChatResponseFormat, Tokenizer};
 use crate::server::application::AppError;
 use crate::shared::{ChunkStrategy, ChunkingConfig, SettingsDto};
 
@@ -39,31 +35,19 @@ struct MicroChunk {
 pub struct LlmChunker {
     chat_client: Arc<dyn ChatClient>,
     settings: Arc<RwLock<SettingsDto>>,
-    markdown_parser: Arc<dyn MarkdownParser>,
 }
 
 impl LlmChunker {
-    pub fn create(
-        chat_client: Arc<dyn ChatClient>,
-        settings: Arc<RwLock<SettingsDto>>,
-        markdown_parser: Arc<dyn MarkdownParser>,
-    ) -> Self {
+    pub fn create(chat_client: Arc<dyn ChatClient>, settings: Arc<RwLock<SettingsDto>>) -> Self {
         Self {
             chat_client,
             settings,
-            markdown_parser,
         }
     }
 }
 
-impl MarkdownBackedChunker for LlmChunker {
-    fn markdown_parser(&self) -> &dyn MarkdownParser {
-        self.markdown_parser.as_ref()
-    }
-}
-
 #[async_trait]
-impl TextChunker for LlmChunker {
+impl DocumentChunker for LlmChunker {
     fn strategy(&self) -> ChunkStrategy {
         ChunkStrategy::Llm
     }
@@ -71,13 +55,13 @@ impl TextChunker for LlmChunker {
     async fn chunk(
         &self,
         config: ChunkingConfig,
-        source: &str,
+        source: &Document,
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
         let target_tokens = config.target_tokens.max(1) as usize;
         let micro_size = config.llm_micro_chunk_tokens.max(32) as usize;
         let budget = TokenBudget::new(tokenizer);
-        let units = self.parse_markdown(source)?.llm_text_units();
+        let units = source.llm_text_units();
         let micro_chunks = split_into_micro_chunks(units, micro_size, &budget)?;
 
         if micro_chunks.is_empty() {
@@ -459,7 +443,8 @@ fn parse_atx_heading(line: &str) -> Option<(usize, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::application::test_support::MockTokenizer;
+    use crate::server::application::ports::MarkdownParser;
+use crate::server::application::test_support::MockTokenizer;
     use crate::server::infrastructure::markdown::MarkdownRsParser;
 
     fn tokenizer() -> MockTokenizer {

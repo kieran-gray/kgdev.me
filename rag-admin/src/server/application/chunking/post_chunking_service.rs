@@ -50,7 +50,7 @@ impl PostChunkingService {
     ) -> Result<ChunkedPost, AppError> {
         let body_chunks = self
             .chunking_engine
-            .chunk_text(config, post.markdown_body())
+            .chunk_markdown(config, post.markdown_body())
             .await?;
         let glossary_chunks = if include_glossary {
             post.glossary_chunks(body_chunks.len() as u32)

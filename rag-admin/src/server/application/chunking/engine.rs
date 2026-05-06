@@ -2,31 +2,33 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     server::application::{
-        chunking::{ports::TextChunker, ChunkOutput},
-        ports::Tokenizer,
+        chunking::{ports::DocumentChunker, ChunkOutput},
+        ports::{MarkdownParser, Tokenizer},
         AppError,
     },
     shared::{ChunkStrategy, ChunkingConfig},
 };
 
 pub struct ChunkingEngine {
-    chunkers: BTreeMap<ChunkStrategy, Arc<dyn TextChunker>>,
+    chunkers: BTreeMap<ChunkStrategy, Arc<dyn DocumentChunker>>,
+    markdown_parser: Arc<dyn MarkdownParser>,
     tokenizer: Arc<dyn Tokenizer>,
 }
 
 impl ChunkingEngine {
-    pub fn new(tokenizer: Arc<dyn Tokenizer>) -> Self {
+    pub fn new(tokenizer: Arc<dyn Tokenizer>, markdown_parser: Arc<dyn MarkdownParser>) -> Self {
         Self {
             chunkers: BTreeMap::new(),
+            markdown_parser,
             tokenizer,
         }
     }
 
-    pub fn add(&mut self, chunker: Arc<dyn TextChunker>) {
+    pub fn add(&mut self, chunker: Arc<dyn DocumentChunker>) {
         self.chunkers.insert(chunker.strategy(), chunker);
     }
 
-    pub async fn chunk_text(
+    pub async fn chunk_markdown(
         &self,
         config: ChunkingConfig,
         source: &str,
@@ -38,8 +40,10 @@ impl ChunkingEngine {
             ))
         })?;
 
+        let markdown = self.markdown_parser.parse(source)?;
+
         let chunks = chunker
-            .chunk(config, source, self.tokenizer.as_ref())
+            .chunk(config, &markdown, self.tokenizer.as_ref())
             .await?;
         Ok(chunks)
     }

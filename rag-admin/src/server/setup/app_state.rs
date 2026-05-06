@@ -87,12 +87,11 @@ impl AppState {
 
         let embedding_service = EmbeddingService::new(embedder.clone());
 
-        let mut chunking_engine = ChunkingEngine::new(tokenizer.clone());
+        let mut chunking_engine = ChunkingEngine::new(tokenizer.clone(), markdown_parser);
         register_builtin_chunkers(
             &mut chunking_engine,
             BuiltinChunkerDeps {
                 chat_client,
-                markdown_parser,
                 settings: settings.clone(),
             },
         );

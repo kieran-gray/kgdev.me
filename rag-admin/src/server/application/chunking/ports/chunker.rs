@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::{
     server::{
-        application::{markdown::Document, ports::{MarkdownParser, Tokenizer}, AppError},
+        application::{markdown::Document, ports::Tokenizer, AppError},
         domain::Chunk,
     },
     shared::{ChunkStrategy, ChunkingConfig},
@@ -32,21 +32,13 @@ impl From<ChunkOutput> for Chunk {
 }
 
 #[async_trait]
-pub trait TextChunker: Send + Sync {
+pub trait DocumentChunker: Send + Sync {
     fn strategy(&self) -> ChunkStrategy;
 
     async fn chunk(
         &self,
         config: ChunkingConfig,
-        source: &str,
+        source: &Document,
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError>;
-}
-
-pub trait MarkdownBackedChunker {
-    fn markdown_parser(&self) -> &dyn MarkdownParser;
-
-    fn parse_markdown(&self, source: &str) -> Result<Document, AppError> {
-        self.markdown_parser().parse(source)
-    }
 }

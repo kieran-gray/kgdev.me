@@ -1,33 +1,15 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 
-use crate::server::application::chunking::{
-    ChunkOutput, MarkdownBackedChunker, TextChunker, TokenBudget,
-};
-use crate::server::application::markdown::SegmentBlock;
-use crate::server::application::ports::{MarkdownParser, Tokenizer};
+use crate::server::application::chunking::{ChunkOutput, DocumentChunker, TokenBudget};
+use crate::server::application::markdown::{Document, SegmentBlock};
+use crate::server::application::ports::Tokenizer;
 use crate::server::application::AppError;
 use crate::shared::{ChunkStrategy, ChunkingConfig};
 
-pub struct BertChunker {
-    markdown_parser: Arc<dyn MarkdownParser>,
-}
-
-impl BertChunker {
-    pub fn new(markdown_parser: Arc<dyn MarkdownParser>) -> Self {
-        Self { markdown_parser }
-    }
-}
-
-impl MarkdownBackedChunker for BertChunker {
-    fn markdown_parser(&self) -> &dyn MarkdownParser {
-        self.markdown_parser.as_ref()
-    }
-}
+pub struct BertChunker;
 
 #[async_trait]
-impl TextChunker for BertChunker {
+impl DocumentChunker for BertChunker {
     fn strategy(&self) -> ChunkStrategy {
         ChunkStrategy::Bert
     }
@@ -35,7 +17,7 @@ impl TextChunker for BertChunker {
     async fn chunk(
         &self,
         config: ChunkingConfig,
-        source: &str,
+        source: &Document,
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
         let target = config.target_tokens.max(1) as usize;
@@ -43,7 +25,7 @@ impl TextChunker for BertChunker {
         let min = config.min_tokens as usize;
         let budget = TokenBudget::new(tokenizer);
 
-        let raw = self.parse_markdown(source)?.bert_segments();
+        let raw = source.bert_segments();
         let packed = pack_segments(raw, target, &budget)?;
         let split = split_oversized(packed, target, overlap, min, &budget)?;
 
@@ -226,16 +208,19 @@ fn split_oversized(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
+    use crate::server::application::ports::MarkdownParser;
     use crate::server::application::test_support::MockTokenizer;
+    use crate::server::infrastructure::markdown::MarkdownRsParser;
     use crate::shared::ChunkStrategy;
 
     fn chunker() -> BertChunker {
-        BertChunker::new(Arc::new(
-            crate::server::infrastructure::markdown::MarkdownRsParser,
-        ))
+        BertChunker {}
+    }
+
+    fn to_markdown(source: &str) -> Document {
+        let markdown_parser = MarkdownRsParser {};
+        markdown_parser.parse(source).unwrap()
     }
 
     fn cfg() -> ChunkingConfig {
@@ -250,7 +235,7 @@ mod tests {
         let chunker = chunker();
         let tokenizer = MockTokenizer::new();
 
-        let src = "## A\nfirst paragraph.\n\n## B\nsecond paragraph.";
+        let src = &to_markdown("## A\nfirst paragraph.\n\n## B\nsecond paragraph.");
         let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
         assert!(!chunks.is_empty());
         for (i, c) in chunks.iter().enumerate() {
@@ -263,7 +248,7 @@ mod tests {
         let chunker = chunker();
         let tokenizer = MockTokenizer::new();
 
-        let src = "# Top\n\nintro\n\n## Sub\n\ndetail";
+        let src = &to_markdown("# Top\n\nintro\n\n## Sub\n\ndetail");
         let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
         let headings: Vec<&str> = chunks.iter().map(|c| c.heading.as_str()).collect();
         assert!(headings.iter().any(|h| h.contains("Top")));
@@ -279,7 +264,7 @@ mod tests {
             .map(|i| format!("let x{i} = {i};"))
             .collect::<Vec<_>>()
             .join("\n");
-        let src = format!("## Code\n\n```rust\n{code}\n```\n");
+        let src = &to_markdown(&format!("## Code\n\n```rust\n{code}\n```\n"));
         let chunks = chunker.chunk(cfg(), &src, &tokenizer).await.unwrap();
         for c in chunks.iter().filter(|c| c.text.contains("```")) {
             let opens = c.text.matches("```").count();
@@ -293,7 +278,7 @@ mod tests {
         let tokenizer = MockTokenizer::new();
 
         let para = "Lorem ipsum dolor sit amet. ".repeat(120);
-        let src = format!("## Big\n\n{para}");
+        let src = &to_markdown(&format!("## Big\n\n{para}"));
         let big = ChunkingConfig {
             strategy: ChunkStrategy::Bert,
             target_tokens: 384,

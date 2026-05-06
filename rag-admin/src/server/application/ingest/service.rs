@@ -375,8 +375,9 @@ mod tests {
                 ..SettingsDto::default()
             }));
 
-            let mut chunking_engine = ChunkingEngine::new(Arc::new(MockTokenizer::new()));
-            chunking_engine.add(Arc::new(SectionChunker::new(markdown_parser())));
+            let mut chunking_engine =
+                ChunkingEngine::new(Arc::new(MockTokenizer::new()), markdown_parser());
+            chunking_engine.add(Arc::new(SectionChunker {}));
             let post_chunking_service = PostChunkingService::new(Arc::new(chunking_engine));
 
             let embedding_service = EmbeddingService::new(embedder.clone());

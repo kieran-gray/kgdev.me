@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 
 use crate::{
     server::application::{
-        chunking::{ChunkOutput, MarkdownBackedChunker, TextChunker, TokenBudget},
-        markdown::SectionBlock,
-        ports::{MarkdownParser, Tokenizer},
+        chunking::{ChunkOutput, DocumentChunker, TokenBudget},
+        markdown::{Document, SectionBlock},
+        ports::Tokenizer,
         AppError,
     },
     shared::{ChunkStrategy, ChunkingConfig},
@@ -14,24 +12,10 @@ use crate::{
 
 const SECTION_CUT_DEPTH: usize = 3;
 
-pub struct SectionChunker {
-    markdown_parser: Arc<dyn MarkdownParser>,
-}
-
-impl SectionChunker {
-    pub fn new(markdown_parser: Arc<dyn MarkdownParser>) -> Self {
-        Self { markdown_parser }
-    }
-}
-
-impl MarkdownBackedChunker for SectionChunker {
-    fn markdown_parser(&self) -> &dyn MarkdownParser {
-        self.markdown_parser.as_ref()
-    }
-}
+pub struct SectionChunker;
 
 #[async_trait]
-impl TextChunker for SectionChunker {
+impl DocumentChunker for SectionChunker {
     fn strategy(&self) -> ChunkStrategy {
         ChunkStrategy::Section
     }
@@ -39,12 +23,12 @@ impl TextChunker for SectionChunker {
     async fn chunk(
         &self,
         config: ChunkingConfig,
-        source: &str,
+        source: &Document,
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
         let budget = TokenBudget::new(tokenizer);
         let max_tokens = config.max_section_tokens();
-        let sections = self.parse_markdown(source)?.sections(SECTION_CUT_DEPTH);
+        let sections = source.sections(SECTION_CUT_DEPTH);
         let mut split = Vec::new();
         for section in sections {
             split.extend(split_oversized(section, max_tokens, &budget)?);
@@ -122,14 +106,19 @@ fn last_double_newline(window: &[char]) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use crate::server::{
+        application::ports::MarkdownParser, infrastructure::markdown::MarkdownRsParser,
+    };
 
     use super::*;
 
     fn chunker() -> SectionChunker {
-        SectionChunker::new(Arc::new(
-            crate::server::infrastructure::markdown::MarkdownRsParser,
-        ))
+        SectionChunker {}
+    }
+
+    fn to_markdown(source: &str) -> Document {
+        let markdown_parser = MarkdownRsParser {};
+        markdown_parser.parse(source).unwrap()
     }
 
     fn cfg() -> ChunkingConfig {
@@ -138,7 +127,7 @@ mod tests {
 
     #[tokio::test]
     async fn one_chunk_per_h2() {
-        let src = "## A\n\nfirst paragraph.\n\n## B\n\nsecond paragraph.";
+        let src = &to_markdown("## A\n\nfirst paragraph.\n\n## B\n\nsecond paragraph.");
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
         let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
@@ -149,7 +138,7 @@ mod tests {
 
     #[tokio::test]
     async fn h4_does_not_cut() {
-        let src = "## Top\n\nintro\n\n#### Deep\n\nstill same chunk.";
+        let src = &to_markdown("## Top\n\nintro\n\n#### Deep\n\nstill same chunk.");
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
         let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
@@ -160,7 +149,7 @@ mod tests {
 
     #[tokio::test]
     async fn fenced_heading_does_not_cut() {
-        let src = "## A\n\n```md\n## not a real heading\n```\n\nbody";
+        let src = &to_markdown("## A\n\n```md\n## not a real heading\n```\n\nbody");
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
         let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
@@ -172,7 +161,7 @@ mod tests {
     async fn oversized_section_splits() {
         let max = cfg().max_section_tokens as usize;
         let para = "x ".repeat(max / 2);
-        let src = format!("## Big\n\n{para}\n\n{para}\n\n{para}");
+        let src = &to_markdown(&format!("## Big\n\n{para}\n\n{para}\n\n{para}"));
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
         let chunks = chunker.chunk(cfg(), &src, &tokenizer).await.unwrap();
@@ -191,7 +180,7 @@ mod tests {
         let chunker = chunker();
 
         let para = "x ".repeat(300);
-        let src = format!("## Big\n\n{para}\n\n{para}\n\n{para}");
+        let src = &to_markdown(&format!("## Big\n\n{para}\n\n{para}\n\n{para}"));
         let big = ChunkingConfig {
             max_section_tokens: 480,
             ..Default::default()
@@ -208,7 +197,7 @@ mod tests {
 
     #[tokio::test]
     async fn heading_path_preserved() {
-        let src = "# Top\n\nintro\n\n## Sub\n\ndetail";
+        let src = &to_markdown("# Top\n\nintro\n\n## Sub\n\ndetail");
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
         let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
@@ -220,7 +209,7 @@ mod tests {
 
     #[tokio::test]
     async fn skipped_heading_levels() {
-        let src = "# Top\n\n### Deep";
+        let src = &to_markdown("# Top\n\n### Deep");
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
         let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
