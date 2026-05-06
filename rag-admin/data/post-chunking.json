@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "posts": {
+    "blog-view-counter": {
+      "strategy": "section",
+      "max_section_tokens": 256,
+      "target_tokens": 384,
+      "overlap_tokens": 64,
+      "min_tokens": 96,
+      "llm_micro_chunk_tokens": 96
+    },
+    "event-sourcing-cloudflare": {
+      "strategy": "llm",
+      "max_section_tokens": 480,
+      "target_tokens": 384,
+      "overlap_tokens": 64,
+      "min_tokens": 96,
+      "llm_micro_chunk_tokens": 96
+    },
+    "quest-exactly-once-p1": {
+      "strategy": "llm",
+      "max_section_tokens": 480,
+      "target_tokens": 384,
+      "overlap_tokens": 64,
+      "min_tokens": 96,
+      "llm_micro_chunk_tokens": 64
+    },
+    "quest-exactly-once-p2": {
+      "strategy": "section",
+      "max_section_tokens": 256,
+      "target_tokens": 384,
+      "overlap_tokens": 64,
+      "min_tokens": 96,
+      "llm_micro_chunk_tokens": 96
+    }
+  }
+}

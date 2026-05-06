@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 
-use crate::server_fns::list_posts;
+use crate::server_functions::posts::list_posts;
 use crate::shared::PostSummary;
 
 #[component]

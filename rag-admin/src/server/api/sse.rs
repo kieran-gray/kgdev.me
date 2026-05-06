@@ -8,7 +8,7 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::Extension;
 use futures_util::stream::Stream;
 
-use crate::server::application::job_registry::JobMessage;
+use crate::server::application::JobMessage;
 use crate::server::setup::AppState;
 use crate::shared::LogEvent;
 

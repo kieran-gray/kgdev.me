@@ -1,10 +1,11 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
-use crate::server_fns::{load_settings, save_settings};
+use crate::server_functions::settings::{load_settings, save_settings};
 use crate::shared::{
     catalog_for_backend, CatalogEntry, ChunkStrategy, ChunkingConfig, EmbedderBackend,
-    EmbeddingModel, SettingsDto, VectorIndexConfig,
+    EmbeddingModel, EvaluationGenerationBackend, EvaluationSettings, SettingsDto,
+    VectorIndexConfig,
 };
 
 #[component]
@@ -49,6 +50,7 @@ fn SettingsForm(initial: SettingsDto) -> impl IntoView {
     let (vector_index, set_vector_index) = signal(initial.vector_index);
     let (model, set_model) = signal(initial.embedding_model);
     let (default_chunking, set_default_chunking) = signal(initial.default_chunking);
+    let (evaluation, set_evaluation) = signal(initial.evaluation);
 
     let (status, set_status) = signal::<Option<(bool, String)>>(None);
 
@@ -63,6 +65,7 @@ fn SettingsForm(initial: SettingsDto) -> impl IntoView {
             vector_index: vector_index.get(),
             embedding_model: model.get(),
             default_chunking: default_chunking.get(),
+            evaluation: evaluation.get(),
         };
         spawn_local(async move {
             match save_settings(payload).await {
@@ -88,6 +91,11 @@ fn SettingsForm(initial: SettingsDto) -> impl IntoView {
             <ChunkingDefaultsSection
                 config=default_chunking
                 set_config=set_default_chunking
+            />
+
+            <EvaluationDefaultsSection
+                config=evaluation
+                set_config=set_evaluation
             />
 
             <div class="card-outer p-6 space-y-4">
@@ -147,6 +155,139 @@ fn SettingsForm(initial: SettingsDto) -> impl IntoView {
                 }}
             </div>
         </form>
+    }
+}
+
+#[component]
+fn EvaluationDefaultsSection(
+    config: ReadSignal<EvaluationSettings>,
+    set_config: WriteSignal<EvaluationSettings>,
+) -> impl IntoView {
+    view! {
+        <div class="card-outer p-6 space-y-4">
+            <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
+                <span class="tech-label">"chunking.evaluation"</span>
+                <p class="tech-label opacity-50 mt-2">
+                    "Defaults for synthetic chunking evaluation. Generation is Ollama-first so local runs do not spend Workers AI credits."
+                </p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Field label="GENERATION_BACKEND" hint="ollama is the supported local default">
+                    <select
+                        class="input font-mono text-sm"
+                        prop:value=move || config.get().generation_backend.as_str().to_string()
+                        on:change=move |e| {
+                            let v = event_target_value(&e);
+                            set_config.update(|c| {
+                                c.generation_backend = match v.as_str() {
+                                    "workers_ai" => EvaluationGenerationBackend::WorkersAi,
+                                    _ => EvaluationGenerationBackend::Ollama,
+                                };
+                            });
+                        }
+                    >
+                        <option value="ollama">"ollama"</option>
+                        <option value="workers_ai" disabled=true>"workers_ai (later)"</option>
+                    </select>
+                </Field>
+                <Field label="OLLAMA_BASE_URL" hint="local Ollama daemon URL">
+                    <input
+                        class="input font-mono text-sm"
+                        prop:value=move || config.get().ollama_base_url
+                        on:input=move |e| {
+                            let v = event_target_value(&e);
+                            set_config.update(|c| c.ollama_base_url = v);
+                        }
+                    />
+                </Field>
+                <Field label="GENERATION_MODEL" hint="chat model used to create questions">
+                    <input
+                        class="input font-mono text-sm"
+                        prop:value=move || config.get().generation_model
+                        on:input=move |e| {
+                            let v = event_target_value(&e);
+                            set_config.update(|c| c.generation_model = v);
+                        }
+                    />
+                </Field>
+                <Field label="QUESTION_COUNT" hint="target generated questions per post">
+                    <input
+                        class="input font-mono text-sm"
+                        type="number"
+                        min="1"
+                        prop:value=move || config.get().question_count.to_string()
+                        on:input=move |e| {
+                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
+                            set_config.update(|c| c.question_count = v);
+                        }
+                    />
+                </Field>
+                <Field label="TOP_K" hint="chunks retrieved per synthetic question">
+                    <input
+                        class="input font-mono text-sm"
+                        type="number"
+                        min="1"
+                        prop:value=move || config.get().top_k.to_string()
+                        on:input=move |e| {
+                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
+                            set_config.update(|c| c.top_k = v);
+                        }
+                    />
+                </Field>
+                <Field label="MIN_SCORE_MILLI" hint="0-1000 cosine threshold for retrieved chunks">
+                    <input
+                        class="input font-mono text-sm"
+                        type="number"
+                        min="0"
+                        max="1000"
+                        prop:value=move || config.get().min_score_milli.to_string()
+                        on:input=move |e| {
+                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
+                            set_config.update(|c| c.min_score_milli = v);
+                        }
+                    />
+                </Field>
+                <Field label="EXCERPT_THRESHOLD" hint="0-1000; filters weak query/reference pairs">
+                    <input
+                        class="input font-mono text-sm"
+                        type="number"
+                        min="0"
+                        max="1000"
+                        prop:value=move || config.get().excerpt_similarity_threshold_milli.to_string()
+                        on:input=move |e| {
+                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
+                            set_config.update(|c| c.excerpt_similarity_threshold_milli = v);
+                        }
+                    />
+                </Field>
+                <Field label="DUPLICATE_THRESHOLD" hint="0-1000; filters near-duplicate questions">
+                    <input
+                        class="input font-mono text-sm"
+                        type="number"
+                        min="0"
+                        max="1000"
+                        prop:value=move || config.get().duplicate_similarity_threshold_milli.to_string()
+                        on:input=move |e| {
+                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
+                            set_config.update(|c| c.duplicate_similarity_threshold_milli = v);
+                        }
+                    />
+                </Field>
+                <Field label="INCLUDE_GLOSSARY" hint="include glossary chunks as retrieval distractors">
+                    <select
+                        class="input font-mono text-sm"
+                        prop:value=move || if config.get().include_glossary { "true" } else { "false" }
+                        on:change=move |e| {
+                            let v = event_target_value(&e);
+                            set_config.update(|c| c.include_glossary = v == "true");
+                        }
+                    >
+                        <option value="true">"true"</option>
+                        <option value="false">"false"</option>
+                    </select>
+                </Field>
+            </div>
+        </div>
     }
 }
 
@@ -413,79 +554,54 @@ fn ChunkingDefaultsSection(
                 <span class="tech-label">"chunking.defaults"</span>
                 <p class="tech-label opacity-50 mt-2">
                     "Default chunking parameters for ingest. \
-                     Per-post overrides can be applied from the post detail page (one-shot, not persisted)."
+                     Per-post overrides can be previewed and saved from the post detail page."
                 </p>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Field label="STRATEGY" hint="bert = sliding window w/ overlap, section = one chunk per H2/H3">
+                <Field label="STRATEGY" hint="bert = sliding window w/ overlap, section = one chunk per H2/H3, llm = semantic boundaries over micro chunks">
                     <select
                         class="input font-mono text-sm"
-                        prop:value=move || match config.get().strategy {
-                            ChunkStrategy::Bert => "bert",
-                            ChunkStrategy::Section => "section",
-                        }
+                        prop:value=move || config.get().strategy.as_str()
                         on:change=move |e| {
                             let v = event_target_value(&e);
                             set_config.update(|c| {
-                                c.strategy = match v.as_str() {
-                                    "section" => ChunkStrategy::Section,
-                                    _ => ChunkStrategy::Bert,
-                                };
+                                let strategy = ChunkStrategy::from_id(&v).unwrap_or_default();
+                                *c = ChunkingConfig::for_strategy(strategy);
                             });
                         }
                     >
-                        <option value="bert">"bert"</option>
-                        <option value="section">"section"</option>
+                        {ChunkStrategy::all()
+                            .iter()
+                            .map(|definition| view! {
+                                <option value=definition.id>{definition.label}</option>
+                            })
+                            .collect_view()}
                     </select>
                 </Field>
-                <Field label="MAX_SECTION_CHARS" hint="section: max chars per chunk before fallback split">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="1"
-                        prop:value=move || config.get().max_section_chars.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.max_section_chars = v);
-                        }
-                    />
-                </Field>
-                <Field label="TARGET_CHARS" hint="bert: target chunk size in chars">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="1"
-                        prop:value=move || config.get().target_chars.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.target_chars = v);
-                        }
-                    />
-                </Field>
-                <Field label="OVERLAP_CHARS" hint="bert: chars of overlap between adjacent chunks">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="0"
-                        prop:value=move || config.get().overlap_chars.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.overlap_chars = v);
-                        }
-                    />
-                </Field>
-                <Field label="MIN_CHARS" hint="bert: small trailing chunks merge with the previous one">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="0"
-                        prop:value=move || config.get().min_chars.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.min_chars = v);
-                        }
-                    />
-                </Field>
+                {move || {
+                    let params = config.get().strategy.definition().params;
+                    params
+                        .iter()
+                        .map(|param| {
+                            let key = param.key;
+                            let min = param.min;
+                            view! {
+                                <Field label=param.label hint=param.hint>
+                                    <input
+                                        class="input font-mono text-sm"
+                                        type="number"
+                                        min=min.to_string()
+                                        prop:value=move || config.get().param_value(key).to_string()
+                                        on:input=move |e| {
+                                            let v: u32 = event_target_value(&e).parse().unwrap_or(min);
+                                            set_config.update(|c| c.set_param_value(key, v.max(min)));
+                                        }
+                                    />
+                                </Field>
+                            }
+                        })
+                        .collect_view()
+                }}
             </div>
         </div>
     }

@@ -5,7 +5,7 @@ use crate::shared::{LogEvent, LogLevel};
 #[component]
 pub fn LogPanel(events: ReadSignal<Vec<LogEvent>>) -> impl IntoView {
     view! {
-        <div class="log-pre min-h-[200px] bg-black/40">
+        <div class="log-pre h-full bg-black/40">
             {move || {
                 let events = events.get();
                 if events.is_empty() {

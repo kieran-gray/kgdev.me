@@ -29,6 +29,7 @@ impl EmbedderBackend {
 pub struct EmbeddingModel {
     pub backend: EmbedderBackend,
     pub id: String,
+    #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub dims: u32,
 }
 

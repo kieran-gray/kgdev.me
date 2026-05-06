@@ -7,10 +7,6 @@ use sha2::{Digest, Sha256};
 use super::{BlogPost, Chunk, GlossaryTerm, ManifestEntry};
 use crate::server::application::AppError;
 
-/// SHA-256 over `source_markdown` concatenated with the JSON serialization of
-/// the post's glossary terms. The frontend computes the same value and serves
-/// it as `contentHash`; field order on `GlossaryTerm`/`GlossarySource` keeps
-/// the two implementations in sync.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PostVersion(String);
@@ -63,10 +59,6 @@ impl PartialEq<String> for PostVersion {
     }
 }
 
-/// A `Post` aggregate: the fetched `BlogPost` plus its derived `PostVersion`.
-/// Owns the rules for dirty detection, glossary-chunk assembly, and vector
-/// metadata shaping. Construct with `Post::try_new` — it validates the
-/// invariant that slug and title are non-empty.
 #[derive(Debug)]
 pub struct Post {
     blog_post: BlogPost,
@@ -123,9 +115,6 @@ impl Post {
         }
     }
 
-    /// Build the glossary chunks that get appended after the body chunks.
-    /// `start_id` is the next chunk_id after the last body chunk, so that
-    /// every chunk in the post has a unique sequential id.
     pub fn glossary_chunks(&self, start_id: u32) -> Vec<Chunk> {
         self.blog_post
             .glossary_terms
@@ -249,6 +238,8 @@ mod tests {
             post_version: "deadbeef".into(),
             chunk_count: 1,
             ingested_at: "2026-01-01".into(),
+            chunking_config: None,
+            embedding_model: None,
         };
         assert!(p.is_dirty(Some(&entry)));
     }
@@ -260,6 +251,8 @@ mod tests {
             post_version: p.version().as_str().to_string(),
             chunk_count: 1,
             ingested_at: "2026-01-01".into(),
+            chunking_config: None,
+            embedding_model: None,
         };
         assert!(!p.is_dirty(Some(&entry)));
     }
