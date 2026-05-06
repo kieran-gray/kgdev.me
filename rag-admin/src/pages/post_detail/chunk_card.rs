@@ -4,6 +4,7 @@ use leptos::prelude::*;
 #[component]
 pub fn ChunkCard(chunk: ChunkPreview, strategy: ChunkStrategy, size_limit: u32) -> impl IntoView {
     let (show_tokens, set_show_tokens) = signal(false);
+    let _ = strategy;
 
     let prefix = if chunk.is_glossary {
         "GLOSSARY"
@@ -14,18 +15,9 @@ pub fn ChunkCard(chunk: ChunkPreview, strategy: ChunkStrategy, size_limit: u32) 
     let token_count = chunk.token_count;
     let heading = chunk.heading.clone();
 
-    let (length_label, count_label, over_limit) = match strategy {
-        ChunkStrategy::Bert | ChunkStrategy::Llm => (
-            format!("LENGTH: {text_length} CHARS"),
-            format!("TOKENS: {token_count}/{size_limit}"),
-            token_count > size_limit,
-        ),
-        ChunkStrategy::Section => (
-            format!("LENGTH: {text_length}/{size_limit} CHARS"),
-            format!("TOKENS: {token_count}"),
-            text_length > size_limit,
-        ),
-    };
+    let length_label = format!("TEXT_LENGTH: {text_length} CHARS");
+    let count_label = format!("TOKENS: {token_count}/{size_limit}");
+    let over_limit = token_count > size_limit;
 
     let tokens = StoredValue::new(chunk.tokens);
     let text_excerpt = StoredValue::new(chunk.text_excerpt);

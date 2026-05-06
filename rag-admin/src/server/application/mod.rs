@@ -5,8 +5,8 @@ pub mod evaluation;
 pub mod exceptions;
 pub mod ingest;
 pub mod job;
+pub mod markdown;
 pub mod ports;
-pub mod services;
 
 #[cfg(test)]
 pub mod test_support;

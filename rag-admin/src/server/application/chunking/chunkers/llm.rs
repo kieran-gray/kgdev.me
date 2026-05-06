@@ -3,22 +3,31 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use super::common::{fence_marker_of, parse_heading};
-use crate::server::application::chunking::{ChunkOutput, TextChunker};
-use crate::server::application::ports::{ChatClient, ChatRequest, ChatResponseFormat};
+use crate::server::application::chunking::{
+    ChunkOutput, MarkdownBackedChunker, TextChunker, TokenBudget,
+};
+use crate::server::application::markdown::TextUnit;
+use crate::server::application::ports::{
+    ChatClient, ChatRequest, ChatResponseFormat, MarkdownParser, Tokenizer,
+};
 use crate::server::application::AppError;
 use crate::shared::{ChunkStrategy, ChunkingConfig, SettingsDto};
 
-const SYSTEM_PROMPT: &str = "You are an assistant specialized in splitting text into \
-    thematically consistent sections. The text has been divided into chunks, each marked with \
-    <|start_chunk_X|> and <|end_chunk_X|> tags, where X is the chunk number. Your task is to \
-    identify the points where splits should occur, such that consecutive chunks of similar themes \
-    stay together. Respond with a list of chunk IDs where you believe a split should be made. \
-    For example, if chunks 1 and 2 belong together but chunk 3 starts a new topic, you would \
-    suggest a split after chunk 2. THE CHUNK IDs MUST BE IN ASCENDING ORDER. \
-    Your response should be in the form: 'split_after: 3, 5'.";
+const SYSTEM_PROMPT: &str = "You split blog text into compact, self-contained retrieval chunks. \
+    The text has been divided into numbered micro-chunks marked with <|start_chunk_X|> and \
+    <|end_chunk_X|> tags, where X is the chunk number. Choose split points so each final chunk is \
+    narrow enough to avoid irrelevant context, but complete enough that a retriever selecting only \
+    a few chunks can still recover the full evidence needed to answer detailed questions. Prefer \
+    compact evidence packages over broad thematic sections or isolated fragments. Split when the \
+    next micro-chunk starts a clearly independent claim, component, API, file path, responsibility, \
+    trade-off, example, or conclusion. Keep adjacent micro-chunks together when they form one \
+    answerable unit: a heading and its explanation, an intro sentence and its list, a sequence of \
+    steps, a code block and its explanation, or list items that are likely to be asked about \
+    together. Do not split so aggressively that a multi-part answer would require many tiny chunks. \
+    Respond only with the IDs of micro-chunks after which a split should occur. THE CHUNK IDs MUST \
+    BE IN ASCENDING ORDER. Your response should be in the form: 'split_after: 3, 5'.";
 
-const WINDOW_CHARS: usize = 3000;
+const WINDOW_TOKENS: usize = 1024;
 
 #[derive(Debug, Clone)]
 struct MicroChunk {
@@ -27,33 +36,29 @@ struct MicroChunk {
     char_end: usize,
 }
 
-#[derive(Debug, Clone)]
-struct TextUnit {
-    text: String,
-    char_start: usize,
-    char_end: usize,
-    atomic: bool,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct SourceLine<'a> {
-    raw: &'a str,
-    line: &'a str,
-    char_start: usize,
-    char_end: usize,
-}
-
 pub struct LlmChunker {
     chat_client: Arc<dyn ChatClient>,
     settings: Arc<RwLock<SettingsDto>>,
+    markdown_parser: Arc<dyn MarkdownParser>,
 }
 
 impl LlmChunker {
-    pub fn create(chat_client: Arc<dyn ChatClient>, settings: Arc<RwLock<SettingsDto>>) -> Self {
+    pub fn create(
+        chat_client: Arc<dyn ChatClient>,
+        settings: Arc<RwLock<SettingsDto>>,
+        markdown_parser: Arc<dyn MarkdownParser>,
+    ) -> Self {
         Self {
             chat_client,
             settings,
+            markdown_parser,
         }
+    }
+}
+
+impl MarkdownBackedChunker for LlmChunker {
+    fn markdown_parser(&self) -> &dyn MarkdownParser {
+        self.markdown_parser.as_ref()
     }
 }
 
@@ -67,9 +72,13 @@ impl TextChunker for LlmChunker {
         &self,
         config: ChunkingConfig,
         source: &str,
+        tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
-        let micro_size = config.llm_micro_chunk_chars.max(100) as usize;
-        let micro_chunks = split_into_micro_chunks(source, micro_size);
+        let target_tokens = config.target_tokens.max(1) as usize;
+        let micro_size = config.llm_micro_chunk_tokens.max(32) as usize;
+        let budget = TokenBudget::new(tokenizer);
+        let units = self.parse_markdown(source)?.llm_text_units();
+        let micro_chunks = split_into_micro_chunks(units, micro_size, &budget)?;
 
         if micro_chunks.is_empty() {
             return Ok(Vec::new());
@@ -83,8 +92,8 @@ impl TextChunker for LlmChunker {
             .generation_model
             .clone();
         let split_points =
-            find_split_points(&micro_chunks, self.chat_client.as_ref(), &model).await?;
-        let merged = merge_micro_chunks(&micro_chunks, &split_points);
+            find_split_points(&micro_chunks, self.chat_client.as_ref(), &model, &budget).await?;
+        let merged = merge_micro_chunks(&micro_chunks, &split_points, target_tokens, &budget)?;
 
         Ok(merged
             .into_iter()
@@ -128,215 +137,13 @@ fn trim_chunk_text(text: &str, char_start: usize, char_end: usize) -> (String, u
     )
 }
 
-fn split_into_micro_chunks(body: &str, target_chars: usize) -> Vec<MicroChunk> {
-    let target_chars = target_chars.max(1);
-    pack_text_units(split_into_text_units(body), target_chars)
-}
-
-fn split_into_text_units(body: &str) -> Vec<TextUnit> {
-    let mut units = Vec::new();
-    let lines = source_lines(body);
-    let mut idx = 0usize;
-    let mut prose = String::new();
-    let mut prose_start: Option<usize> = None;
-
-    while idx < lines.len() {
-        let line = lines[idx];
-
-        if let Some(marker) = fence_marker_of(line.line) {
-            flush_prose(&mut units, &mut prose, &mut prose_start);
-            let fence = collect_fenced_block(&lines, &mut idx, &marker);
-            push_unit(
-                &mut units,
-                fence.text,
-                fence.char_start,
-                fence.char_end,
-                true,
-            );
-            continue;
-        }
-
-        if parse_heading(line.line).is_some() {
-            flush_prose(&mut units, &mut prose, &mut prose_start);
-            push_unit(
-                &mut units,
-                line.raw.to_string(),
-                line.char_start,
-                line.char_end,
-                true,
-            );
-            continue;
-        }
-
-        if is_list_item(line.line) {
-            let list = collect_list_block(&lines, &mut idx);
-            if list_intro_should_bind(&prose) {
-                let start = prose_start.take().unwrap_or(list.char_start);
-                let mut text = std::mem::take(&mut prose);
-                text.push_str(&list.text);
-                push_unit(&mut units, text, start, list.char_end, true);
-            } else {
-                flush_prose(&mut units, &mut prose, &mut prose_start);
-                push_unit(&mut units, list.text, list.char_start, list.char_end, true);
-            }
-            continue;
-        }
-
-        if prose_start.is_none() {
-            prose_start = Some(line.char_start);
-        }
-        prose.push_str(line.raw);
-        idx += 1;
-    }
-
-    flush_prose(&mut units, &mut prose, &mut prose_start);
-
-    units
-}
-
-fn source_lines(body: &str) -> Vec<SourceLine<'_>> {
-    let mut lines = Vec::new();
-    let mut char_cursor = 0usize;
-
-    for raw in body.split_inclusive('\n') {
-        let char_start = char_cursor;
-        let char_end = char_start + raw.chars().count();
-        lines.push(SourceLine {
-            raw,
-            line: raw.trim_end_matches('\n'),
-            char_start,
-            char_end,
-        });
-        char_cursor = char_end;
-    }
-
-    if body.is_empty() {
-        return lines;
-    }
-
-    if !body.ends_with('\n') && lines.is_empty() {
-        lines.push(SourceLine {
-            raw: body,
-            line: body,
-            char_start: 0,
-            char_end: body.chars().count(),
-        });
-    }
-
-    lines
-}
-
-fn collect_fenced_block(lines: &[SourceLine<'_>], idx: &mut usize, marker: &str) -> TextUnit {
-    let start = lines[*idx].char_start;
-    let mut end = lines[*idx].char_end;
-    let mut text = String::new();
-    let mut first = true;
-
-    while *idx < lines.len() {
-        let line = lines[*idx];
-        text.push_str(line.raw);
-        end = line.char_end;
-        *idx += 1;
-
-        if !first && fence_marker_of(line.line).is_some() && line.line.starts_with(marker) {
-            break;
-        }
-        first = false;
-    }
-
-    TextUnit {
-        text,
-        char_start: start,
-        char_end: end,
-        atomic: true,
-    }
-}
-
-fn collect_list_block(lines: &[SourceLine<'_>], idx: &mut usize) -> TextUnit {
-    let start = lines[*idx].char_start;
-    let mut end = lines[*idx].char_end;
-    let mut text = String::new();
-
-    while *idx < lines.len() {
-        let line = lines[*idx];
-        if text.is_empty()
-            || is_list_item(line.line)
-            || is_list_continuation(line.line)
-            || blank_line_inside_list(lines, *idx)
-        {
-            text.push_str(line.raw);
-            end = line.char_end;
-            *idx += 1;
-            continue;
-        }
-        break;
-    }
-
-    if *idx < lines.len() && lines[*idx].line.trim().is_empty() {
-        let line = lines[*idx];
-        text.push_str(line.raw);
-        end = line.char_end;
-        *idx += 1;
-    }
-
-    TextUnit {
-        text,
-        char_start: start,
-        char_end: end,
-        atomic: true,
-    }
-}
-
-fn blank_line_inside_list(lines: &[SourceLine<'_>], idx: usize) -> bool {
-    lines[idx].line.trim().is_empty()
-        && lines
-            .iter()
-            .skip(idx + 1)
-            .find(|line| !line.line.trim().is_empty())
-            .map(|line| is_list_item(line.line) || is_list_continuation(line.line))
-            .unwrap_or(false)
-}
-
-fn list_intro_should_bind(prose: &str) -> bool {
-    let trimmed = prose.trim_end();
-    !trimmed.is_empty() && trimmed.ends_with(':')
-}
-
-fn flush_prose(units: &mut Vec<TextUnit>, prose: &mut String, prose_start: &mut Option<usize>) {
-    let Some(start) = prose_start.take() else {
-        return;
-    };
-    let text = std::mem::take(prose);
-    units.extend(split_prose_on_terminators(&text, start));
-}
-
-fn split_prose_on_terminators(text: &str, char_start: usize) -> Vec<TextUnit> {
-    let chars: Vec<char> = text.chars().collect();
-    let mut units = Vec::new();
-    let mut start = 0usize;
-    let mut i = 0usize;
-
-    while i < chars.len() {
-        if is_terminating_punctuation(chars[i])
-            && chars.get(i + 1).map(|c| c.is_whitespace()).unwrap_or(true)
-        {
-            let mut end = i + 1;
-            while chars.get(end).map(|c| c.is_whitespace()).unwrap_or(false) {
-                end += 1;
-            }
-            push_unit_from_chars(&mut units, &chars, start, end, char_start, false);
-            start = end;
-            i = end;
-            continue;
-        }
-        i += 1;
-    }
-
-    if start < chars.len() {
-        push_unit_from_chars(&mut units, &chars, start, chars.len(), char_start, false);
-    }
-
-    units
+fn split_into_micro_chunks(
+    units: Vec<TextUnit>,
+    target_tokens: usize,
+    budget: &TokenBudget<'_>,
+) -> Result<Vec<MicroChunk>, AppError> {
+    let target_tokens = target_tokens.max(1);
+    pack_text_units(units, target_tokens, budget)
 }
 
 fn push_unit_from_chars(
@@ -375,7 +182,11 @@ fn push_unit(
     });
 }
 
-fn pack_text_units(units: Vec<TextUnit>, target_chars: usize) -> Vec<MicroChunk> {
+fn pack_text_units(
+    units: Vec<TextUnit>,
+    target_tokens: usize,
+    budget: &TokenBudget<'_>,
+) -> Result<Vec<MicroChunk>, AppError> {
     let mut out = Vec::new();
     let mut current_text = String::new();
     let mut current_start = 0usize;
@@ -384,19 +195,20 @@ fn pack_text_units(units: Vec<TextUnit>, target_chars: usize) -> Vec<MicroChunk>
     for unit in units {
         if unit.atomic {
             flush_micro_chunk(&mut out, &mut current_text, current_start, current_end);
-            out.push(MicroChunk {
-                text: unit.text,
-                char_start: unit.char_start,
-                char_end: unit.char_end,
-            });
+            for piece in split_oversized_unit(unit, target_tokens, budget)? {
+                out.push(MicroChunk {
+                    text: piece.text,
+                    char_start: piece.char_start,
+                    char_end: piece.char_end,
+                });
+            }
             continue;
         }
 
-        let pieces = split_oversized_unit(unit, target_chars);
+        let pieces = split_oversized_unit(unit, target_tokens, budget)?;
         for piece in pieces {
-            let current_len = current_text.chars().count();
-            let piece_len = piece.text.chars().count();
-            if !current_text.is_empty() && current_len + piece_len > target_chars {
+            let merged = format!("{}{}", current_text, piece.text);
+            if !current_text.is_empty() && budget.count_str(&merged)? > target_tokens {
                 flush_micro_chunk(&mut out, &mut current_text, current_start, current_end);
             }
 
@@ -409,7 +221,7 @@ fn pack_text_units(units: Vec<TextUnit>, target_chars: usize) -> Vec<MicroChunk>
     }
 
     flush_micro_chunk(&mut out, &mut current_text, current_start, current_end);
-    out
+    Ok(out)
 }
 
 fn flush_micro_chunk(
@@ -429,9 +241,13 @@ fn flush_micro_chunk(
     });
 }
 
-fn split_oversized_unit(unit: TextUnit, target_chars: usize) -> Vec<TextUnit> {
-    if unit.atomic || unit.text.chars().count() <= target_chars * 2 {
-        return vec![unit];
+fn split_oversized_unit(
+    unit: TextUnit,
+    target_tokens: usize,
+    budget: &TokenBudget<'_>,
+) -> Result<Vec<TextUnit>, AppError> {
+    if budget.count_str(&unit.text)? <= target_tokens {
+        return Ok(vec![unit]);
     }
 
     let chars: Vec<char> = unit.text.chars().collect();
@@ -439,7 +255,8 @@ fn split_oversized_unit(unit: TextUnit, target_chars: usize) -> Vec<TextUnit> {
     let mut start = 0usize;
 
     while start < chars.len() {
-        let hard_end = (start + target_chars).min(chars.len());
+        let prefix_len = budget.max_prefix_chars(&chars[start..], target_tokens)?;
+        let hard_end = (start + prefix_len).min(chars.len());
         let end = if hard_end < chars.len() {
             last_whitespace_after_half(&chars[start..hard_end])
                 .map(|offset| start + offset + 1)
@@ -451,7 +268,7 @@ fn split_oversized_unit(unit: TextUnit, target_chars: usize) -> Vec<TextUnit> {
         start = end;
     }
 
-    out
+    Ok(out)
 }
 
 fn last_whitespace_after_half(chars: &[char]) -> Option<usize> {
@@ -464,39 +281,11 @@ fn last_whitespace_after_half(chars: &[char]) -> Option<usize> {
         .map(|(i, _)| i)
 }
 
-fn is_terminating_punctuation(c: char) -> bool {
-    matches!(c, '.' | '!' | '?' | ';' | ':' | '。' | '！' | '？')
-}
-
-fn is_list_item(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with("- ")
-        || trimmed.starts_with("* ")
-        || trimmed.starts_with("+ ")
-        || ordered_list_marker(trimmed)
-}
-
-fn is_list_continuation(line: &str) -> bool {
-    if line.trim().is_empty() || parse_heading(line).is_some() || fence_marker_of(line).is_some() {
-        return false;
-    }
-    line.starts_with("  ") || line.starts_with('\t')
-}
-
-fn ordered_list_marker(line: &str) -> bool {
-    let mut chars = line.chars().peekable();
-    let mut saw_digit = false;
-    while matches!(chars.peek(), Some(c) if c.is_ascii_digit()) {
-        saw_digit = true;
-        chars.next();
-    }
-    saw_digit && matches!(chars.next(), Some('.' | ')')) && matches!(chars.next(), Some(' '))
-}
-
 async fn find_split_points(
     micro_chunks: &[MicroChunk],
     client: &dyn ChatClient,
     model: &str,
+    budget: &TokenBudget<'_>,
 ) -> Result<Vec<usize>, AppError> {
     let n = micro_chunks.len();
     if n <= 1 {
@@ -510,15 +299,17 @@ async fn find_split_points(
         let mut window = String::new();
 
         for (i, item) in micro_chunks.iter().enumerate().take(n).skip(current) {
-            window.push_str(&format!(
+            let tagged = format!(
                 "<|start_chunk_{}|>{}<|end_chunk_{}|>",
                 i + 1,
                 item.text,
                 i + 1
-            ));
-            if window.len() > WINDOW_CHARS {
+            );
+            let candidate = format!("{window}{tagged}");
+            if !window.is_empty() && budget.count_str(&candidate)? > WINDOW_TOKENS {
                 break;
             }
+            window = candidate;
         }
 
         let user_msg = format!(
@@ -532,7 +323,7 @@ async fn find_split_points(
                 model: model.to_string(),
                 system: SYSTEM_PROMPT.to_string(),
                 user: user_msg,
-                temperature: 0.5,
+                temperature: 0.2,
                 response_format: ChatResponseFormat::Text,
             })
             .await?;
@@ -585,13 +376,29 @@ fn parse_split_response(response: &str, min_id: usize) -> Vec<usize> {
     numbers
 }
 
-fn merge_micro_chunks(micro_chunks: &[MicroChunk], split_points: &[usize]) -> Vec<MicroChunk> {
+fn merge_micro_chunks(
+    micro_chunks: &[MicroChunk],
+    split_points: &[usize],
+    max_tokens: usize,
+    budget: &TokenBudget<'_>,
+) -> Result<Vec<MicroChunk>, AppError> {
     let mut out = Vec::new();
     let mut current_text = String::new();
     let mut current_start = micro_chunks.first().map(|m| m.char_start).unwrap_or(0);
     let mut last_end = 0usize;
 
     for (i, mc) in micro_chunks.iter().enumerate() {
+        let candidate = format!("{}{}", current_text, mc.text);
+        if !current_text.is_empty() && budget.count_str(&candidate)? > max_tokens {
+            out.push(MicroChunk {
+                text: current_text.clone(),
+                char_start: current_start,
+                char_end: last_end,
+            });
+            current_text.clear();
+            current_start = mc.char_start;
+        }
+
         current_text.push_str(&mc.text);
         last_end = mc.char_end;
 
@@ -616,24 +423,58 @@ fn merge_micro_chunks(micro_chunks: &[MicroChunk], split_points: &[usize]) -> Ve
         });
     }
 
-    out
+    Ok(out)
 }
 
 fn extract_heading(text: &str) -> String {
     for line in text.lines() {
-        if let Some((_depth, heading)) = parse_heading(line) {
+        if let Some((_depth, heading)) = parse_atx_heading(line) {
             return heading;
         }
     }
     String::new()
 }
 
+fn parse_atx_heading(line: &str) -> Option<(usize, String)> {
+    let bytes = line.as_bytes();
+    let mut depth = 0usize;
+    while depth < bytes.len() && bytes[depth] == b'#' {
+        depth += 1;
+    }
+    if depth == 0 || depth > 6 {
+        return None;
+    }
+    let after = &line[depth..];
+    let first = after.chars().next()?;
+    if !first.is_whitespace() {
+        return None;
+    }
+    let text = after.trim().to_string();
+    if text.is_empty() {
+        return None;
+    }
+    Some((depth, text))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::server::application::test_support::MockTokenizer;
+    use crate::server::infrastructure::markdown::MarkdownRsParser;
+
+    fn tokenizer() -> MockTokenizer {
+        MockTokenizer::new()
+    }
 
     fn joined_text(chunks: &[MicroChunk]) -> String {
         chunks.iter().map(|c| c.text.as_str()).collect()
+    }
+
+    fn split_test(body: &str, target_tokens: usize) -> Vec<MicroChunk> {
+        let tokenizer = tokenizer();
+        let budget = TokenBudget::new(&tokenizer);
+        let units = MarkdownRsParser.parse(body).unwrap().llm_text_units();
+        split_into_micro_chunks(units, target_tokens, &budget).unwrap()
     }
 
     fn slice_chars(text: &str, start: usize, end: usize) -> String {
@@ -643,7 +484,7 @@ mod tests {
     #[test]
     fn split_into_micro_chunks_basic() {
         let body = "paragraph one.\n\nparagraph two.\n\nparagraph three.";
-        let chunks = split_into_micro_chunks(body, 10);
+        let chunks = split_test(body, 4);
         assert!(chunks.len() >= 2);
         let full = joined_text(&chunks);
         assert!(full.contains("paragraph one"));
@@ -653,7 +494,7 @@ mod tests {
     #[test]
     fn split_into_micro_chunks_uses_terminating_punctuation_boundaries() {
         let body = "Alpha sentence. Beta clause; Gamma question? Delta exclaim!";
-        let chunks = split_into_micro_chunks(body, 25);
+        let chunks = split_test(body, 2);
 
         assert_eq!(joined_text(&chunks), body);
         assert_eq!(
@@ -674,14 +515,14 @@ mod tests {
     }
 
     #[test]
-    fn split_into_micro_chunks_keeps_headings_atomic() {
+    fn split_into_micro_chunks_binds_headings_to_following_chunk() {
         let body = "Intro sentence.\n## Heading\nBody sentence.";
-        let chunks = split_into_micro_chunks(body, 1000);
+        let chunks = split_test(body, 1000);
         let heading_start = "Intro sentence.\n".chars().count();
 
         assert_eq!(joined_text(&chunks), body);
-        assert_eq!(chunks.len(), 3);
-        assert_eq!(chunks[1].text, "## Heading\n");
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[1].text, "## Heading\nBody sentence.");
         assert_eq!(chunks[1].char_start, heading_start);
         assert_eq!(
             slice_chars(body, chunks[1].char_start, chunks[1].char_end),
@@ -693,7 +534,7 @@ mod tests {
     fn split_into_micro_chunks_keeps_fenced_code_blocks_atomic() {
         let fence = "```rust\nfn main() { println!(\"a.b\"); }\n```\n";
         let body = format!("Intro sentence.\n{fence}After.");
-        let chunks = split_into_micro_chunks(&body, 10);
+        let chunks = split_test(&body, 20);
 
         assert_eq!(joined_text(&chunks), body);
         let fence_chunks = chunks
@@ -707,12 +548,11 @@ mod tests {
     #[test]
     fn split_into_micro_chunks_keeps_contiguous_list_items_together() {
         let body = "- first item.\n- second item.\nclosing sentence.";
-        let chunks = split_into_micro_chunks(body, 1000);
+        let chunks = split_test(body, 1000);
 
         assert_eq!(joined_text(&chunks), body);
-        assert_eq!(chunks.len(), 2);
-        assert_eq!(chunks[0].text, "- first item.\n- second item.\n");
-        assert_eq!(chunks[1].text, "closing sentence.");
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].text, body);
     }
 
     #[test]
@@ -726,7 +566,7 @@ mod tests {
             "- Storage per DO is capped.\n",
             "- Cross-aggregate queries need D1.\n"
         );
-        let chunks = split_into_micro_chunks(body, 150);
+        let chunks = split_test(body, 150);
 
         assert_eq!(joined_text(&chunks), body);
         assert_eq!(chunks.len(), 2);
@@ -746,7 +586,7 @@ mod tests {
     #[test]
     fn split_into_micro_chunks_keeps_wrapped_list_item_with_item() {
         let body = "- first item starts here\n  and continues here.\n- second item.\n";
-        let chunks = split_into_micro_chunks(body, 1000);
+        let chunks = split_test(body, 1000);
 
         assert_eq!(joined_text(&chunks), body);
         assert_eq!(chunks.len(), 1);
@@ -756,7 +596,7 @@ mod tests {
     #[test]
     fn split_into_micro_chunks_splits_oversized_prose_without_punctuation() {
         let body = "alpha beta gamma delta epsilon zeta eta theta";
-        let chunks = split_into_micro_chunks(body, 12);
+        let chunks = split_test(body, 4);
 
         assert!(chunks.len() > 1);
         assert_eq!(joined_text(&chunks), body);
@@ -821,7 +661,9 @@ mod tests {
             },
         ];
         // Split after index 1 (keep 0+1 together, 2 alone)
-        let merged = merge_micro_chunks(&micro, &[1, 2]);
+        let tokenizer = tokenizer();
+        let budget = TokenBudget::new(&tokenizer);
+        let merged = merge_micro_chunks(&micro, &[1, 2], 10, &budget).unwrap();
         assert_eq!(merged.len(), 2);
         assert_eq!(merged[0].text, "AB");
         assert_eq!(merged[1].text, "C");

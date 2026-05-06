@@ -1,64 +1,9 @@
 use leptos::prelude::*;
-use serde::{Deserialize, Serialize};
 
 use crate::shared::{
-    ChunkingConfig, ChunkingVariant, EmbedResult, EvaluationDatasetStatus, EvaluationJobInfo,
-    EvaluationRunOptions, EvaluationRunResult, IngestJobInfo, IngestOptions, PostDetailDto,
-    PostSummary, SettingsDto,
+    ChunkingVariant, EvaluationAutotuneRequest, EvaluationDatasetStatus, EvaluationJobInfo,
+    EvaluationRunOptions, EvaluationRunResult, EvaluationRunSummary,
 };
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiError {
-    pub message: String,
-}
-
-#[server(name = ListPosts, prefix = "/api", endpoint = "list_posts")]
-pub async fn list_posts() -> Result<Vec<PostSummary>, ServerFnError> {
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-    state
-        .post_service
-        .list_posts()
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
-}
-
-#[server(name = GetPostDetail, prefix = "/api", endpoint = "get_post_detail")]
-pub async fn get_post_detail(
-    slug: String,
-    chunking_override: Option<ChunkingConfig>,
-) -> Result<PostDetailDto, ServerFnError> {
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-    state
-        .post_service
-        .get_post_detail(&slug, chunking_override)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
-}
-
-#[server(name = StartIngest, prefix = "/api", endpoint = "start_ingest")]
-pub async fn start_ingest(
-    slug: String,
-    options: IngestOptions,
-) -> Result<IngestJobInfo, ServerFnError> {
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-    state
-        .ingest_service
-        .start_ingest(slug, options)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
-}
 
 #[server(
     name = GetEvaluationDatasetStatus,
@@ -143,6 +88,47 @@ pub async fn get_latest_evaluation_result(
 }
 
 #[server(
+    name = GetEvaluationResultHistory,
+    prefix = "/api",
+    endpoint = "get_evaluation_result_history"
+)]
+pub async fn get_evaluation_result_history(
+    slug: String,
+) -> Result<Vec<EvaluationRunSummary>, ServerFnError> {
+    use crate::server::setup::AppState;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+    state
+        .chunking_evaluation_service
+        .result_history(&slug)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+#[server(
+    name = GetEvaluationResultRun,
+    prefix = "/api",
+    endpoint = "get_evaluation_result_run"
+)]
+pub async fn get_evaluation_result_run(
+    slug: String,
+    run_id: String,
+) -> Result<Option<EvaluationRunResult>, ServerFnError> {
+    use crate::server::setup::AppState;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+    state
+        .chunking_evaluation_service
+        .result_run(&slug, &run_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+#[server(
     name = StartRunEvaluation,
     prefix = "/api",
     endpoint = "start_run_evaluation"
@@ -165,81 +151,44 @@ pub async fn start_run_evaluation(
 }
 
 #[server(
-    name = SavePostChunkingConfig,
+    name = StartRunEvaluationMatrix,
     prefix = "/api",
-    endpoint = "save_post_chunking_config"
+    endpoint = "start_run_evaluation_matrix"
 )]
-pub async fn save_post_chunking_config(
+pub async fn start_run_evaluation_matrix(
     slug: String,
-    config: ChunkingConfig,
-) -> Result<(), ServerFnError> {
+    variant: ChunkingVariant,
+    option_sets: Vec<EvaluationRunOptions>,
+) -> Result<EvaluationJobInfo, ServerFnError> {
     use crate::server::setup::AppState;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .post_chunking_config_store
-        .save(&slug, config)
+        .chunking_evaluation_service
+        .start_run_evaluation_matrix(slug, variant, option_sets)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
 #[server(
-    name = ClearPostChunkingConfig,
+    name = StartRunEvaluationAutotune,
     prefix = "/api",
-    endpoint = "clear_post_chunking_config"
+    endpoint = "start_run_evaluation_autotune"
 )]
-pub async fn clear_post_chunking_config(slug: String) -> Result<(), ServerFnError> {
+pub async fn start_run_evaluation_autotune(
+    slug: String,
+    request: EvaluationAutotuneRequest,
+) -> Result<EvaluationJobInfo, ServerFnError> {
     use crate::server::setup::AppState;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .post_chunking_config_store
-        .clear(&slug)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
-}
-
-#[server(name = EmbedTexts, prefix = "/api", endpoint = "embed_texts")]
-pub async fn embed_texts(
-    model: String,
-    text_a: String,
-    text_b: String,
-) -> Result<EmbedResult, ServerFnError> {
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-    state
-        .embedding_service
-        .embed_texts(&model, &text_a, &text_b)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
-}
-
-#[server(name = LoadSettings, prefix = "/api", endpoint = "load_settings")]
-pub async fn load_settings() -> Result<SettingsDto, ServerFnError> {
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-    Ok(state.settings_snapshot().await)
-}
-
-#[server(name = SaveSettings, prefix = "/api", endpoint = "save_settings")]
-pub async fn save_settings(settings: SettingsDto) -> Result<(), ServerFnError> {
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-    state
-        .save_settings(settings)
+        .chunking_evaluation_service
+        .start_run_evaluation_autotune(slug, request)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }

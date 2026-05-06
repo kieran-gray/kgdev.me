@@ -15,15 +15,19 @@ use tuning_panel::TuningPanel;
 use utils::{open_event_stream, short_hash, truncate_chars};
 
 use crate::components::log_panel::LogPanel;
-use crate::server_fns::{
-    clear_post_chunking_config, get_latest_evaluation_result, get_post_detail, start_ingest,
+use crate::server_functions::chunking::clear_post_chunking_config;
+use crate::server_functions::evaluation::{
+    get_evaluation_result_history, get_evaluation_result_run, get_latest_evaluation_result,
 };
+use crate::server_functions::ingest::start_ingest;
+use crate::server_functions::posts::get_post_detail;
 use crate::shared::{
-    ChunkStrategy, ChunkingConfig, EvaluationRunResult, IngestOptions, LogEvent, LogLevel,
+    ChunkingConfig, EvaluationRunResult, EvaluationRunSummary, IngestOptions, LogEvent, LogLevel,
     PostDetailDto,
 };
 
 const GLOSSARY_DEFINITION_PREVIEW_CHARS: usize = 300;
+const EVALUATION_HISTORY_PAGE_SIZE: usize = 10;
 
 #[component]
 pub fn PostDetailPage() -> impl IntoView {
@@ -96,6 +100,7 @@ fn PostDetailView(
     let (eval_dialog_open, set_eval_dialog_open) = signal(false);
     let (eval_result, set_eval_result) =
         signal::<Option<Result<EvaluationRunResult, String>>>(None);
+    let (history_refresh, set_history_refresh) = signal(0u32);
     let (save_status, set_save_status) = signal::<Option<(bool, String)>>(None);
 
     let default_chunking = detail.default_chunking;
@@ -180,10 +185,20 @@ fn PostDetailView(
     let body_len = detail.markdown_body_length;
     let glossary = StoredValue::new(detail.glossary_terms.clone());
     let chunks = StoredValue::new(detail.chunk_preview.clone());
+    let chunk_preview_notice = detail.chunk_preview_notice.clone();
     let size_limit = effective_chunking.size_limit_for_display(token_limit);
     let title = detail.title.clone();
     let slug_disp = detail.slug.clone();
     let evaluation_slug = detail.slug.clone();
+    let history_slug = detail.slug.clone();
+    let evaluation_history = Resource::new(
+        move || (history_slug.clone(), history_refresh.get()),
+        move |(slug, _)| async move {
+            get_evaluation_result_history(slug)
+                .await
+                .map_err(|e| e.to_string())
+        },
+    );
 
     let saved_result_slug = detail.slug.clone();
     Effect::new(move |_| {
@@ -266,6 +281,7 @@ fn PostDetailView(
             open=eval_dialog_open
             set_open=set_eval_dialog_open
             set_eval_result=set_eval_result
+            set_history_refresh=set_history_refresh
         />
 
         <div class="space-y-4">
@@ -363,6 +379,41 @@ fn PostDetailView(
                             </div>
 
                             <div class="lg:col-span-2 space-y-6">
+                                <section class="card-outer p-4 space-y-3">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <div class="flex flex-col">
+                                            <span class="tech-label">"evaluation.history"</span>
+                                            <span class="tech-label opacity-50">"SAVED_RUNS"</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="btn px-3 py-1 text-xs"
+                                            on:click=move |_| set_history_refresh.update(|v| *v += 1)
+                                        >
+                                            "↻"
+                                        </button>
+                                    </div>
+                                    <Suspense fallback=|| view! { <p class="tech-label animate-pulse">"LOADING_HISTORY..."</p> }>
+                                        {move || {
+                                            evaluation_history
+                                                .get()
+                                                .map(|res| match res {
+                                                    Ok(history) => view! {
+                                                        <EvaluationHistory
+                                                            slug=slug.get_value()
+                                                            history=history
+                                                            set_eval_result=set_eval_result
+                                                        />
+                                                    }.into_any(),
+                                                    Err(e) => view! {
+                                                        <div class="tech-label log-line-error">
+                                                            {format!("EVALUATION_HISTORY_FAULT: {e}")}
+                                                        </div>
+                                                    }.into_any(),
+                                                })
+                                        }}
+                                    </Suspense>
+                                </section>
                                 {move || {
                                     eval_result
                                         .get()
@@ -372,6 +423,7 @@ fn PostDetailView(
                                                     <EvaluationResults
                                                         result=result
                                                         slug=slug.get_value()
+                                                        current_config=effective_chunking
                                                         set_override_config=set_override_config
                                                         set_save_status=set_save_status
                                                     />
@@ -408,6 +460,11 @@ fn PostDetailView(
                                     <span class="badge !text-amber-400 !border-amber-400">"USING_OVERRIDE_PREVIEW"</span>
                                 })}
                             </div>
+                            {chunk_preview_notice.clone().map(|notice| view! {
+                                <div class="card-outer p-4 tech-label !text-amber-400 border-amber-400/50">
+                                    {notice}
+                                </div>
+                            })}
                             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {chunks
                                     .with_value(|c| {
@@ -502,6 +559,173 @@ where
 }
 
 #[component]
+fn EvaluationHistory(
+    slug: String,
+    history: Vec<EvaluationRunSummary>,
+    set_eval_result: WriteSignal<Option<Result<EvaluationRunResult, String>>>,
+) -> impl IntoView {
+    let slug = StoredValue::new(slug);
+    let total_runs = history.len();
+    if history.is_empty() {
+        return view! {
+            <p class="tech-label opacity-50">"NO_SAVED_RUNS"</p>
+        }
+        .into_any();
+    }
+    let history = StoredValue::new(history);
+    let total_pages = total_runs.div_ceil(EVALUATION_HISTORY_PAGE_SIZE);
+    let (page, set_page) = signal(0usize);
+    let previous_disabled = move || page.get() == 0;
+    let next_disabled = move || page.get() + 1 >= total_pages;
+    let previous_page = move |_| set_page.update(|p| *p = p.saturating_sub(1));
+    let next_page = move |_| {
+        set_page.update(|p| {
+            if *p + 1 < total_pages {
+                *p += 1;
+            }
+        })
+    };
+
+    view! {
+        <div class="space-y-2">
+            <div class="overflow-auto border border-[var(--color-border)]">
+                <table class="w-full text-[10px] border-collapse">
+                    <thead>
+                        <tr style="background-color: var(--color-card-inner);">
+                            <th class="text-left px-2 py-2 tech-label border-b border-[var(--color-border)]">"RUN"</th>
+                            <th class="text-left px-2 py-2 tech-label border-b border-[var(--color-border)]">"VARIANTS"</th>
+                            <th class="text-right px-2 py-2 tech-label border-b border-[var(--color-border)]">"TOP_K"</th>
+                            <th class="text-right px-2 py-2 tech-label border-b border-[var(--color-border)]">"MIN"</th>
+                            <th class="text-right px-2 py-2 tech-label border-b border-[var(--color-border)]">"SCORE"</th>
+                            <th class="text-right px-2 py-2 tech-label border-b border-[var(--color-border)]">"RECALL"</th>
+                            <th class="text-right px-2 py-2 tech-label border-b border-[var(--color-border)]">"PREC"</th>
+                            <th class="text-right px-2 py-2 tech-label border-b border-[var(--color-border)]">"P_OMEGA"</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {move || {
+                            let start = page.get() * EVALUATION_HISTORY_PAGE_SIZE;
+                            history
+                                .with_value(|runs| {
+                                    runs.iter()
+                                        .skip(start)
+                                        .take(EVALUATION_HISTORY_PAGE_SIZE)
+                                        .map(|run| {
+                                            let run_id = run.run_id.clone();
+                                            let slug_value = slug.get_value();
+                                            let variant_label = if run.variant_count == 1 {
+                                                run.variant_labels.first().cloned().unwrap_or_else(|| run.best_label.clone())
+                                            } else if run.option_count > 1 {
+                                                format!("{} MATRIX RESULTS · BEST {}", run.option_count, run.best_label)
+                                            } else {
+                                                format!("{} VARIANTS · BEST {}", run.variant_count, run.best_label)
+                                            };
+                                            let top_k_label = if run.option_count > 1 {
+                                                "MIXED".to_string()
+                                            } else {
+                                                run.options.top_k.to_string()
+                                            };
+                                            let min_score_label = if run.option_count > 1 {
+                                                "MIXED".to_string()
+                                            } else {
+                                                run.options.min_score_milli.to_string()
+                                            };
+                                            let run_label = if run.created_at.is_empty() {
+                                                run.run_id.clone()
+                                            } else {
+                                                run.created_at.clone()
+                                            };
+                                            let load = move |_| {
+                                                let slug = slug_value.clone();
+                                                let run_id = run_id.clone();
+                                                set_eval_result.set(None);
+                                                spawn_local(async move {
+                                                    let result = get_evaluation_result_run(slug, run_id)
+                                                        .await
+                                                        .map_err(|e| e.to_string())
+                                                        .and_then(|saved| {
+                                                            saved.ok_or_else(|| "saved evaluation run was not found".to_string())
+                                                        });
+                                                    set_eval_result.set(Some(result));
+                                                });
+                                            };
+                                            view! {
+                                                <tr class="hover:bg-[var(--color-card-inner)]">
+                                                    <td class="px-2 py-2 font-mono border-b border-[var(--color-border)]">
+                                                        <button type="button" class="tech-label hover:underline" on:click=load>
+                                                            {run_label}
+                                                        </button>
+                                                    </td>
+                                                    <td class="px-2 py-2 font-mono border-b border-[var(--color-border)]">
+                                                        {variant_label}
+                                                    </td>
+                                                    <td class="px-2 py-2 font-mono text-right border-b border-[var(--color-border)]">
+                                                        {top_k_label}
+                                                    </td>
+                                                    <td class="px-2 py-2 font-mono text-right border-b border-[var(--color-border)]">
+                                                        {min_score_label}
+                                                    </td>
+                                                    <td class="px-2 py-2 font-mono text-right border-b border-[var(--color-border)] font-bold">
+                                                        {fmt_percent(run.best_score)}
+                                                    </td>
+                                                    <td class="px-2 py-2 font-mono text-right border-b border-[var(--color-border)]">
+                                                        {fmt_percent(run.best_recall)}
+                                                    </td>
+                                                    <td class="px-2 py-2 font-mono text-right border-b border-[var(--color-border)]">
+                                                        {fmt_percent(run.best_precision)}
+                                                    </td>
+                                                    <td class="px-2 py-2 font-mono text-right border-b border-[var(--color-border)]">
+                                                        {fmt_percent(run.best_precision_omega)}
+                                                    </td>
+                                                </tr>
+                                            }
+                                        })
+                                        .collect_view()
+                                })
+                        }}
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+                <span class="tech-label opacity-50">
+                    {move || {
+                        let start = page.get() * EVALUATION_HISTORY_PAGE_SIZE + 1;
+                        let end = ((page.get() + 1) * EVALUATION_HISTORY_PAGE_SIZE).min(total_runs);
+                        format!("SHOWING {}-{} OF {}", start, end, total_runs)
+                    }}
+                </span>
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="btn px-3 py-1 text-xs"
+                        disabled=previous_disabled
+                        on:click=previous_page
+                    >
+                        "PREV"
+                    </button>
+                    <span class="tech-label opacity-60">
+                        {move || format!("PAGE {}/{}", page.get() + 1, total_pages)}
+                    </span>
+                    <button
+                        type="button"
+                        class="btn px-3 py-1 text-xs"
+                        disabled=next_disabled
+                        on:click=next_page
+                    >
+                        "NEXT"
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+    .into_any()
+}
+
+fn fmt_percent(value: f32) -> String {
+    format!("{:.1}%", value * 100.0)
+}
+
+#[component]
 fn MiniStat(label: &'static str, value: String) -> impl IntoView {
     view! {
         <div class="flex flex-col">
@@ -522,15 +746,5 @@ fn DetailField(label: &'static str, value: String) -> impl IntoView {
 }
 
 fn strategy_label(c: ChunkingConfig, size_limit: u32) -> String {
-    match c.strategy {
-        ChunkStrategy::Bert => format!(
-            "STRATEGY: BERT · TOKEN_LIMIT: {} · TARGET: {} · OVERLAP: {} · MIN: {}",
-            size_limit, c.target_chars, c.overlap_chars, c.min_chars
-        ),
-        ChunkStrategy::Llm => format!(
-            "STRATEGY: LLM · TOKEN_LIMIT: {} · TARGET: {} · OVERLAP: {} · MIN: {}",
-            size_limit, c.target_chars, c.overlap_chars, c.min_chars
-        ),
-        ChunkStrategy::Section => format!("STRATEGY: SECTION · MAX_CHARS: {}", c.max_section_chars),
-    }
+    c.detail_label(size_limit)
 }

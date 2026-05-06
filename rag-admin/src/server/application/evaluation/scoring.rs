@@ -1,7 +1,8 @@
 use crate::server::application::evaluation::retrieval::{retrieve_chunks, EvalChunk};
 use crate::shared::{
     ChunkingVariant, EvaluationMetrics, EvaluationQuestion, EvaluationQuestionResult,
-    EvaluationRunOptions, EvaluationVariantResult,
+    EvaluationReferenceResult, EvaluationResultSplit, EvaluationRunOptions,
+    EvaluationVariantResult,
 };
 
 pub fn evaluate_variant(
@@ -17,7 +18,7 @@ pub fn evaluate_variant(
     let mut precision_scores = Vec::with_capacity(questions.len());
     let mut iou_scores = Vec::with_capacity(questions.len());
     let mut omega_scores = Vec::with_capacity(questions.len());
-    let mut retrieved_chars = Vec::with_capacity(questions.len());
+    let mut retrieved_tokens = Vec::with_capacity(questions.len());
 
     for (question, question_embedding) in questions.iter().zip(question_embeddings) {
         let retrieved = retrieve_chunks(question_embedding, chunks, chunk_embeddings, options);
@@ -26,10 +27,10 @@ pub fn evaluate_variant(
         let score = score_question(question, &retrieved_refs);
         let omega = precision_omega(question, chunks);
 
-        retrieved_chars.push(
+        retrieved_tokens.push(
             retrieved_refs
                 .iter()
-                .map(|c| c.retrieved_len())
+                .map(|c| c.retrieved_tokens())
                 .sum::<u32>(),
         );
         recall_scores.push(score.recall);
@@ -43,23 +44,23 @@ pub fn evaluate_variant(
             iou: score.iou,
             retrieved_chunk_ids: retrieved_refs.iter().map(|c| c.chunk_id).collect(),
             missed_reference_count: score.missed_reference_count,
+            reference_results: score.reference_results,
         });
     }
 
     let chunk_count = chunks.len() as u32;
-    let average_chunk_chars = if chunks.is_empty() {
+    let average_chunk_tokens = if chunks.is_empty() {
         0
     } else {
-        chunks
-            .iter()
-            .map(|c| c.text.chars().count() as u32)
-            .sum::<u32>()
-            / chunk_count
+        chunks.iter().map(|c| c.token_count).sum::<u32>() / chunk_count
     };
-    let average_retrieved_chars = mean_u32(&retrieved_chars);
+    let average_retrieved_tokens = mean_u32(&retrieved_tokens);
 
     EvaluationVariantResult {
         variant,
+        options: options.clone(),
+        split: EvaluationResultSplit::Full,
+        selected: false,
         metrics: EvaluationMetrics {
             recall_mean: mean(&recall_scores),
             recall_std: std_dev(&recall_scores),
@@ -71,18 +72,19 @@ pub fn evaluate_variant(
             precision_omega_std: std_dev(&omega_scores),
         },
         chunk_count,
-        average_chunk_chars,
-        average_retrieved_chars,
+        average_chunk_tokens,
+        average_retrieved_tokens,
         question_results,
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct QuestionScore {
     recall: f32,
     precision: f32,
     iou: f32,
     missed_reference_count: u32,
+    reference_results: Vec<EvaluationReferenceResult>,
 }
 
 fn score_question(question: &EvaluationQuestion, retrieved_chunks: &[&EvalChunk]) -> QuestionScore {
@@ -99,6 +101,7 @@ fn score_question(question: &EvaluationQuestion, retrieved_chunks: &[&EvalChunk]
             precision: 0.0,
             iou: 0.0,
             missed_reference_count: question.references.len() as u32,
+            reference_results: Vec::new(),
         };
     }
 
@@ -136,7 +139,43 @@ fn score_question(question: &EvaluationQuestion, retrieved_chunks: &[&EvalChunk]
         precision,
         iou,
         missed_reference_count: missed_reference_count(&reference_ranges, &missed),
+        reference_results: reference_results(question, retrieved_chunks),
     }
+}
+
+fn reference_results(
+    question: &EvaluationQuestion,
+    retrieved_chunks: &[&EvalChunk],
+) -> Vec<EvaluationReferenceResult> {
+    question
+        .references
+        .iter()
+        .filter_map(|reference| {
+            let reference_range = Range::new(reference.char_start, reference.char_end);
+            let total_chars = reference_range.len();
+            if total_chars == 0 {
+                return None;
+            }
+
+            let intersections = retrieved_chunks
+                .iter()
+                .filter(|chunk| chunk.body_chunk)
+                .filter_map(|chunk| {
+                    Range::new(chunk.char_start, chunk.char_end).intersect(reference_range)
+                })
+                .collect::<Vec<_>>();
+            let covered_chars = sum_ranges(&union_ranges(intersections));
+
+            Some(EvaluationReferenceResult {
+                content: reference.content.clone(),
+                char_start: reference.char_start,
+                char_end: reference.char_end,
+                covered_chars,
+                total_chars,
+                recall: covered_chars as f32 / total_chars as f32,
+            })
+        })
+        .collect()
 }
 
 fn precision_omega(question: &EvaluationQuestion, chunks: &[EvalChunk]) -> f32 {

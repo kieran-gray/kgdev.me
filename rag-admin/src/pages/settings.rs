@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
-use crate::server_fns::{load_settings, save_settings};
+use crate::server_functions::settings::{load_settings, save_settings};
 use crate::shared::{
     catalog_for_backend, CatalogEntry, ChunkStrategy, ChunkingConfig, EmbedderBackend,
     EmbeddingModel, EvaluationGenerationBackend, EvaluationSettings, SettingsDto,
@@ -561,87 +561,47 @@ fn ChunkingDefaultsSection(
                 <Field label="STRATEGY" hint="bert = sliding window w/ overlap, section = one chunk per H2/H3, llm = semantic boundaries over micro chunks">
                     <select
                         class="input font-mono text-sm"
-                        prop:value=move || match config.get().strategy {
-                            ChunkStrategy::Bert => "bert",
-                            ChunkStrategy::Section => "section",
-                            ChunkStrategy::Llm => "llm",
-                        }
+                        prop:value=move || config.get().strategy.as_str()
                         on:change=move |e| {
                             let v = event_target_value(&e);
                             set_config.update(|c| {
-                                c.strategy = match v.as_str() {
-                                    "section" => ChunkStrategy::Section,
-                                    "llm" => ChunkStrategy::Llm,
-                                    _ => ChunkStrategy::Bert,
-                                };
+                                let strategy = ChunkStrategy::from_id(&v).unwrap_or_default();
+                                *c = ChunkingConfig::for_strategy(strategy);
                             });
                         }
                     >
-                        <option value="bert">"bert"</option>
-                        <option value="section">"section"</option>
-                        <option value="llm">"llm"</option>
+                        {ChunkStrategy::all()
+                            .iter()
+                            .map(|definition| view! {
+                                <option value=definition.id>{definition.label}</option>
+                            })
+                            .collect_view()}
                     </select>
                 </Field>
-                <Field label="MAX_SECTION_CHARS" hint="section: max chars per chunk before fallback split">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="1"
-                        prop:value=move || config.get().max_section_chars.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.max_section_chars = v);
-                        }
-                    />
-                </Field>
-                <Field label="TARGET_CHARS" hint="bert: target chunk size in chars">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="1"
-                        prop:value=move || config.get().target_chars.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.target_chars = v);
-                        }
-                    />
-                </Field>
-                <Field label="OVERLAP_CHARS" hint="bert: chars of overlap between adjacent chunks">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="0"
-                        prop:value=move || config.get().overlap_chars.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.overlap_chars = v);
-                        }
-                    />
-                </Field>
-                <Field label="MIN_CHARS" hint="bert: small trailing chunks merge with the previous one">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="0"
-                        prop:value=move || config.get().min_chars.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.min_chars = v);
-                        }
-                    />
-                </Field>
-                <Field label="LLM_MICRO_CHUNK_CHARS" hint="llm: punctuation-aware micro chunks offered to the model for boundary selection">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="100"
-                        prop:value=move || config.get().llm_micro_chunk_chars.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(300);
-                            set_config.update(|c| c.llm_micro_chunk_chars = v.max(100));
-                        }
-                    />
-                </Field>
+                {move || {
+                    let params = config.get().strategy.definition().params;
+                    params
+                        .iter()
+                        .map(|param| {
+                            let key = param.key;
+                            let min = param.min;
+                            view! {
+                                <Field label=param.label hint=param.hint>
+                                    <input
+                                        class="input font-mono text-sm"
+                                        type="number"
+                                        min=min.to_string()
+                                        prop:value=move || config.get().param_value(key).to_string()
+                                        on:input=move |e| {
+                                            let v: u32 = event_target_value(&e).parse().unwrap_or(min);
+                                            set_config.update(|c| c.set_param_value(key, v.max(min)));
+                                        }
+                                    />
+                                </Field>
+                            }
+                        })
+                        .collect_view()
+                }}
             </div>
         </div>
     }

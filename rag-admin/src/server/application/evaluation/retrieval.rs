@@ -6,6 +6,7 @@ use crate::shared::EvaluationRunOptions;
 pub struct EvalChunk {
     pub chunk_id: u32,
     pub text: String,
+    pub token_count: u32,
     pub char_start: u32,
     pub char_end: u32,
     pub body_chunk: bool,
@@ -19,29 +20,31 @@ impl EvalChunk {
             self.text.chars().count() as u32
         }
     }
-}
 
-impl From<ChunkOutput> for EvalChunk {
-    fn from(value: ChunkOutput) -> Self {
-        Self {
-            chunk_id: value.chunk_id,
-            text: value.text,
-            char_start: value.char_start,
-            char_end: value.char_end,
-            body_chunk: true,
-        }
+    pub fn retrieved_tokens(&self) -> u32 {
+        self.token_count
     }
 }
 
-impl From<Chunk> for EvalChunk {
-    fn from(value: Chunk) -> Self {
-        Self {
-            chunk_id: value.chunk_id,
-            text: value.text,
-            char_start: value.char_start,
-            char_end: value.char_end,
-            body_chunk: !value.is_glossary,
-        }
+pub fn body_eval_chunk(value: ChunkOutput, token_count: u32) -> EvalChunk {
+    EvalChunk {
+        chunk_id: value.chunk_id,
+        text: value.text,
+        token_count,
+        char_start: value.char_start,
+        char_end: value.char_end,
+        body_chunk: true,
+    }
+}
+
+pub fn domain_eval_chunk(value: Chunk, token_count: u32) -> EvalChunk {
+    EvalChunk {
+        chunk_id: value.chunk_id,
+        text: value.text,
+        token_count,
+        char_start: value.char_start,
+        char_end: value.char_end,
+        body_chunk: !value.is_glossary,
     }
 }
 

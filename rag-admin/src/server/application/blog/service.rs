@@ -11,7 +11,8 @@ use crate::server::application::ports::Tokenizer;
 use crate::server::application::AppError;
 use crate::server::domain::{Chunk, Post};
 use crate::shared::{
-    ChunkPreview, ChunkingConfig, GlossaryTermDto, PostDetailDto, PostSummary, SettingsDto,
+    ChunkPreview, ChunkStrategy, ChunkingConfig, GlossaryTermDto, PostDetailDto, PostSummary,
+    SettingsDto,
 };
 
 pub struct PostService {
@@ -103,10 +104,27 @@ impl PostService {
             })
             .unwrap_or(true);
 
-        let chunked_post = self
-            .post_chunking_service
-            .chunk_post(&post, effective, true)
-            .await?;
+        let skip_saved_llm_preview =
+            chunking_override.is_none() && effective.strategy == ChunkStrategy::Llm;
+        let (chunked_post, chunk_preview_notice) = if skip_saved_llm_preview {
+            (
+                crate::server::application::chunking::ChunkedPost {
+                    body_chunks: Vec::new(),
+                    glossary_chunks: post.glossary_chunks(0),
+                },
+                Some(
+                    "LLM chunk preview skipped on initial load. Apply an explicit preview override to generate it."
+                        .to_string(),
+                ),
+            )
+        } else {
+            (
+                self.post_chunking_service
+                    .chunk_post(&post, effective, true)
+                    .await?,
+                None,
+            )
+        };
 
         let mut all_previews: Vec<ChunkPreview> = chunked_post
             .body_chunks
@@ -135,6 +153,7 @@ impl PostService {
             effective_chunking: effective,
             default_chunking,
             post_chunking_config,
+            chunk_preview_notice,
             glossary_terms: post
                 .glossary_terms()
                 .iter()
@@ -204,18 +223,22 @@ mod tests {
     fn default_chunking() -> ChunkingConfig {
         ChunkingConfig {
             strategy: ChunkStrategy::Section,
-            max_section_chars: 8000,
-            target_chars: 1600,
-            overlap_chars: 240,
-            min_chars: 320,
-            llm_micro_chunk_chars: 300,
+            max_section_tokens: 480,
+            target_tokens: 384,
+            overlap_tokens: 64,
+            min_tokens: 96,
+            llm_micro_chunk_tokens: 96,
         }
     }
 
+    fn markdown_parser() -> Arc<dyn crate::server::application::ports::MarkdownParser> {
+        Arc::new(crate::server::infrastructure::markdown::MarkdownRsParser)
+    }
+
     fn post_chunking_service() -> Arc<PostChunkingService> {
-        let mut chunking_engine = ChunkingEngine::new();
-        chunking_engine.add(Arc::new(SectionChunker {}));
-        chunking_engine.add(Arc::new(BertChunker {}));
+        let mut chunking_engine = ChunkingEngine::new(Arc::new(MockTokenizer::new()));
+        chunking_engine.add(Arc::new(SectionChunker::new(markdown_parser())));
+        chunking_engine.add(Arc::new(BertChunker::new(markdown_parser())));
         PostChunkingService::new(Arc::new(chunking_engine))
     }
 
@@ -361,7 +384,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_post_detail_uses_chunking_override() {
-        let body = "## A\n\n".to_string() + &"x".repeat(5000);
+        let body = "## A\n\n".to_string() + &"x ".repeat(5000);
         let post = make_blog_post("a", "Alpha", &body);
         let blog = Arc::new(MockBlogSource::new().with_post(post));
         let manifest = Arc::new(MockManifestStore::new());
@@ -377,12 +400,38 @@ mod tests {
 
         let override_cfg = ChunkingConfig {
             strategy: ChunkStrategy::Section,
-            max_section_chars: 1000,
+            max_section_tokens: 100,
             ..ChunkingConfig::default()
         };
         let detail = svc.get_post_detail("a", Some(override_cfg)).await.unwrap();
         assert_eq!(detail.effective_chunking, override_cfg);
         assert!(detail.chunk_preview.len() > 1);
+    }
+
+    #[tokio::test]
+    async fn get_post_detail_skips_saved_llm_preview_on_initial_load() {
+        let post = make_blog_post("a", "Alpha", "## A\n\nbody");
+        let llm_config = ChunkingConfig {
+            strategy: ChunkStrategy::Llm,
+            llm_micro_chunk_tokens: 96,
+            ..ChunkingConfig::default()
+        };
+        let svc = PostService::new(
+            Arc::new(MockBlogSource::new().with_post(post)),
+            Arc::new(MockManifestStore::new()),
+            Arc::new(MockPostChunkingConfigStore::new().with_config("a", llm_config)),
+            Arc::new(MockTokenizer::new()),
+            TOKEN_LIMIT,
+            settings(),
+            post_chunking_service(),
+        );
+
+        let detail = svc.get_post_detail("a", None).await.unwrap();
+
+        assert_eq!(detail.effective_chunking, llm_config);
+        assert_eq!(detail.post_chunking_config, Some(llm_config));
+        assert!(detail.chunk_preview_notice.is_some());
+        assert!(detail.chunk_preview.is_empty());
     }
 
     #[tokio::test]

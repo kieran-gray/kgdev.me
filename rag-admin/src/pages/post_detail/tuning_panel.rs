@@ -17,11 +17,7 @@ pub fn TuningPanel(
         }
     });
 
-    let strategy_value = move || match working.get().strategy {
-        ChunkStrategy::Bert => "bert",
-        ChunkStrategy::Section => "section",
-        ChunkStrategy::Llm => "llm",
-    };
+    let strategy_value = move || working.get().strategy.as_str();
 
     let is_overridden = move || committed.get().is_some();
     let has_unsaved_changes = move || working.get() != committed.get().unwrap_or(default_config);
@@ -62,88 +58,46 @@ pub fn TuningPanel(
                         on:change=move |e| {
                             let v = event_target_value(&e);
                             update(Box::new(move |c| {
-                                c.strategy = match v.as_str() {
-                                    "section" => ChunkStrategy::Section,
-                                    "llm" => ChunkStrategy::Llm,
-                                    _ => ChunkStrategy::Bert,
-                                };
+                                let strategy = ChunkStrategy::from_id(&v).unwrap_or_default();
+                                *c = ChunkingConfig::for_strategy(strategy);
                             }));
                         }
                     >
-                        <option value="bert">"bert"</option>
-                        <option value="section">"section"</option>
-                        <option value="llm">"llm"</option>
+                        {ChunkStrategy::all()
+                            .iter()
+                            .map(|definition| view! {
+                                <option value=definition.id>{definition.label}</option>
+                            })
+                            .collect_view()}
                     </select>
                 </SmallField>
 
-                {move || match working.get().strategy {
-                    ChunkStrategy::Section => view! {
-                        <SmallField label="MAX_SECTION_CHARS">
-                            <input
-                                class="input font-mono text-xs"
-                                type="number"
-                                min="1"
-                                prop:value=move || working.get().max_section_chars.to_string()
-                                on:input=move |e| {
-                                    let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                                    update(Box::new(move |c| c.max_section_chars = v));
-                                }
-                            />
-                        </SmallField>
-                    }.into_any(),
-                    ChunkStrategy::Bert => view! {
+                {move || {
+                    let params = working.get().strategy.definition().params;
+                    view! {
                         <div class="space-y-3">
-                            <SmallField label="TARGET_CHARS">
-                                <input
-                                    class="input font-mono text-xs"
-                                    type="number"
-                                    min="1"
-                                    prop:value=move || working.get().target_chars.to_string()
-                                    on:input=move |e| {
-                                        let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                                        update(Box::new(move |c| c.target_chars = v));
+                            {params
+                                .iter()
+                                .map(|param| {
+                                    let key = param.key;
+                                    let min = param.min;
+                                    view! {
+                                        <SmallField label=param.label>
+                                            <input
+                                                class="input font-mono text-xs"
+                                                type="number"
+                                                min=min.to_string()
+                                                prop:value=move || working.get().param_value(key).to_string()
+                                                on:input=move |e| {
+                                                    let v: u32 = event_target_value(&e).parse().unwrap_or(min);
+                                                    update(Box::new(move |c| c.set_param_value(key, v.max(min))));
+                                                }
+                                            />
+                                        </SmallField>
                                     }
-                                />
-                            </SmallField>
-                            <SmallField label="OVERLAP_CHARS">
-                                <input
-                                    class="input font-mono text-xs"
-                                    type="number"
-                                    min="0"
-                                    prop:value=move || working.get().overlap_chars.to_string()
-                                    on:input=move |e| {
-                                        let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                                        update(Box::new(move |c| c.overlap_chars = v));
-                                    }
-                                />
-                            </SmallField>
-                            <SmallField label="MIN_CHARS">
-                                <input
-                                    class="input font-mono text-xs"
-                                    type="number"
-                                    min="0"
-                                    prop:value=move || working.get().min_chars.to_string()
-                                    on:input=move |e| {
-                                        let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                                        update(Box::new(move |c| c.min_chars = v));
-                                    }
-                                />
-                            </SmallField>
+                                })
+                                .collect_view()}
                         </div>
-                    }.into_any(),
-                    ChunkStrategy::Llm => view! {
-                        <SmallField label="MICRO_CHUNK_CHARS">
-                            <input
-                                class="input font-mono text-xs"
-                                type="number"
-                                min="100"
-                                prop:value=move || working.get().llm_micro_chunk_chars.to_string()
-                                on:input=move |e| {
-                                    let v: u32 = event_target_value(&e).parse().unwrap_or(300);
-                                    update(Box::new(move |c| c.llm_micro_chunk_chars = v.max(100)));
-                                }
-                            />
-                        </SmallField>
                     }.into_any()
                 }}
             </div>

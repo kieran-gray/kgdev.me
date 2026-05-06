@@ -39,7 +39,7 @@ impl EvaluationGenerator for OllamaEvaluationGenerator {
                 model: model.to_string(),
                 system: prompt.system,
                 user: prompt.user,
-                temperature: 0.2,
+                temperature: 0.6,
                 response_format: ChatResponseFormat::Json,
             })
             .await?;

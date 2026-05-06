@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_query_map;
 
-use crate::server_fns::embed_texts;
+use crate::server_functions::embed::embed_texts;
 use crate::shared::EmbedResult;
 
 #[component]

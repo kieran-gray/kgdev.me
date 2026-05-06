@@ -283,17 +283,7 @@ impl IngestService {
 }
 
 fn describe_chunking(c: ChunkingConfig) -> String {
-    use crate::shared::ChunkStrategy;
-    match c.strategy {
-        ChunkStrategy::Bert => format!(
-            "bert · target={} · overlap={} · min={}",
-            c.target_chars, c.overlap_chars, c.min_chars
-        ),
-        ChunkStrategy::Section => format!("section · max_chars={}", c.max_section_chars),
-        ChunkStrategy::Llm => {
-            format!("llm · micro_chunk_chars={}", c.llm_micro_chunk_chars)
-        }
-    }
+    c.describe()
 }
 
 fn now_rfc3339() -> String {
@@ -307,11 +297,13 @@ fn now_rfc3339() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+
     use crate::server::application::chunking::chunkers::SectionChunker;
     use crate::server::application::chunking::ChunkingEngine;
     use crate::server::application::test_support::{
         make_blog_post, make_glossary_term, MockBlogSource, MockEmbedder, MockKvStore,
-        MockManifestStore, MockPostChunkingConfigStore, MockVectorStore,
+        MockManifestStore, MockPostChunkingConfigStore, MockTokenizer, MockVectorStore,
     };
     use crate::server::domain::PostVersion;
     use crate::shared::{
@@ -324,11 +316,11 @@ mod tests {
     fn default_chunking() -> ChunkingConfig {
         ChunkingConfig {
             strategy: ChunkStrategy::Section,
-            max_section_chars: 8000,
-            target_chars: 1600,
-            overlap_chars: 240,
-            min_chars: 320,
-            llm_micro_chunk_chars: 300,
+            max_section_tokens: 480,
+            target_tokens: 384,
+            overlap_tokens: 64,
+            min_tokens: 96,
+            llm_micro_chunk_tokens: 96,
         }
     }
 
@@ -348,6 +340,10 @@ mod tests {
             chunking_config: Some(default_chunking()),
             embedding_model: Some(embedding_model()),
         }
+    }
+
+    fn markdown_parser() -> Arc<dyn crate::server::application::ports::MarkdownParser> {
+        Arc::new(crate::server::infrastructure::markdown::MarkdownRsParser)
     }
 
     struct Fixture {
@@ -379,8 +375,8 @@ mod tests {
                 ..SettingsDto::default()
             }));
 
-            let mut chunking_engine = ChunkingEngine::new();
-            chunking_engine.add(Arc::new(SectionChunker {}));
+            let mut chunking_engine = ChunkingEngine::new(Arc::new(MockTokenizer::new()));
+            chunking_engine.add(Arc::new(SectionChunker::new(markdown_parser())));
             let post_chunking_service = PostChunkingService::new(Arc::new(chunking_engine));
 
             let embedding_service = EmbeddingService::new(embedder.clone());
@@ -565,7 +561,7 @@ mod tests {
 
         let override_cfg = ChunkingConfig {
             strategy: ChunkStrategy::Section,
-            max_section_chars: 200,
+            max_section_tokens: 200,
             ..ChunkingConfig::default()
         };
 

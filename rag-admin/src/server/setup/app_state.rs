@@ -4,11 +4,13 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 
 use crate::server::application::blog::{ports::PostChunkingConfigStore, PostService};
-use crate::server::application::chunking::chunkers::{BertChunker, LlmChunker, SectionChunker};
+use crate::server::application::chunking::chunkers::{
+    register_builtin_chunkers, BuiltinChunkerDeps,
+};
 use crate::server::application::chunking::{ChunkingEngine, PostChunkingService};
 use crate::server::application::embedding::{ports::Embedder, EmbeddingService};
 use crate::server::application::evaluation::{
-    ports::EvaluationGenerator, ChunkingEvaluationService,
+    ports::EvaluationGenerator, ChunkingEvaluationService, ChunkingEvaluationServiceDeps,
 };
 use crate::server::application::ingest::{ports::VectorStore, IngestService, IngestServiceDeps};
 use crate::server::application::{AppError, JobRegistry};
@@ -23,6 +25,7 @@ use crate::server::infrastructure::http_client::ReqwestHttpClient;
 use crate::server::infrastructure::ingest::FileManifestStore;
 use crate::server::infrastructure::kv::CloudflareKvStore;
 use crate::server::infrastructure::llm::OllamaChatClient;
+use crate::server::infrastructure::markdown::MarkdownRsParser;
 use crate::server::infrastructure::tokenizer::{HuggingFaceTokenizer, EMBEDDING_TOKEN_LIMIT};
 use crate::server::infrastructure::vector::CloudflareVectorStore;
 use crate::server::setup::config::{
@@ -72,6 +75,7 @@ impl AppState {
         let chat_client = OllamaChatClient::new(http.clone(), settings.clone());
         let evaluation_generator: Arc<dyn EvaluationGenerator> =
             OllamaEvaluationGenerator::new(chat_client.clone());
+        let markdown_parser = Arc::new(MarkdownRsParser);
 
         let manifest_store = FileManifestStore::new(manifest_path());
         let post_chunking_config_store: Arc<dyn PostChunkingConfigStore> =
@@ -83,10 +87,15 @@ impl AppState {
 
         let embedding_service = EmbeddingService::new(embedder.clone());
 
-        let mut chunking_engine = ChunkingEngine::new();
-        chunking_engine.add(Arc::new(SectionChunker {}));
-        chunking_engine.add(Arc::new(BertChunker {}));
-        chunking_engine.add(Arc::new(LlmChunker::create(chat_client, settings.clone())));
+        let mut chunking_engine = ChunkingEngine::new(tokenizer.clone());
+        register_builtin_chunkers(
+            &mut chunking_engine,
+            BuiltinChunkerDeps {
+                chat_client,
+                markdown_parser,
+                settings: settings.clone(),
+            },
+        );
         let chunking_engine = Arc::new(chunking_engine);
         let post_chunking_service = PostChunkingService::new(chunking_engine);
 
@@ -106,7 +115,7 @@ impl AppState {
             blog_source.clone(),
             manifest_store,
             post_chunking_config_store.clone(),
-            tokenizer,
+            tokenizer.clone(),
             EMBEDDING_TOKEN_LIMIT,
             settings.clone(),
             post_chunking_service.clone(),
@@ -115,16 +124,18 @@ impl AppState {
         let evaluation_dataset_store = FileEvaluationDatasetStore::new(evaluations_dir());
         let evaluation_result_store = FileEvaluationResultStore::new(evaluations_dir());
 
-        let chunking_evaluation_service = ChunkingEvaluationService::new(
-            blog_source,
-            evaluation_generator.clone(),
-            embedding_service.clone(),
-            settings.clone(),
-            job_registry.clone(),
-            evaluation_dataset_store,
-            evaluation_result_store,
-            post_chunking_service,
-        );
+        let chunking_evaluation_service =
+            ChunkingEvaluationService::new(ChunkingEvaluationServiceDeps {
+                blog_source,
+                generator: evaluation_generator.clone(),
+                embedding_service: embedding_service.clone(),
+                settings: settings.clone(),
+                job_registry: job_registry.clone(),
+                evaluation_dataset_store,
+                evaluation_result_store,
+                post_chunking_service,
+                tokenizer,
+            });
 
         let state = Self {
             settings,

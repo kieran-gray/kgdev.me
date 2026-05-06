@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::ChunkingConfig;
+use super::{ChunkingConfig, EmbedderBackend};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -93,12 +93,16 @@ pub struct EvaluationReference {
     pub char_start: u32,
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub char_end: u32,
+    #[serde(default)]
+    pub embedding: Option<Vec<OrderedF32>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EvaluationQuestion {
     pub question: String,
     pub references: Vec<EvaluationReference>,
+    #[serde(default)]
+    pub embedding: Option<Vec<OrderedF32>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -106,6 +110,12 @@ pub struct EvaluationDataset {
     pub slug: String,
     pub post_version: String,
     pub generated_at: String,
+    #[serde(default)]
+    pub embedding_model_backend: Option<EmbedderBackend>,
+    #[serde(default)]
+    pub embedding_model_id: Option<String>,
+    #[serde(default)]
+    pub embedding_model_dims: Option<u32>,
     pub questions: Vec<EvaluationQuestion>,
 }
 
@@ -116,6 +126,31 @@ pub struct EvaluationDatasetStatus {
     pub exists: bool,
     pub question_count: u32,
     pub generated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct OrderedF32(pub f32);
+
+impl Eq for OrderedF32 {}
+
+impl From<f32> for OrderedF32 {
+    fn from(value: f32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<OrderedF32> for f32 {
+    fn from(value: OrderedF32) -> Self {
+        value.0
+    }
+}
+
+pub fn ordered_f32_vec(values: Vec<f32>) -> Vec<OrderedF32> {
+    values.into_iter().map(OrderedF32::from).collect()
+}
+
+pub fn plain_f32_vec(values: &[OrderedF32]) -> Vec<f32> {
+    values.iter().copied().map(f32::from).collect()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -143,6 +178,45 @@ impl Default for EvaluationRunOptions {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EvaluationAutotuneRequest {
+    pub current_config: ChunkingConfig,
+    pub top_k_values: Vec<u32>,
+    pub min_score_milli_values: Vec<u32>,
+    pub include_glossary_values: Vec<bool>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EvaluationResultSplit {
+    #[default]
+    Full,
+    Tuning,
+    Holdout,
+}
+
+impl EvaluationResultSplit {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Tuning => "tuning",
+            Self::Holdout => "holdout",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvaluationAutotuneSummary {
+    pub tuning_question_count: u32,
+    pub holdout_question_count: u32,
+    pub candidate_count: u32,
+    pub selected_label: String,
+    pub selected_options: EvaluationRunOptions,
+    pub selected_config: ChunkingConfig,
+    pub tuning_score: f32,
+    pub holdout_score: f32,
+}
+
 impl EvaluationRunOptions {
     pub fn min_score(&self) -> f32 {
         milli_to_f32(self.min_score_milli)
@@ -167,6 +241,63 @@ pub struct EvaluationMetrics {
     pub precision_omega_std: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EvaluationScoreWeights {
+    pub recall: f32,
+    pub iou: f32,
+    pub precision: f32,
+    pub precision_omega: f32,
+}
+
+impl Default for EvaluationScoreWeights {
+    fn default() -> Self {
+        Self {
+            recall: 0.40,
+            iou: 0.25,
+            precision: 0.20,
+            precision_omega: 0.15,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EvaluationScorePolicy {
+    weights: EvaluationScoreWeights,
+}
+
+impl EvaluationScorePolicy {
+    pub fn new(weights: EvaluationScoreWeights) -> Self {
+        Self { weights }
+    }
+
+    pub fn score(self, metrics: &EvaluationMetrics) -> f32 {
+        metrics.recall_mean * self.weights.recall
+            + metrics.iou_mean * self.weights.iou
+            + metrics.precision_mean * self.weights.precision
+            + metrics.precision_omega_mean * self.weights.precision_omega
+    }
+}
+
+impl Default for EvaluationScorePolicy {
+    fn default() -> Self {
+        Self::new(EvaluationScoreWeights::default())
+    }
+}
+
+pub fn evaluation_score(metrics: &EvaluationMetrics) -> f32 {
+    EvaluationScorePolicy::default().score(metrics)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvaluationReferenceResult {
+    pub content: String,
+    pub char_start: u32,
+    pub char_end: u32,
+    pub covered_chars: u32,
+    pub total_chars: u32,
+    pub recall: f32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationQuestionResult {
     pub question: String,
@@ -175,24 +306,55 @@ pub struct EvaluationQuestionResult {
     pub iou: f32,
     pub retrieved_chunk_ids: Vec<u32>,
     pub missed_reference_count: u32,
+    #[serde(default)]
+    pub reference_results: Vec<EvaluationReferenceResult>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationVariantResult {
     pub variant: ChunkingVariant,
+    #[serde(default)]
+    pub options: EvaluationRunOptions,
+    #[serde(default)]
+    pub split: EvaluationResultSplit,
+    #[serde(default)]
+    pub selected: bool,
     pub metrics: EvaluationMetrics,
     pub chunk_count: u32,
-    pub average_chunk_chars: u32,
-    pub average_retrieved_chars: u32,
+    #[serde(default, alias = "average_chunk_chars")]
+    pub average_chunk_tokens: u32,
+    #[serde(default, alias = "average_retrieved_chars")]
+    pub average_retrieved_tokens: u32,
     pub question_results: Vec<EvaluationQuestionResult>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationRunResult {
+    #[serde(default)]
+    pub run_id: String,
     pub slug: String,
     pub post_version: String,
+    #[serde(default)]
+    pub created_at: String,
     pub options: EvaluationRunOptions,
+    #[serde(default)]
+    pub autotune: Option<EvaluationAutotuneSummary>,
     pub variants: Vec<EvaluationVariantResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvaluationRunSummary {
+    pub run_id: String,
+    pub created_at: String,
+    pub options: EvaluationRunOptions,
+    pub variant_labels: Vec<String>,
+    pub variant_count: u32,
+    pub option_count: u32,
+    pub best_label: String,
+    pub best_score: f32,
+    pub best_recall: f32,
+    pub best_precision: f32,
+    pub best_precision_omega: f32,
 }
 
 fn milli_to_f32(value: u32) -> f32 {

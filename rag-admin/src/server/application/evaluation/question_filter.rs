@@ -128,7 +128,9 @@ mod tests {
                 content: reference.into(),
                 char_start: 0,
                 char_end: reference.chars().count() as u32,
+                embedding: None,
             }],
+            embedding: None,
         }
     }
 

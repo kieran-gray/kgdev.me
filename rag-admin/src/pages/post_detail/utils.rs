@@ -1,4 +1,4 @@
-use crate::shared::{ChunkStrategy, ChunkingConfig, ChunkingVariant, LogEvent};
+use crate::shared::{ChunkingConfig, ChunkingVariant, LogEvent};
 use leptos::prelude::*;
 
 #[cfg(feature = "hydrate")]
@@ -101,64 +101,23 @@ pub fn short_hash(hash: &str) -> String {
 }
 
 pub fn sweep_variants(current: ChunkingConfig) -> Vec<ChunkingVariant> {
-    let mut variants = vec![ChunkingVariant {
-        label: "current".into(),
-        config: current,
-    }];
-
-    for max_section_chars in [2000, 4000, 8000, 12000] {
-        let config = ChunkingConfig {
-            strategy: ChunkStrategy::Section,
-            max_section_chars,
-            ..ChunkingConfig::default()
-        };
-        push_variant(
-            &mut variants,
-            format!("section:{max_section_chars}"),
+    ChunkingConfig::sweep_configs(current)
+        .into_iter()
+        .map(|config| ChunkingVariant {
+            label: chunking_variant_label(&config),
             config,
-        );
-    }
-
-    for (target_chars, overlap_chars) in [(800, 0), (1200, 120), (1600, 240), (2400, 240)] {
-        let config = ChunkingConfig {
-            strategy: ChunkStrategy::Bert,
-            target_chars,
-            overlap_chars,
-            min_chars: 320,
-            ..ChunkingConfig::default()
-        };
-        push_variant(
-            &mut variants,
-            format!("bert:{target_chars}/{overlap_chars}"),
-            config,
-        );
-    }
-
-    for llm_micro_chunk_chars in [150, 300, 450] {
-        let config = ChunkingConfig {
-            strategy: ChunkStrategy::Llm,
-            llm_micro_chunk_chars,
-            ..ChunkingConfig::default()
-        };
-        push_variant(
-            &mut variants,
-            format!("llm:{llm_micro_chunk_chars}"),
-            config,
-        );
-    }
-
-    variants
+        })
+        .collect()
 }
 
-pub fn push_variant(variants: &mut Vec<ChunkingVariant>, label: String, config: ChunkingConfig) {
-    if variants.iter().all(|v| v.config != config) {
-        variants.push(ChunkingVariant { label, config });
-    }
+pub fn chunking_variant_label(config: &ChunkingConfig) -> String {
+    config.display_label()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::ChunkStrategy;
 
     fn default_config(strategy: ChunkStrategy) -> ChunkingConfig {
         ChunkingConfig {
@@ -176,9 +135,9 @@ mod tests {
             .map(|variant| variant.label.as_str())
             .collect::<Vec<_>>();
 
-        assert!(labels.contains(&"llm:150"));
-        assert!(labels.contains(&"llm:300"));
-        assert!(labels.contains(&"llm:450"));
+        assert!(labels.contains(&"llm:64"));
+        assert!(labels.contains(&"llm:96"));
+        assert!(labels.contains(&"llm:128"));
         assert!(variants
             .iter()
             .any(|variant| variant.config.strategy == ChunkStrategy::Llm));
@@ -188,13 +147,13 @@ mod tests {
     fn sweep_variants_keeps_current_llm_without_duplicate() {
         let current = ChunkingConfig {
             strategy: ChunkStrategy::Llm,
-            llm_micro_chunk_chars: 300,
+            llm_micro_chunk_tokens: 96,
             ..ChunkingConfig::default()
         };
 
         let variants = sweep_variants(current);
 
-        assert_eq!(variants.first().unwrap().label, "current");
+        assert_eq!(variants.first().unwrap().label, "llm:96");
         assert_eq!(
             variants
                 .iter()

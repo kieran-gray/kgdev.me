@@ -7,5 +7,6 @@ pub mod http_client;
 pub mod ingest;
 pub mod kv;
 pub mod llm;
+pub mod markdown;
 pub mod tokenizer;
 pub mod vector;

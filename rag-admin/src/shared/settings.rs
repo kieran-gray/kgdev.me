@@ -45,10 +45,10 @@ mod tests {
             },
             "default_chunking": {
                 "strategy": "section",
-                "max_section_chars": "8000",
-                "target_chars": "1600",
-                "overlap_chars": "240",
-                "min_chars": "320"
+                "max_section_tokens": "480",
+                "target_tokens": "384",
+                "overlap_tokens": "64",
+                "min_tokens": "96"
             },
             "evaluation": {
                 "generation_backend": "ollama",
@@ -66,7 +66,7 @@ mod tests {
 
         assert_eq!(parsed.vector_index.dimensions(), 1024);
         assert_eq!(parsed.embedding_model.dims, 1024);
-        assert_eq!(parsed.default_chunking.max_section_chars, 8000);
+        assert_eq!(parsed.default_chunking.max_section_tokens, 480);
         assert_eq!(parsed.evaluation.question_count, 8);
     }
 }

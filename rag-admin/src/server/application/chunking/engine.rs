@@ -3,20 +3,22 @@ use std::{collections::BTreeMap, sync::Arc};
 use crate::{
     server::application::{
         chunking::{ports::TextChunker, ChunkOutput},
+        ports::Tokenizer,
         AppError,
     },
     shared::{ChunkStrategy, ChunkingConfig},
 };
 
-#[derive(Default)]
 pub struct ChunkingEngine {
     chunkers: BTreeMap<ChunkStrategy, Arc<dyn TextChunker>>,
+    tokenizer: Arc<dyn Tokenizer>,
 }
 
 impl ChunkingEngine {
-    pub fn new() -> Self {
+    pub fn new(tokenizer: Arc<dyn Tokenizer>) -> Self {
         Self {
             chunkers: BTreeMap::new(),
+            tokenizer,
         }
     }
 
@@ -29,12 +31,16 @@ impl ChunkingEngine {
         config: ChunkingConfig,
         source: &str,
     ) -> Result<Vec<ChunkOutput>, AppError> {
-        let chunker = self
-            .chunkers
-            .get(&config.strategy)
-            .ok_or_else(|| AppError::Validation("unsupported chunking strategy".into()))?;
+        let chunker = self.chunkers.get(&config.strategy).ok_or_else(|| {
+            AppError::Validation(format!(
+                "unsupported chunking strategy '{}'",
+                config.strategy.as_str()
+            ))
+        })?;
 
-        let chunks = chunker.chunk(config, source).await?;
+        let chunks = chunker
+            .chunk(config, source, self.tokenizer.as_ref())
+            .await?;
         Ok(chunks)
     }
 }
