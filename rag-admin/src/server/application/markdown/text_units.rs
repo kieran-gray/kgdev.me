@@ -171,3 +171,25 @@ fn parse_atx_heading(line: &str) -> Option<(usize, String)> {
     }
     Some((depth, text))
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::server::application::ports::MarkdownParser;
+    use crate::server::infrastructure::markdown::MarkdownRsParser;
+
+    #[test]
+    fn llm_text_units_bind_heading_and_colon_intro_list() {
+        let parser = MarkdownRsParser;
+        let doc = parser
+            .parse("## Heading\nIntro:\n- first\n- second\n\nTail sentence.")
+            .unwrap();
+
+        let units = doc.llm_text_units();
+
+        assert_eq!(units.len(), 2);
+        assert!(units[0].atomic);
+        assert!(units[0].text.starts_with("## Heading\nIntro:\n- first"));
+        assert!(units[0].text.contains("- second"));
+        assert_eq!(units[1].text, "Tail sentence.");
+    }
+}

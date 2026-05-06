@@ -764,45 +764,45 @@ impl ChunkingEvaluationService {
                 .await;
 
             match generated {
-                Ok(generated) => match ReferenceLocator::generated_to_question(
-                    &generated,
-                    post.markdown_body(),
-                ) {
-                    Ok(question) => {
-                        let decision = gate.try_accept(question).await?;
-                        match decision {
-                            CandidateDecision::Accepted { kept } => {
-                                if let Some(question) = gate.latest_question() {
-                                    previous_coverage.push(previous_coverage_entry(question));
+                Ok(generated) => {
+                    match ReferenceLocator::generated_to_question(&generated, post.markdown_body())
+                    {
+                        Ok(question) => {
+                            let decision = gate.try_accept(question).await?;
+                            match decision {
+                                CandidateDecision::Accepted { kept } => {
+                                    if let Some(question) = gate.latest_question() {
+                                        previous_coverage.push(previous_coverage_entry(question));
+                                    }
+                                    job.emit(IngestLogEvent::info(format!(
+                                        "accepted evaluation question {kept}/{target_questions}"
+                                    )))
+                                    .await;
                                 }
-                                job.emit(IngestLogEvent::info(format!(
-                                    "accepted evaluation question {kept}/{target_questions}"
-                                )))
-                                .await;
-                            }
-                            CandidateDecision::RejectedLowExcerptSimilarity { similarity } => {
-                                job.emit(IngestLogEvent::warn(format!(
+                                CandidateDecision::RejectedLowExcerptSimilarity { similarity } => {
+                                    job.emit(IngestLogEvent::warn(format!(
                                     "discarded generated question: low excerpt similarity {:.1}%",
                                     similarity * 100.0
                                 )))
-                                .await;
-                            }
-                            CandidateDecision::RejectedDuplicate { similarity } => {
-                                job.emit(IngestLogEvent::warn(format!(
-                                    "discarded generated question: duplicate similarity {:.1}%",
-                                    similarity * 100.0
-                                )))
-                                .await;
+                                    .await;
+                                }
+                                CandidateDecision::RejectedDuplicate { similarity } => {
+                                    job.emit(IngestLogEvent::warn(format!(
+                                        "discarded generated question: duplicate similarity {:.1}%",
+                                        similarity * 100.0
+                                    )))
+                                    .await;
+                                }
                             }
                         }
+                        Err(e) => {
+                            job.emit(IngestLogEvent::warn(format!(
+                                "discarded generated question: {e}"
+                            )))
+                            .await;
+                        }
                     }
-                    Err(e) => {
-                        job.emit(IngestLogEvent::warn(format!(
-                            "discarded generated question: {e}"
-                        )))
-                        .await;
-                    }
-                },
+                }
                 Err(e) => {
                     job.emit(IngestLogEvent::warn(format!(
                         "generation attempt {} failed: {e}",

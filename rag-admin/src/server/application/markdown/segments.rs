@@ -49,3 +49,27 @@ fn flush_segment(out: &mut Vec<SegmentBlock>, current: &[&Block], heading_path: 
         atomic: false,
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::server::application::ports::MarkdownParser;
+    use crate::server::infrastructure::markdown::MarkdownRsParser;
+
+    #[test]
+    fn bert_segments_keep_code_fences_atomic() {
+        let parser = MarkdownRsParser;
+        let doc = parser
+            .parse("## Code\nIntro\n\n```rust\nfn main() {}\n```\n\nOutro\n")
+            .unwrap();
+
+        let segments = doc.bert_segments();
+
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0].heading, "Code");
+        assert!(!segments[0].atomic);
+        assert!(segments[1].atomic);
+        assert!(segments[1].text.contains("```rust"));
+        assert_eq!(segments[2].heading, "Code");
+        assert!(segments[2].text.contains("Outro"));
+    }
+}

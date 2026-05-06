@@ -45,7 +45,12 @@ impl MdastMapper {
         }
 
         if raw_blocks[0].start > 0 {
-            blocks.push(make_block(source, 0, raw_blocks[0].start, BlockKind::Other)?);
+            blocks.push(make_block(
+                source,
+                0,
+                raw_blocks[0].start,
+                BlockKind::Other,
+            )?);
         }
 
         for (idx, raw) in raw_blocks.iter().enumerate() {
@@ -136,5 +141,28 @@ fn append_plain_text(node: &Node, out: &mut String) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use markdown::{to_mdast, ParseOptions};
+
+    #[test]
+    fn maps_heading_text_and_preserves_offsets() {
+        let source = "# Heading\n\nParagraph.\n";
+        let root = to_mdast(source, &ParseOptions::gfm()).unwrap();
+
+        let doc = MdastMapper::map_document(source, root).unwrap();
+
+        assert_eq!(doc.blocks.len(), 2);
+        match &doc.blocks[0].kind {
+            BlockKind::Heading(heading) => assert_eq!(heading.text, "Heading"),
+            other => panic!("expected heading block, got {other:?}"),
+        }
+        assert_eq!(doc.blocks[0].span.char_start, 0);
+        assert_eq!(doc.blocks[0].span.char_end, "# Heading\n\n".chars().count());
+        assert_eq!(doc.blocks[1].text, "Paragraph.\n");
     }
 }

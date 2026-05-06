@@ -37,3 +37,26 @@ fn flush_section(out: &mut Vec<SectionBlock>, current: &[&Block], heading_path: 
         heading: heading_path::join_heading_path(heading_path),
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::server::application::ports::MarkdownParser;
+    use crate::server::infrastructure::markdown::MarkdownRsParser;
+
+    #[test]
+    fn sections_split_at_cut_depth_and_preserve_heading_path() {
+        let parser = MarkdownRsParser;
+        let doc = parser
+            .parse("# Top\nIntro\n\n## Sub\nDetails\n\n#### Deep\nNested\n")
+            .unwrap();
+
+        let sections = doc.sections(3);
+
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[0].heading, "Top");
+        assert!(sections[0].text.contains("Intro"));
+        assert_eq!(sections[1].heading, "Top > Sub > Deep");
+        assert!(sections[1].text.contains("#### Deep"));
+        assert!(sections[1].text.contains("Nested"));
+    }
+}
