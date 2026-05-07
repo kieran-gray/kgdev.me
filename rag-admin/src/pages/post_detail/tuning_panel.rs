@@ -7,20 +7,30 @@ pub fn TuningPanel(
     committed: ReadSignal<Option<ChunkingConfig>>,
     set_committed: WriteSignal<Option<ChunkingConfig>>,
 ) -> impl IntoView {
-    let initial = committed.get_untracked().unwrap_or(default_config);
+    let default_config = StoredValue::new(default_config);
+    let initial = committed
+        .get_untracked()
+        .unwrap_or(default_config.get_value());
     let (working, set_working) = signal(initial);
 
     Effect::new(move |_| {
-        let next = committed.get().unwrap_or(default_config);
+        let next = committed.get().unwrap_or(default_config.get_value());
         if working.get_untracked() != next {
             set_working.set(next);
         }
     });
 
-    let strategy_value = move || working.get().strategy.as_str();
+    let strategy_value = move || working.get().strategy().as_str();
 
     let is_overridden = move || committed.get().is_some();
-    let has_unsaved_changes = move || working.get() != committed.get().unwrap_or(default_config);
+    let has_unsaved_changes = move || {
+        working.with(|w| {
+            committed.with(|c| match c {
+                Some(c) => w != c,
+                None => default_config.with_value(|d| w != d),
+            })
+        })
+    };
 
     let update = move |f: Box<dyn Fn(&mut ChunkingConfig)>| {
         set_working.update(|c| f(c));
@@ -28,7 +38,7 @@ pub fn TuningPanel(
 
     let save = move |_| {
         let next = working.get_untracked();
-        if next == default_config {
+        if next == default_config.get_value() {
             set_committed.set(None);
         } else {
             set_committed.set(Some(next));
@@ -36,7 +46,7 @@ pub fn TuningPanel(
     };
 
     let reset = move |_| {
-        set_working.set(default_config);
+        set_working.set(default_config.get_value());
         set_committed.set(None);
     };
 
@@ -73,7 +83,7 @@ pub fn TuningPanel(
                 </SmallField>
 
                 {move || {
-                    let params = working.get().strategy.definition().params;
+                    let params = working.get().strategy().definition().params;
                     view! {
                         <div class="space-y-3">
                             {params

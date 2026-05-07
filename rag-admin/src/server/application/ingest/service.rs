@@ -6,7 +6,9 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::server::application::blog::ports::{BlogSource, PostChunkingConfigStore};
 use crate::server::application::chunking::PostChunkingService;
-use crate::server::application::ingest::ports::{KvStore, ManifestStore, VectorStore};
+use crate::server::application::ingest::ports::{
+    KvStore, ManifestStore, VectorIndex, VectorRecordMapper,
+};
 use crate::server::application::{embedding::EmbeddingService, AppError};
 use crate::server::application::{IngestLogEvent, Job, JobRegistry};
 use crate::server::domain::{ManifestEntry, Post, VectorRecord};
@@ -18,7 +20,8 @@ const UPSERT_BATCH: usize = 100;
 pub struct IngestService {
     blog_source: Arc<dyn BlogSource>,
     embedding_service: Arc<EmbeddingService>,
-    vector_store: Arc<dyn VectorStore>,
+    vector_store: Arc<dyn VectorIndex>,
+    vector_record_mapper: Arc<dyn VectorRecordMapper>,
     kv_store: Arc<dyn KvStore>,
     manifest_store: Arc<dyn ManifestStore>,
     post_chunking_config_store: Arc<dyn PostChunkingConfigStore>,
@@ -31,7 +34,8 @@ pub struct IngestService {
 pub struct IngestServiceDeps {
     pub blog_source: Arc<dyn BlogSource>,
     pub embedding_service: Arc<EmbeddingService>,
-    pub vector_store: Arc<dyn VectorStore>,
+    pub vector_store: Arc<dyn VectorIndex>,
+    pub vector_record_mapper: Arc<dyn VectorRecordMapper>,
     pub kv_store: Arc<dyn KvStore>,
     pub manifest_store: Arc<dyn ManifestStore>,
     pub post_chunking_config_store: Arc<dyn PostChunkingConfigStore>,
@@ -46,6 +50,7 @@ impl IngestService {
             blog_source: deps.blog_source,
             embedding_service: deps.embedding_service,
             vector_store: deps.vector_store,
+            vector_record_mapper: deps.vector_record_mapper,
             kv_store: deps.kv_store,
             manifest_store: deps.manifest_store,
             post_chunking_config_store: deps.post_chunking_config_store,
@@ -114,25 +119,30 @@ impl IngestService {
             (
                 s.vector_index.clone(),
                 s.embedding_model.clone(),
-                s.default_chunking,
+                s.default_chunking.clone(),
             )
         };
         let post_chunking_config = self.post_chunking_config_store.get(slug).await?;
+        let using_chunking_override = match options.chunking_override.as_ref() {
+            Some(options) => {
+                job.emit(IngestLogEvent::info(format!(
+                    "using one-shot chunking override: {}",
+                    describe_chunking(options)
+                )))
+                .await;
+                true
+            }
+            _ => false,
+        };
+
         let effective = options
             .chunking_override
             .or(post_chunking_config)
             .unwrap_or(default_chunking);
 
-        if let Some(options) = options.chunking_override {
-            job.emit(IngestLogEvent::info(format!(
-                "using one-shot chunking override: {}",
-                describe_chunking(options)
-            )))
-            .await;
-        }
         let chunked_post = self
             .post_chunking_service
-            .chunk_post(&post, effective, true)
+            .chunk_post(&post, &effective, true)
             .await?;
         let post_chunk_count = chunked_post.body_chunk_count();
         let glossary_chunk_count = chunked_post.glossary_chunk_count();
@@ -143,12 +153,13 @@ impl IngestService {
             (&prev, options.force),
             (Some(p), false) if post.version() == &p.post_version
         );
-        let chunking_unchanged = options.chunking_override.is_none()
+        let chunking_unchanged = !using_chunking_override
             && prev
                 .as_ref()
-                .and_then(|p| p.chunking_config)
-                .map(|c| c == effective)
+                .and_then(|p| p.chunking_config.clone())
+                .map(|ref c| c == &effective)
                 .unwrap_or(false);
+
         let embedding_model_unchanged = prev
             .as_ref()
             .and_then(|p| p.embedding_model.as_ref())
@@ -216,11 +227,7 @@ impl IngestService {
         let records: Vec<VectorRecord> = chunks
             .iter()
             .zip(embeddings)
-            .map(|(c, values)| VectorRecord {
-                id: post.vector_id(c),
-                values,
-                metadata: post.metadata_for(c),
-            })
+            .map(|(c, values)| self.vector_record_mapper.map(&post, c, values))
             .collect();
 
         for (i, batch) in records.chunks(UPSERT_BATCH).enumerate() {
@@ -232,22 +239,34 @@ impl IngestService {
                 vector_index.name()
             )))
             .await;
-            self.vector_store.upsert(vector_index.name(), batch).await?;
+            self.vector_store.upsert(batch).await?;
         }
 
         if let Some(p) = &prev {
             if p.chunk_count > chunk_count {
+                use crate::server::domain::Chunk;
                 let stale: Vec<String> = (chunk_count..p.chunk_count)
-                    .map(|i| format!("{}:{}", slug, i))
+                    .map(|i| {
+                        self.vector_record_mapper.map_id(
+                            &post,
+                            &Chunk {
+                                chunk_id: i,
+                                heading: String::new(),
+                                text: String::new(),
+                                char_start: 0,
+                                char_end: 0,
+                                sources: vec![],
+                                is_glossary: false,
+                            },
+                        )
+                    })
                     .collect();
                 job.emit(IngestLogEvent::info(format!(
                     "deleting {} stale vector(s)",
                     stale.len()
                 )))
                 .await;
-                self.vector_store
-                    .delete_ids(vector_index.name(), &stale)
-                    .await?;
+                self.vector_store.delete(&stale).await?;
             }
         }
 
@@ -282,7 +301,7 @@ impl IngestService {
     }
 }
 
-fn describe_chunking(c: ChunkingConfig) -> String {
+fn describe_chunking(c: &ChunkingConfig) -> String {
     c.describe()
 }
 
@@ -300,28 +319,22 @@ mod tests {
     use std::sync::Arc;
 
     use crate::server::application::chunking::chunkers::SectionChunker;
-    use crate::server::application::chunking::ChunkingEngine;
+    use crate::server::application::chunking::ChunkerRegistry;
     use crate::server::application::test_support::{
         make_blog_post, make_glossary_term, MockBlogSource, MockEmbedder, MockKvStore,
         MockManifestStore, MockPostChunkingConfigStore, MockTokenizer, MockVectorStore,
     };
     use crate::server::domain::PostVersion;
+    use crate::server::infrastructure::vector::CloudflareVectorRecordMapper;
     use crate::shared::{
-        ChunkStrategy, ChunkingConfig, EmbedderBackend, EmbeddingModel, VectorIndexConfig,
+        ChunkingConfig, EmbedderBackend, EmbeddingModel, SectionChunkingConfig, VectorIndexConfig,
     };
 
     const VECTOR_INDEX: &str = "test-index";
     const TEST_DIMS: u32 = 4;
 
     fn default_chunking() -> ChunkingConfig {
-        ChunkingConfig {
-            strategy: ChunkStrategy::Section,
-            max_section_tokens: 480,
-            target_tokens: 384,
-            overlap_tokens: 64,
-            min_tokens: 96,
-            llm_micro_chunk_tokens: 96,
-        }
+        ChunkingConfig::default()
     }
 
     fn embedding_model() -> EmbeddingModel {
@@ -376,16 +389,19 @@ mod tests {
             }));
 
             let mut chunking_engine =
-                ChunkingEngine::new(Arc::new(MockTokenizer::new()), markdown_parser());
+                ChunkerRegistry::new(Arc::new(MockTokenizer::new()), markdown_parser());
             chunking_engine.add(Arc::new(SectionChunker {}));
             let post_chunking_service = PostChunkingService::new(Arc::new(chunking_engine));
 
             let embedding_service = EmbeddingService::new(embedder.clone());
 
+            let vector_record_mapper = Arc::new(CloudflareVectorRecordMapper {});
+
             let service = IngestService::new(IngestServiceDeps {
                 blog_source: blog,
                 embedding_service,
                 vector_store: vectors.clone(),
+                vector_record_mapper,
                 kv_store: kv.clone(),
                 manifest_store: manifest.clone(),
                 post_chunking_config_store,
@@ -425,8 +441,7 @@ mod tests {
 
         let upserts = fx.vectors.upserts();
         assert_eq!(upserts.len(), 1);
-        assert_eq!(upserts[0].0, VECTOR_INDEX);
-        let upserted = &upserts[0].1;
+        let upserted = &upserts[0];
         assert!(!upserted.is_empty());
         assert!(upserted.iter().all(|r| r.id.starts_with("a:")));
 
@@ -526,12 +541,11 @@ mod tests {
             .await
             .unwrap();
 
-        let upserted_count = fx.vectors.upserts()[0].1.len() as u32;
+        let upserted_count = fx.vectors.upserts()[0].len() as u32;
         let deletes = fx.vectors.deletes();
         assert_eq!(deletes.len(), 1);
-        assert_eq!(deletes[0].0, VECTOR_INDEX);
         let stale_ids: Vec<String> = (upserted_count..5).map(|i| format!("a:{i}")).collect();
-        assert_eq!(deletes[0].1, stale_ids);
+        assert_eq!(deletes[0], stale_ids);
     }
 
     #[tokio::test]
@@ -560,11 +574,9 @@ mod tests {
             MockManifestStore::new().with_entry("a", manifest_entry(version.into_string(), 1)),
         );
 
-        let override_cfg = ChunkingConfig {
-            strategy: ChunkStrategy::Section,
+        let override_cfg = ChunkingConfig::Section(SectionChunkingConfig {
             max_section_tokens: 200,
-            ..ChunkingConfig::default()
-        };
+        });
 
         fx.service
             .run_ingest(
@@ -599,7 +611,7 @@ mod tests {
             .await
             .unwrap();
 
-        let upserted = &fx.vectors.upserts()[0].1;
+        let upserted = &fx.vectors.upserts()[0];
         let glossary_records: Vec<_> = upserted
             .iter()
             .filter(|r| {

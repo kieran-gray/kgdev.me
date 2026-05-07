@@ -37,7 +37,7 @@ pub trait DocumentChunker: Send + Sync {
 
     async fn chunk(
         &self,
-        config: ChunkingConfig,
+        config: &ChunkingConfig,
         source: &Document,
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError>;

@@ -8,7 +8,8 @@ mod settings;
 mod vector;
 
 pub use chunking::{
-    ChunkParamDefinition, ChunkParamKey, ChunkStrategy, ChunkerDefinition, ChunkingConfig,
+    BertChunkingConfig, ChunkParamDefinition, ChunkParamKey, ChunkStrategy, ChunkerDefinition,
+    ChunkingConfig, LlmChunkingConfig, SectionChunkingConfig,
 };
 pub use embedding::{
     catalog_for_backend, CatalogEntry, EmbedResult, EmbedderBackend, EmbeddingModel,

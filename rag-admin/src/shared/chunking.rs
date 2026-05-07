@@ -130,156 +130,193 @@ impl ChunkStrategy {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ChunkingConfig {
-    pub strategy: ChunkStrategy,
-    #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
-    pub max_section_tokens: u32,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ChunkingConfig {
+    Bert(BertChunkingConfig),
+    Section(SectionChunkingConfig),
+    Llm(LlmChunkingConfig),
+}
+
+impl Default for ChunkingConfig {
+    fn default() -> Self {
+        Self::Section(SectionChunkingConfig {
+            max_section_tokens: 2000,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BertChunkingConfig {
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub target_tokens: u32,
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub overlap_tokens: u32,
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub min_tokens: u32,
-    #[serde(
-        default = "default_llm_micro_chunk_tokens",
-        deserialize_with = "crate::shared::serde_compat::u32_from_string"
-    )]
-    pub llm_micro_chunk_tokens: u32,
 }
 
-fn default_llm_micro_chunk_tokens() -> u32 {
-    96
-}
-
-impl Default for ChunkingConfig {
+impl Default for BertChunkingConfig {
     fn default() -> Self {
         Self {
-            strategy: ChunkStrategy::default(),
-            max_section_tokens: 480,
             target_tokens: 384,
             overlap_tokens: 64,
             min_tokens: 96,
-            llm_micro_chunk_tokens: default_llm_micro_chunk_tokens(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SectionChunkingConfig {
+    #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
+    pub max_section_tokens: u32,
+}
+
+impl Default for SectionChunkingConfig {
+    fn default() -> Self {
+        Self {
+            max_section_tokens: 480,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LlmChunkingConfig {
+    #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
+    pub target_tokens: u32,
+    #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
+    pub micro_chunk_tokens: u32,
+    pub generation_model: String,
+}
+
+impl Default for LlmChunkingConfig {
+    fn default() -> Self {
+        Self {
+            target_tokens: 384,
+            micro_chunk_tokens: 96,
+            generation_model: "ministral-3:14b".to_string(),
         }
     }
 }
 
 impl ChunkingConfig {
+    pub fn strategy(&self) -> ChunkStrategy {
+        match self {
+            Self::Bert(_) => ChunkStrategy::Bert,
+            Self::Section(_) => ChunkStrategy::Section,
+            Self::Llm(_) => ChunkStrategy::Llm,
+        }
+    }
+
     pub fn for_strategy(strategy: ChunkStrategy) -> Self {
-        Self {
-            strategy,
-            ..Self::default()
+        match strategy {
+            ChunkStrategy::Bert => Self::Bert(BertChunkingConfig::default()),
+            ChunkStrategy::Section => Self::Section(SectionChunkingConfig::default()),
+            ChunkStrategy::Llm => Self::Llm(LlmChunkingConfig::default()),
         }
-    }
-
-    pub fn size_limit_for_display(&self, embedding_token_limit: u32) -> u32 {
-        match self.strategy {
-            ChunkStrategy::Bert | ChunkStrategy::Section | ChunkStrategy::Llm => {
-                embedding_token_limit
-            }
-        }
-    }
-
-    pub fn max_section_tokens(&self) -> usize {
-        self.max_section_tokens.max(1) as usize
     }
 
     pub fn param_value(&self, key: ChunkParamKey) -> u32 {
-        match key {
-            ChunkParamKey::MaxSectionTokens => self.max_section_tokens,
-            ChunkParamKey::TargetTokens => self.target_tokens,
-            ChunkParamKey::OverlapTokens => self.overlap_tokens,
-            ChunkParamKey::MinTokens => self.min_tokens,
-            ChunkParamKey::LlmMicroChunkTokens => self.llm_micro_chunk_tokens,
+        match (self, key) {
+            (Self::Section(c), ChunkParamKey::MaxSectionTokens) => c.max_section_tokens,
+            (Self::Bert(c), ChunkParamKey::TargetTokens) => c.target_tokens,
+            (Self::Bert(c), ChunkParamKey::OverlapTokens) => c.overlap_tokens,
+            (Self::Bert(c), ChunkParamKey::MinTokens) => c.min_tokens,
+            (Self::Llm(c), ChunkParamKey::TargetTokens) => c.target_tokens,
+            (Self::Llm(c), ChunkParamKey::LlmMicroChunkTokens) => c.micro_chunk_tokens,
+            _ => 0,
         }
     }
 
     pub fn set_param_value(&mut self, key: ChunkParamKey, value: u32) {
-        match key {
-            ChunkParamKey::MaxSectionTokens => self.max_section_tokens = value,
-            ChunkParamKey::TargetTokens => self.target_tokens = value,
-            ChunkParamKey::OverlapTokens => self.overlap_tokens = value,
-            ChunkParamKey::MinTokens => self.min_tokens = value,
-            ChunkParamKey::LlmMicroChunkTokens => self.llm_micro_chunk_tokens = value.max(32),
+        match (self, key) {
+            (Self::Section(c), ChunkParamKey::MaxSectionTokens) => c.max_section_tokens = value,
+            (Self::Bert(c), ChunkParamKey::TargetTokens) => c.target_tokens = value,
+            (Self::Bert(c), ChunkParamKey::OverlapTokens) => c.overlap_tokens = value,
+            (Self::Bert(c), ChunkParamKey::MinTokens) => c.min_tokens = value,
+            (Self::Llm(c), ChunkParamKey::TargetTokens) => c.target_tokens = value,
+            (Self::Llm(c), ChunkParamKey::LlmMicroChunkTokens) => c.micro_chunk_tokens = value,
+            _ => {}
+        }
+    }
+
+    pub fn size_limit_for_display(&self, token_limit: u32) -> u32 {
+        match self {
+            Self::Bert(c) => c.target_tokens.min(token_limit),
+            Self::Section(c) => c.max_section_tokens.min(token_limit),
+            Self::Llm(c) => c.target_tokens.min(token_limit),
         }
     }
 
     pub fn display_label(&self) -> String {
-        match self.strategy {
-            ChunkStrategy::Section => format!("section:{}", self.max_section_tokens),
-            ChunkStrategy::Bert => format!("bert:{}/{}", self.target_tokens, self.overlap_tokens),
-            ChunkStrategy::Llm => format!("llm:{}", self.llm_micro_chunk_tokens),
+        match self {
+            Self::Bert(config) => {
+                format!("bert:{}/{}", config.target_tokens, config.overlap_tokens)
+            }
+            Self::Section(config) => format!("section:{}", config.max_section_tokens),
+            Self::Llm(config) => format!("llm:{}", config.micro_chunk_tokens),
         }
     }
 
     pub fn describe(&self) -> String {
-        match self.strategy {
-            ChunkStrategy::Bert => format!(
+        match self {
+            Self::Bert(config) => format!(
                 "bert · target={} · overlap={} · min={}",
-                self.target_tokens, self.overlap_tokens, self.min_tokens
+                config.target_tokens, config.overlap_tokens, config.min_tokens
             ),
-            ChunkStrategy::Section => format!("section · max_tokens={}", self.max_section_tokens),
-            ChunkStrategy::Llm => {
-                format!("llm · micro_chunk_tokens={}", self.llm_micro_chunk_tokens)
+            Self::Section(config) => format!("section · max_tokens={}", config.max_section_tokens),
+            Self::Llm(config) => {
+                format!("llm · micro_chunk_tokens={}", config.micro_chunk_tokens)
             }
         }
     }
 
     pub fn detail_label(&self, size_limit: u32) -> String {
-        match self.strategy {
-            ChunkStrategy::Bert => format!(
+        match self {
+            Self::Bert(config) => format!(
                 "STRATEGY: BERT · TOKEN_LIMIT: {} · TARGET: {} · OVERLAP: {} · MIN: {}",
-                size_limit, self.target_tokens, self.overlap_tokens, self.min_tokens
+                size_limit, config.target_tokens, config.overlap_tokens, config.min_tokens
             ),
-            ChunkStrategy::Llm => format!(
+            Self::Section(config) => format!(
+                "STRATEGY: SECTION · MAX_TOKENS: {}",
+                config.max_section_tokens
+            ),
+            Self::Llm(config) => format!(
                 "STRATEGY: LLM · TOKEN_LIMIT: {} · TARGET: {} · MICRO_CHUNK_TOKENS: {}",
-                size_limit, self.target_tokens, self.llm_micro_chunk_tokens
+                size_limit, config.target_tokens, config.micro_chunk_tokens
             ),
-            ChunkStrategy::Section => {
-                format!(
-                    "STRATEGY: SECTION · MAX_TOKENS: {}",
-                    self.max_section_tokens
-                )
-            }
         }
     }
 
-    pub fn sweep_configs(current: Self) -> Vec<Self> {
-        let mut configs = vec![current];
+    pub fn sweep_configs(current: &Self) -> Vec<Self> {
+        let mut configs = vec![current.clone()];
 
         for max_section_tokens in [256, 384, 480, 512] {
             push_unique_config(
                 &mut configs,
-                ChunkingConfig {
-                    strategy: ChunkStrategy::Section,
-                    max_section_tokens,
-                    ..ChunkingConfig::default()
-                },
+                ChunkingConfig::Section(SectionChunkingConfig { max_section_tokens }),
             );
         }
 
         for (target_tokens, overlap_tokens) in [(256, 0), (320, 48), (384, 64), (448, 64)] {
             push_unique_config(
                 &mut configs,
-                ChunkingConfig {
-                    strategy: ChunkStrategy::Bert,
+                ChunkingConfig::Bert(BertChunkingConfig {
                     target_tokens,
                     overlap_tokens,
                     min_tokens: 96,
-                    ..ChunkingConfig::default()
-                },
+                }),
             );
         }
 
-        for llm_micro_chunk_tokens in [64, 96, 128] {
+        for micro_chunk_tokens in [64, 96, 128] {
             push_unique_config(
                 &mut configs,
-                ChunkingConfig {
-                    strategy: ChunkStrategy::Llm,
-                    llm_micro_chunk_tokens,
-                    ..ChunkingConfig::default()
-                },
+                ChunkingConfig::Llm(LlmChunkingConfig {
+                    target_tokens: 500,
+                    micro_chunk_tokens,
+                    generation_model: "ministral-3:14b".to_string(),
+                }),
             );
         }
 
@@ -321,12 +358,12 @@ mod tests {
 
     #[test]
     fn sweep_configs_are_unique_and_start_with_current() {
-        let current = ChunkingConfig {
-            strategy: ChunkStrategy::Llm,
-            llm_micro_chunk_tokens: 96,
-            ..ChunkingConfig::default()
-        };
-        let configs = ChunkingConfig::sweep_configs(current);
+        let current = ChunkingConfig::Llm(LlmChunkingConfig {
+            target_tokens: 500,
+            micro_chunk_tokens: 96,
+            generation_model: "ministral-3:14b".to_string(),
+        });
+        let configs = ChunkingConfig::sweep_configs(&current);
 
         assert_eq!(configs.first(), Some(&current));
         for (idx, config) in configs.iter().enumerate() {

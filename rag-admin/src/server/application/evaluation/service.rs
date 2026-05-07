@@ -398,7 +398,7 @@ impl ChunkingEvaluationService {
         request: EvaluationAutotuneRequest,
         job: Arc<Job>,
     ) -> Result<(), AppError> {
-        let variants = autotune_variants(request.current_config);
+        let variants = autotune_variants(&request.current_config);
         let option_sets = autotune_option_sets(&request);
         let candidate_count = variants.len() * option_sets.len();
 
@@ -672,7 +672,7 @@ impl ChunkingEvaluationService {
 
         let chunked_post = self
             .post_chunking_service
-            .chunk_post(&context.post, variant.config, options.include_glossary)
+            .chunk_post(&context.post, &variant.config, options.include_glossary)
             .await?;
         let mut eval_chunks: Vec<EvalChunk> = Vec::new();
         for chunk in chunked_post.body_chunks {
@@ -919,12 +919,12 @@ fn validate_autotune_request(request: &EvaluationAutotuneRequest) -> Result<(), 
     Ok(())
 }
 
-fn autotune_variants(current_config: ChunkingConfig) -> Vec<ChunkingVariant> {
+fn autotune_variants(current_config: &ChunkingConfig) -> Vec<ChunkingVariant> {
     ChunkingConfig::sweep_configs(current_config)
         .into_iter()
         .map(|config| ChunkingVariant {
             label: config.display_label(),
-            config,
+            config: config.clone(),
         })
         .collect()
 }
@@ -1211,7 +1211,7 @@ fn new_run_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::{ChunkStrategy, EvaluationReference};
+    use crate::shared::EvaluationReference;
 
     #[test]
     fn tuning_holdout_split_is_deterministic_and_non_overlapping() {
@@ -1230,10 +1230,7 @@ mod tests {
     #[test]
     fn autotune_option_sets_deduplicate_grid_values() {
         let request = EvaluationAutotuneRequest {
-            current_config: ChunkingConfig {
-                strategy: ChunkStrategy::Section,
-                ..ChunkingConfig::default()
-            },
+            current_config: ChunkingConfig::default(),
             top_k_values: vec![3, 3, 5],
             min_score_milli_values: vec![0, 700, 700],
             include_glossary_values: vec![true, false, true],

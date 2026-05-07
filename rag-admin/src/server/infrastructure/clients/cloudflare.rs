@@ -50,6 +50,10 @@ impl CloudflareApi {
         CloudflareCredentials::from_settings(&s)
     }
 
+    pub async fn vector_index_name(&self) -> String {
+        self.settings.read().await.vector_index.name().to_string()
+    }
+
     fn auth_headers(token: &str, content_type: &str) -> Result<HeaderMap, AppError> {
         let mut headers = HeaderMap::new();
         headers.insert(

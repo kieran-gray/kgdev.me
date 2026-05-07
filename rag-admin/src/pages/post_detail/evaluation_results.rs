@@ -41,6 +41,7 @@ pub fn EvaluationResults(
         )
     };
     let slug = StoredValue::new(slug);
+    let current_config = StoredValue::new(current_config);
     let best_action = StoredValue::new(best_action);
     let (help_open, set_help_open) = signal(false);
     let save_best = move |_| {
@@ -158,7 +159,7 @@ pub fn EvaluationResults(
                                         variant=v
                                         rank=rank + 1
                                         slug=slug.get_value()
-                                        current_config=current_config
+                                        current_config=current_config.get_value()
                                         set_override_config=set_override_config
                                         set_save_status=set_save_status
                                     />
@@ -184,8 +185,8 @@ fn EvaluationResultRow(
     let metrics = variant.metrics;
     let options = variant.options.clone();
     let options_for_save = options.clone();
-    let config = variant.variant.config;
-    let label = display_variant_label(variant.variant.label, &config);
+    let config = StoredValue::new(variant.variant.config);
+    let label = config.with_value(|c| display_variant_label(variant.variant.label, c));
     let chunk_count = variant.chunk_count;
     let average_retrieved_tokens = variant.average_retrieved_tokens;
     let missed_questions = variant
@@ -199,7 +200,7 @@ fn EvaluationResultRow(
     let preview_label = label.clone();
     let score = evaluation_score(&metrics);
     let is_best = rank == 1;
-    let is_current = config == current_config;
+    let is_current = config.with_value(|c| c == &current_config);
     let row_class = if is_best {
         "bg-emerald-950/30 hover:bg-emerald-950/40 group"
     } else {
@@ -207,15 +208,16 @@ fn EvaluationResultRow(
     };
 
     let preview = move |_| {
-        set_override_config.set(Some(config));
+        set_override_config.set(Some(config.get_value()));
         set_save_status.set(Some((true, format!("PREVIEWING_VARIANT: {preview_label}"))));
     };
     let save = move |_| {
         set_save_status.set(None);
         let slug = slug.get_value();
         let options = options_for_save.clone();
+        let cfg = config.get_value();
         spawn_local(async move {
-            match save_selected_configuration(slug, config, options).await {
+            match save_selected_configuration(slug, cfg, options).await {
                 Ok(()) => {
                     set_save_status.set(Some((true, "CONFIG_AND_EVAL_DEFAULTS_SAVED".into())))
                 }
@@ -402,7 +404,7 @@ struct BestVariantAction {
 fn best_variant_action(variant: &EvaluationVariantResult) -> BestVariantAction {
     BestVariantAction {
         label: display_variant_label(variant.variant.label.clone(), &variant.variant.config),
-        config: variant.variant.config,
+        config: variant.variant.config.clone(),
         options: variant.options.clone(),
     }
 }

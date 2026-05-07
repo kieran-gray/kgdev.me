@@ -101,7 +101,7 @@ pub fn short_hash(hash: &str) -> String {
 }
 
 pub fn sweep_variants(current: ChunkingConfig) -> Vec<ChunkingVariant> {
-    ChunkingConfig::sweep_configs(current)
+    ChunkingConfig::sweep_configs(&current)
         .into_iter()
         .map(|config| ChunkingVariant {
             label: chunking_variant_label(&config),
@@ -117,18 +117,11 @@ pub fn chunking_variant_label(config: &ChunkingConfig) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::ChunkStrategy;
-
-    fn default_config(strategy: ChunkStrategy) -> ChunkingConfig {
-        ChunkingConfig {
-            strategy,
-            ..ChunkingConfig::default()
-        }
-    }
+    use crate::shared::{ChunkStrategy, LlmChunkingConfig, SectionChunkingConfig};
 
     #[test]
     fn sweep_variants_includes_llm_candidates() {
-        let variants = sweep_variants(default_config(ChunkStrategy::Section));
+        let variants = sweep_variants(ChunkingConfig::Section(SectionChunkingConfig::default()));
 
         let labels = variants
             .iter()
@@ -140,18 +133,17 @@ mod tests {
         assert!(labels.contains(&"llm:128"));
         assert!(variants
             .iter()
-            .any(|variant| variant.config.strategy == ChunkStrategy::Llm));
+            .any(|variant| variant.config.strategy() == ChunkStrategy::Llm));
     }
 
     #[test]
     fn sweep_variants_keeps_current_llm_without_duplicate() {
-        let current = ChunkingConfig {
-            strategy: ChunkStrategy::Llm,
-            llm_micro_chunk_tokens: 96,
-            ..ChunkingConfig::default()
-        };
+        let current = ChunkingConfig::Llm(LlmChunkingConfig {
+            micro_chunk_tokens: 96,
+            ..LlmChunkingConfig::default()
+        });
 
-        let variants = sweep_variants(current);
+        let variants = sweep_variants(current.clone());
 
         assert_eq!(variants.first().unwrap().label, "llm:96");
         assert_eq!(

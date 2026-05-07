@@ -7,12 +7,12 @@ use crate::server::application::blog::{ports::PostChunkingConfigStore, PostServi
 use crate::server::application::chunking::chunkers::{
     register_builtin_chunkers, BuiltinChunkerDeps,
 };
-use crate::server::application::chunking::{ChunkingEngine, PostChunkingService};
+use crate::server::application::chunking::{ChunkerRegistry, PostChunkingService};
 use crate::server::application::embedding::{ports::Embedder, EmbeddingService};
 use crate::server::application::evaluation::{
     ports::EvaluationGenerator, ChunkingEvaluationService, ChunkingEvaluationServiceDeps,
 };
-use crate::server::application::ingest::{ports::VectorStore, IngestService, IngestServiceDeps};
+use crate::server::application::ingest::{ports::VectorIndex, IngestService, IngestServiceDeps};
 use crate::server::application::{AppError, JobRegistry};
 use crate::server::infrastructure::blog::HttpBlogSource;
 use crate::server::infrastructure::chunking::FilePostChunkingConfigStore;
@@ -27,7 +27,7 @@ use crate::server::infrastructure::kv::CloudflareKvStore;
 use crate::server::infrastructure::llm::OllamaChatClient;
 use crate::server::infrastructure::markdown::MarkdownRsParser;
 use crate::server::infrastructure::tokenizer::{HuggingFaceTokenizer, EMBEDDING_TOKEN_LIMIT};
-use crate::server::infrastructure::vector::CloudflareVectorStore;
+use crate::server::infrastructure::vector::{CloudflareVectorRecordMapper, VectorizeVectorIndex};
 use crate::server::setup::config::{
     evaluations_dir, load_settings, manifest_path, post_chunking_config_path, save_settings,
     settings_path, tokenizer_path,
@@ -43,7 +43,7 @@ pub struct AppState {
     pub chunking_evaluation_service: Arc<ChunkingEvaluationService>,
     pub embedding_service: Arc<EmbeddingService>,
     pub job_registry: Arc<JobRegistry>,
-    pub vector_store: Arc<dyn VectorStore>,
+    pub vector_store: Arc<dyn VectorIndex>,
     pub embedder: Arc<dyn Embedder>,
     pub evaluation_generator: Arc<dyn EvaluationGenerator>,
     pub post_chunking_config_store: Arc<dyn PostChunkingConfigStore>,
@@ -70,7 +70,8 @@ impl AppState {
             settings: settings.clone(),
         });
 
-        let vector_store: Arc<dyn VectorStore> = CloudflareVectorStore::new(cf_api.clone());
+        let vector_store: Arc<dyn VectorIndex> = VectorizeVectorIndex::new(cf_api.clone());
+        let vector_record_mapper = Arc::new(CloudflareVectorRecordMapper);
         let kv_store = CloudflareKvStore::new(cf_api.clone());
         let chat_client = OllamaChatClient::new(http.clone(), settings.clone());
         let evaluation_generator: Arc<dyn EvaluationGenerator> =
@@ -87,7 +88,7 @@ impl AppState {
 
         let embedding_service = EmbeddingService::new(embedder.clone());
 
-        let mut chunking_engine = ChunkingEngine::new(tokenizer.clone(), markdown_parser);
+        let mut chunking_engine = ChunkerRegistry::new(tokenizer.clone(), markdown_parser);
         register_builtin_chunkers(
             &mut chunking_engine,
             BuiltinChunkerDeps {
@@ -102,6 +103,7 @@ impl AppState {
             blog_source: blog_source.clone(),
             embedding_service: embedding_service.clone(),
             vector_store: vector_store.clone(),
+            vector_record_mapper,
             kv_store,
             manifest_store: manifest_store.clone(),
             post_chunking_config_store: post_chunking_config_store.clone(),

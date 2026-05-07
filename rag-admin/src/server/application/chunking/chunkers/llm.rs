@@ -54,12 +54,16 @@ impl DocumentChunker for LlmChunker {
 
     async fn chunk(
         &self,
-        config: ChunkingConfig,
+        config: &ChunkingConfig,
         source: &Document,
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
+        let ChunkingConfig::Llm(config) = config else {
+            unreachable!()
+        };
+
         let target_tokens = config.target_tokens.max(1) as usize;
-        let micro_size = config.llm_micro_chunk_tokens.max(32) as usize;
+        let micro_size = config.micro_chunk_tokens.max(32) as usize;
         let budget = TokenBudget::new(tokenizer);
         let units = source.llm_text_units();
         let micro_chunks = split_into_micro_chunks(units, micro_size, &budget)?;

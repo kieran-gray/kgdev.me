@@ -22,16 +22,24 @@ impl DocumentChunker for SectionChunker {
 
     async fn chunk(
         &self,
-        config: ChunkingConfig,
+        config: &ChunkingConfig,
         source: &Document,
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
+        let ChunkingConfig::Section(config) = config else {
+            unreachable!()
+        };
+
         let budget = TokenBudget::new(tokenizer);
-        let max_tokens = config.max_section_tokens();
         let sections = source.sections(SECTION_CUT_DEPTH);
         let mut split = Vec::new();
+
         for section in sections {
-            split.extend(split_oversized(section, max_tokens, &budget)?);
+            split.extend(split_oversized(
+                section,
+                config.max_section_tokens as usize,
+                &budget,
+            )?);
         }
 
         Ok(split
@@ -106,8 +114,9 @@ fn last_double_newline(window: &[char]) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use crate::server::{
-        application::ports::MarkdownParser, infrastructure::markdown::MarkdownRsParser,
+    use crate::{
+        server::{application::ports::MarkdownParser, infrastructure::markdown::MarkdownRsParser},
+        shared::SectionChunkingConfig,
     };
 
     use super::*;
@@ -122,7 +131,7 @@ mod tests {
     }
 
     fn cfg() -> ChunkingConfig {
-        ChunkingConfig::default()
+        ChunkingConfig::Section(SectionChunkingConfig::default())
     }
 
     #[tokio::test]
@@ -130,7 +139,7 @@ mod tests {
         let src = &to_markdown("## A\n\nfirst paragraph.\n\n## B\n\nsecond paragraph.");
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
-        let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
+        let chunks = chunker.chunk(&cfg(), src, &tokenizer).await.unwrap();
         assert_eq!(chunks.len(), 2);
         assert!(chunks[0].text.contains("first paragraph"));
         assert!(chunks[1].text.contains("second paragraph"));
@@ -141,7 +150,7 @@ mod tests {
         let src = &to_markdown("## Top\n\nintro\n\n#### Deep\n\nstill same chunk.");
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
-        let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
+        let chunks = chunker.chunk(&cfg(), src, &tokenizer).await.unwrap();
         assert_eq!(chunks.len(), 1);
         assert!(chunks[0].text.contains("Deep"));
         assert!(chunks[0].text.contains("still same chunk"));
@@ -152,19 +161,23 @@ mod tests {
         let src = &to_markdown("## A\n\n```md\n## not a real heading\n```\n\nbody");
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
-        let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
+        let chunks = chunker.chunk(&cfg(), src, &tokenizer).await.unwrap();
         assert_eq!(chunks.len(), 1);
         assert!(chunks[0].text.contains("## not a real heading"));
     }
 
     #[tokio::test]
     async fn oversized_section_splits() {
-        let max = cfg().max_section_tokens as usize;
+        let ChunkingConfig::Section(config) = cfg() else {
+            unreachable!()
+        };
+
+        let max = config.max_section_tokens as usize;
         let para = "x ".repeat(max / 2);
         let src = &to_markdown(&format!("## Big\n\n{para}\n\n{para}\n\n{para}"));
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
-        let chunks = chunker.chunk(cfg(), &src, &tokenizer).await.unwrap();
+        let chunks = chunker.chunk(&cfg(), &src, &tokenizer).await.unwrap();
         assert!(
             chunks.len() > 1,
             "expected fallback split, got {} chunks",
@@ -181,17 +194,17 @@ mod tests {
 
         let para = "x ".repeat(300);
         let src = &to_markdown(&format!("## Big\n\n{para}\n\n{para}\n\n{para}"));
-        let big = ChunkingConfig {
+
+        let big = ChunkingConfig::Section(SectionChunkingConfig {
             max_section_tokens: 480,
-            ..Default::default()
-        };
-        let small = ChunkingConfig {
+        });
+        let small = ChunkingConfig::Section(SectionChunkingConfig {
             max_section_tokens: 128,
-            ..Default::default()
-        };
+        });
+
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
-        let big_chunks = chunker.chunk(big, &src, &tokenizer).await.unwrap();
-        let small_chunks = chunker.chunk(small, &src, &tokenizer).await.unwrap();
+        let big_chunks = chunker.chunk(&big, &src, &tokenizer).await.unwrap();
+        let small_chunks = chunker.chunk(&small, &src, &tokenizer).await.unwrap();
         assert!(small_chunks.len() > big_chunks.len());
     }
 
@@ -200,7 +213,7 @@ mod tests {
         let src = &to_markdown("# Top\n\nintro\n\n## Sub\n\ndetail");
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
-        let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
+        let chunks = chunker.chunk(&cfg(), src, &tokenizer).await.unwrap();
         let headings: Vec<&str> = chunks.iter().map(|c| c.heading.as_str()).collect();
         assert!(headings.iter().any(|h| h.contains("Top")));
         assert!(headings.iter().any(|h| h.contains("Sub")));
@@ -212,7 +225,7 @@ mod tests {
         let src = &to_markdown("# Top\n\n### Deep");
         let chunker = chunker();
         let tokenizer = crate::server::application::test_support::MockTokenizer::new();
-        let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
+        let chunks = chunker.chunk(&cfg(), src, &tokenizer).await.unwrap();
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].heading, "Top");
         assert_eq!(chunks[1].heading, "Top > Deep");

@@ -44,11 +44,9 @@ mod tests {
                 "dims": "1024"
             },
             "default_chunking": {
-                "strategy": "section",
-                "max_section_tokens": "480",
-                "target_tokens": "384",
-                "overlap_tokens": "64",
-                "min_tokens": "96"
+                "section": {
+                    "max_section_tokens": "480"
+                }
             },
             "evaluation": {
                 "generation_backend": "ollama",
@@ -66,7 +64,12 @@ mod tests {
 
         assert_eq!(parsed.vector_index.dimensions(), 1024);
         assert_eq!(parsed.embedding_model.dims, 1024);
-        assert_eq!(parsed.default_chunking.max_section_tokens, 480);
+        assert_eq!(
+            parsed
+                .default_chunking
+                .param_value(crate::shared::ChunkParamKey::MaxSectionTokens),
+            480
+        );
         assert_eq!(parsed.evaluation.question_count, 8);
     }
 }

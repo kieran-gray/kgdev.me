@@ -561,7 +561,7 @@ fn ChunkingDefaultsSection(
                 <Field label="STRATEGY" hint="bert = sliding window w/ overlap, section = one chunk per H2/H3, llm = semantic boundaries over micro chunks">
                     <select
                         class="input font-mono text-sm"
-                        prop:value=move || config.get().strategy.as_str()
+                        prop:value=move || config.get().strategy().as_str()
                         on:change=move |e| {
                             let v = event_target_value(&e);
                             set_config.update(|c| {
@@ -579,7 +579,7 @@ fn ChunkingDefaultsSection(
                     </select>
                 </Field>
                 {move || {
-                    let params = config.get().strategy.definition().params;
+                    let params = config.get().strategy().definition().params;
                     params
                         .iter()
                         .map(|param| {

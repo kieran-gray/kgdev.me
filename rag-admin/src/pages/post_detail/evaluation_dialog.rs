@@ -33,7 +33,7 @@ pub fn EvaluationDialog(
 ) -> impl IntoView {
     let slug_value = StoredValue::new(slug);
     let current_config_stored = StoredValue::new(current_config);
-    let matrix_variants = StoredValue::new(sweep_variants(current_config));
+    let matrix_variants = StoredValue::new(sweep_variants(current_config_stored.get_value()));
     let (refresh, set_refresh) = signal(0u32);
     let (events, set_events) = signal::<Vec<LogEvent>>(Vec::new());
     let (running, set_running) = signal(false);
@@ -44,7 +44,7 @@ pub fn EvaluationDialog(
     let (min_score_milli, set_min_score_milli) = signal(0u32);
     let (include_glossary, set_include_glossary) = signal(true);
     let (matrix_variant_label, set_matrix_variant_label) =
-        signal(chunking_variant_label(&current_config));
+        signal(current_config_stored.with_value(chunking_variant_label));
     let (matrix_top_k_values, set_matrix_top_k_values) = signal("2,3,5,8".to_string());
     let (matrix_min_score_values, set_matrix_min_score_values) =
         signal("400,500,600,700".to_string());

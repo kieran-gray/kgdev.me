@@ -75,7 +75,7 @@ impl PostChunkingConfigStore for FilePostChunkingConfigStore {
 
     async fn get(&self, slug: &str) -> Result<Option<ChunkingConfig>, AppError> {
         let _guard = self.lock.lock().await;
-        Ok(self.load_unlocked().await?.posts.get(slug).copied())
+        Ok(self.load_unlocked().await?.posts.get(slug).cloned())
     }
 
     async fn save(&self, slug: &str, config: ChunkingConfig) -> Result<(), AppError> {

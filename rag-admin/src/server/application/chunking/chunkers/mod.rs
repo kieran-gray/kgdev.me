@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
-use crate::server::application::chunking::ChunkingEngine;
+use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::ports::ChatClient;
 use crate::shared::SettingsDto;
 
@@ -19,10 +19,10 @@ pub struct BuiltinChunkerDeps {
     pub settings: Arc<RwLock<SettingsDto>>,
 }
 
-pub fn register_builtin_chunkers(engine: &mut ChunkingEngine, deps: BuiltinChunkerDeps) {
-    engine.add(Arc::new(SectionChunker {}));
-    engine.add(Arc::new(BertChunker {}));
-    engine.add(Arc::new(LlmChunker::create(
+pub fn register_builtin_chunkers(registry: &mut ChunkerRegistry, deps: BuiltinChunkerDeps) {
+    registry.add(Arc::new(SectionChunker {}));
+    registry.add(Arc::new(BertChunker {}));
+    registry.add(Arc::new(LlmChunker::create(
         deps.chat_client,
         deps.settings,
     )));

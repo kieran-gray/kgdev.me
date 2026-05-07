@@ -108,8 +108,8 @@ fn PostDetailView(
     let (history_refresh, set_history_refresh) = signal(0u32);
     let (save_status, set_save_status) = signal::<Option<(bool, String)>>(None);
 
-    let default_chunking = detail.default_chunking;
-    let effective_chunking = detail.effective_chunking;
+    let default_chunking = StoredValue::new(detail.default_chunking);
+    let effective_chunking = StoredValue::new(detail.effective_chunking);
     let token_limit = detail.embedding_token_limit;
 
     let make_ingest_options = move |force: bool, dry_run: bool| IngestOptions {
@@ -195,7 +195,7 @@ fn PostDetailView(
     let glossary = StoredValue::new(detail.glossary_terms.clone());
     let chunks = StoredValue::new(detail.chunk_preview.clone());
     let chunk_preview_notice = detail.chunk_preview_notice.clone();
-    let size_limit = effective_chunking.size_limit_for_display(token_limit);
+    let size_limit = effective_chunking.with_value(|c| c.size_limit_for_display(token_limit));
     let title = detail.title.clone();
     let slug_disp = detail.slug.clone();
     let evaluation_slug = detail.slug.clone();
@@ -286,7 +286,7 @@ fn PostDetailView(
 
         <EvaluationDialog
             slug=evaluation_slug
-            current_config=effective_chunking
+            current_config=effective_chunking.get_value()
             open=eval_dialog_open
             set_open=set_eval_dialog_open
             set_eval_result=set_eval_result
@@ -383,7 +383,7 @@ fn PostDetailView(
                                 </section>
 
                                 <TuningPanel
-                                    default_config=default_chunking
+                                    default_config=default_chunking.get_value()
                                     committed=override_config
                                     set_committed=set_override_config
                                 />
@@ -434,7 +434,7 @@ fn PostDetailView(
                                                 <EvaluationResults
                                                     result=result
                                                     slug=slug.get_value()
-                                                    current_config=effective_chunking
+                                                    current_config=effective_chunking.get_value()
                                                     set_override_config=set_override_config
                                                     set_save_status=set_save_status
                                                 />
@@ -463,7 +463,7 @@ fn PostDetailView(
                                     <span class="tech-label">"data.preview"</span>
                                     <h2 class="text-lg font-bold uppercase">{move || format!("CHUNK_STREAM [{:02}]", chunks.with_value(|c| c.len()))}</h2>
                                     <span class="tech-label opacity-50 mt-1">
-                                        {strategy_label(effective_chunking, size_limit)}
+                                        {strategy_label(effective_chunking.get_value(), size_limit)}
                                     </span>
                                 </div>
                                 {move || override_config.get().is_some().then(|| view! {
@@ -494,7 +494,7 @@ fn PostDetailView(
                                     .with_value(|c| {
                                         c.clone()
                                             .into_iter()
-                                            .map(|c| view! { <ChunkCard chunk=c strategy=effective_chunking.strategy size_limit=size_limit /> })
+                                            .map(|c| view! { <ChunkCard chunk=c strategy=effective_chunking.with_value(|c| c.strategy()) size_limit=size_limit /> })
                                             .collect_view()
                                     })}
                             </div>

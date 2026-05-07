@@ -6,7 +6,10 @@ use serde_json::Value;
 
 use crate::server::application::blog::ports::{BlogSource, PostChunkingConfigStore};
 use crate::server::application::embedding::ports::Embedder;
-use crate::server::application::ingest::ports::{KvStore, ManifestStore, VectorStore};
+use crate::server::application::ingest::ports::vector_index::{
+    VectorIndexDescription, VectorMatch, VectorQuery,
+};
+use crate::server::application::ingest::ports::{KvStore, ManifestStore, VectorIndex};
 use crate::server::application::ports::{
     ChatClient, ChatRequest, ChatResponse, Tokenized, Tokenizer,
 };
@@ -162,8 +165,8 @@ impl Embedder for MockEmbedder {
 }
 
 pub struct MockVectorStore {
-    upserts: Mutex<Vec<(String, Vec<VectorRecord>)>>,
-    deletes: Mutex<Vec<(String, Vec<String>)>>,
+    upserts: Mutex<Vec<Vec<VectorRecord>>>,
+    deletes: Mutex<Vec<Vec<String>>>,
 }
 
 impl MockVectorStore {
@@ -174,40 +177,40 @@ impl MockVectorStore {
         }
     }
 
-    pub fn upserts(&self) -> Vec<(String, Vec<VectorRecord>)> {
+    pub fn upserts(&self) -> Vec<Vec<VectorRecord>> {
         self.upserts.lock().unwrap().clone()
     }
 
-    pub fn deletes(&self) -> Vec<(String, Vec<String>)> {
+    pub fn deletes(&self) -> Vec<Vec<String>> {
         self.deletes.lock().unwrap().clone()
     }
 
     pub fn total_upserted(&self) -> usize {
-        self.upserts
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|(_, r)| r.len())
-            .sum()
+        self.upserts.lock().unwrap().iter().map(|r| r.len()).sum()
     }
 }
 
 #[async_trait]
-impl VectorStore for MockVectorStore {
-    async fn upsert(&self, index: &str, records: &[VectorRecord]) -> Result<(), AppError> {
-        self.upserts
-            .lock()
-            .unwrap()
-            .push((index.to_string(), records.to_vec()));
+impl VectorIndex for MockVectorStore {
+    async fn upsert(&self, records: &[VectorRecord]) -> Result<(), AppError> {
+        self.upserts.lock().unwrap().push(records.to_vec());
         Ok(())
     }
 
-    async fn delete_ids(&self, index: &str, ids: &[String]) -> Result<(), AppError> {
-        self.deletes
-            .lock()
-            .unwrap()
-            .push((index.to_string(), ids.to_vec()));
+    async fn delete(&self, ids: &[String]) -> Result<(), AppError> {
+        self.deletes.lock().unwrap().push(ids.to_vec());
         Ok(())
+    }
+
+    async fn query(&self, _q: &VectorQuery) -> Result<Vec<VectorMatch>, AppError> {
+        Ok(vec![])
+    }
+
+    async fn describe(&self) -> Result<VectorIndexDescription, AppError> {
+        Ok(VectorIndexDescription {
+            name: "mock".into(),
+            dimensions: 0,
+        })
     }
 }
 
@@ -297,12 +300,12 @@ impl PostChunkingConfigStore for MockPostChunkingConfigStore {
             .lock()
             .unwrap()
             .iter()
-            .map(|(k, v)| (k.clone(), *v))
+            .map(|(k, v)| (k.clone(), v.clone()))
             .collect())
     }
 
     async fn get(&self, slug: &str) -> Result<Option<ChunkingConfig>, AppError> {
-        Ok(self.configs.lock().unwrap().get(slug).copied())
+        Ok(self.configs.lock().unwrap().get(slug).cloned())
     }
 
     async fn save(&self, slug: &str, config: ChunkingConfig) -> Result<(), AppError> {

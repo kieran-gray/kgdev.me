@@ -16,10 +16,14 @@ impl DocumentChunker for BertChunker {
 
     async fn chunk(
         &self,
-        config: ChunkingConfig,
+        config: &ChunkingConfig,
         source: &Document,
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
+        let ChunkingConfig::Bert(config) = config else {
+            unreachable!()
+        };
+
         let target = config.target_tokens.max(1) as usize;
         let overlap = config.overlap_tokens as usize;
         let min = config.min_tokens as usize;
@@ -212,7 +216,7 @@ mod tests {
     use crate::server::application::ports::MarkdownParser;
     use crate::server::application::test_support::MockTokenizer;
     use crate::server::infrastructure::markdown::MarkdownRsParser;
-    use crate::shared::ChunkStrategy;
+    use crate::shared::BertChunkingConfig;
 
     fn chunker() -> BertChunker {
         BertChunker {}
@@ -224,10 +228,7 @@ mod tests {
     }
 
     fn cfg() -> ChunkingConfig {
-        ChunkingConfig {
-            strategy: ChunkStrategy::Bert,
-            ..Default::default()
-        }
+        ChunkingConfig::Bert(BertChunkingConfig::default())
     }
 
     #[tokio::test]
@@ -236,7 +237,7 @@ mod tests {
         let tokenizer = MockTokenizer::new();
 
         let src = &to_markdown("## A\nfirst paragraph.\n\n## B\nsecond paragraph.");
-        let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
+        let chunks = chunker.chunk(&cfg(), src, &tokenizer).await.unwrap();
         assert!(!chunks.is_empty());
         for (i, c) in chunks.iter().enumerate() {
             assert_eq!(c.chunk_id as usize, i);
@@ -249,7 +250,7 @@ mod tests {
         let tokenizer = MockTokenizer::new();
 
         let src = &to_markdown("# Top\n\nintro\n\n## Sub\n\ndetail");
-        let chunks = chunker.chunk(cfg(), src, &tokenizer).await.unwrap();
+        let chunks = chunker.chunk(&cfg(), src, &tokenizer).await.unwrap();
         let headings: Vec<&str> = chunks.iter().map(|c| c.heading.as_str()).collect();
         assert!(headings.iter().any(|h| h.contains("Top")));
         assert!(headings.iter().any(|h| h.contains("Sub")));
@@ -265,7 +266,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         let src = &to_markdown(&format!("## Code\n\n```rust\n{code}\n```\n"));
-        let chunks = chunker.chunk(cfg(), &src, &tokenizer).await.unwrap();
+        let chunks = chunker.chunk(&cfg(), &src, &tokenizer).await.unwrap();
         for c in chunks.iter().filter(|c| c.text.contains("```")) {
             let opens = c.text.matches("```").count();
             assert_eq!(opens % 2, 0, "chunk {} has unbalanced fences", c.chunk_id);
@@ -279,22 +280,18 @@ mod tests {
 
         let para = "Lorem ipsum dolor sit amet. ".repeat(120);
         let src = &to_markdown(&format!("## Big\n\n{para}"));
-        let big = ChunkingConfig {
-            strategy: ChunkStrategy::Bert,
+        let big = ChunkingConfig::Bert(BertChunkingConfig {
             target_tokens: 384,
             overlap_tokens: 64,
             min_tokens: 96,
-            ..Default::default()
-        };
-        let small = ChunkingConfig {
-            strategy: ChunkStrategy::Bert,
+        });
+        let small = ChunkingConfig::Bert(BertChunkingConfig {
             target_tokens: 128,
             overlap_tokens: 16,
             min_tokens: 32,
-            ..Default::default()
-        };
-        let big_chunks = chunker.chunk(big, &src, &tokenizer).await.unwrap();
-        let small_chunks = chunker.chunk(small, &src, &tokenizer).await.unwrap();
+        });
+        let big_chunks = chunker.chunk(&big, &src, &tokenizer).await.unwrap();
+        let small_chunks = chunker.chunk(&small, &src, &tokenizer).await.unwrap();
         assert!(small_chunks.len() > big_chunks.len());
     }
 }

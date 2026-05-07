@@ -9,13 +9,13 @@ use crate::{
     shared::{ChunkStrategy, ChunkingConfig},
 };
 
-pub struct ChunkingEngine {
+pub struct ChunkerRegistry {
     chunkers: BTreeMap<ChunkStrategy, Arc<dyn DocumentChunker>>,
     markdown_parser: Arc<dyn MarkdownParser>,
     tokenizer: Arc<dyn Tokenizer>,
 }
 
-impl ChunkingEngine {
+impl ChunkerRegistry {
     pub fn new(tokenizer: Arc<dyn Tokenizer>, markdown_parser: Arc<dyn MarkdownParser>) -> Self {
         Self {
             chunkers: BTreeMap::new(),
@@ -30,13 +30,14 @@ impl ChunkingEngine {
 
     pub async fn chunk_markdown(
         &self,
-        config: ChunkingConfig,
+        config: &ChunkingConfig,
         source: &str,
     ) -> Result<Vec<ChunkOutput>, AppError> {
-        let chunker = self.chunkers.get(&config.strategy).ok_or_else(|| {
+        let strategy = config.strategy();
+        let chunker = self.chunkers.get(&strategy).ok_or_else(|| {
             AppError::Validation(format!(
                 "unsupported chunking strategy '{}'",
-                config.strategy.as_str()
+                strategy.as_str()
             ))
         })?;
 

@@ -205,7 +205,7 @@ fn sanitize_path_segment(value: &str) -> String {
 mod tests {
     use super::*;
     use crate::shared::{
-        ChunkStrategy, ChunkingConfig, ChunkingVariant, EvaluationMetrics, EvaluationRunOptions,
+        ChunkingConfig, ChunkingVariant, EvaluationMetrics, EvaluationRunOptions,
         EvaluationVariantResult,
     };
 
@@ -220,10 +220,7 @@ mod tests {
             variants: vec![EvaluationVariantResult {
                 variant: ChunkingVariant {
                     label: "current".into(),
-                    config: ChunkingConfig {
-                        strategy: ChunkStrategy::Section,
-                        ..ChunkingConfig::default()
-                    },
+                    config: ChunkingConfig::default(),
                 },
                 options: EvaluationRunOptions::default(),
                 split: EvaluationResultSplit::Full,

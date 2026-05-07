@@ -1,7 +1,6 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use super::{BlogPost, Chunk, GlossaryTerm, ManifestEntry};
@@ -131,29 +130,6 @@ impl Post {
             })
             .collect()
     }
-
-    pub fn vector_id(&self, chunk: &Chunk) -> String {
-        format!("{}:{}", self.blog_post.slug, chunk.chunk_id)
-    }
-
-    pub fn metadata_for(&self, chunk: &Chunk) -> Value {
-        let mut m = json!({
-            "post_slug": self.blog_post.slug,
-            "post_version": self.version.as_str(),
-            "post_title": self.blog_post.title,
-            "chunk_id": chunk.chunk_id,
-            "heading": chunk.heading,
-            "text": chunk.text,
-            "char_start": chunk.char_start,
-            "char_end": chunk.char_end,
-        });
-        if !chunk.sources.is_empty() {
-            m["sources"] = Value::String(
-                serde_json::to_string(&chunk.sources).unwrap_or_else(|_| "[]".to_string()),
-            );
-        }
-        m
-    }
 }
 
 #[cfg(test)]
@@ -278,29 +254,5 @@ mod tests {
     fn version_short_is_eight_chars() {
         let p = Post::try_new(blog("s", "t", "body", vec![])).unwrap();
         assert_eq!(p.version().short().len(), 8);
-    }
-
-    #[test]
-    fn metadata_for_glossary_chunk_includes_sources() {
-        let p = Post::try_new(blog("s", "t", "body", vec![term("g", "G")])).unwrap();
-        let chunks = p.glossary_chunks(0);
-        let meta = p.metadata_for(&chunks[0]);
-        assert!(meta.get("sources").is_some());
-    }
-
-    #[test]
-    fn metadata_for_body_chunk_omits_sources() {
-        let p = Post::try_new(blog("s", "t", "body", vec![])).unwrap();
-        let chunk = Chunk {
-            chunk_id: 0,
-            heading: "h".into(),
-            text: "t".into(),
-            char_start: 0,
-            char_end: 1,
-            sources: vec![],
-            is_glossary: false,
-        };
-        let meta = p.metadata_for(&chunk);
-        assert!(meta.get("sources").is_none());
     }
 }

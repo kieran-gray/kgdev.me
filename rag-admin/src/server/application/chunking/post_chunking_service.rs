@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use crate::server::application::chunking::ChunkOutput;
-use crate::server::application::chunking::ChunkingEngine;
+use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::AppError;
 use crate::server::domain::{Chunk, Post};
 use crate::shared::ChunkingConfig;
 
 pub struct PostChunkingService {
-    chunking_engine: Arc<ChunkingEngine>,
+    chunking_engine: Arc<ChunkerRegistry>,
 }
 
 pub struct ChunkedPost {
@@ -38,14 +38,14 @@ impl ChunkedPost {
 }
 
 impl PostChunkingService {
-    pub fn new(chunking_engine: Arc<ChunkingEngine>) -> Arc<Self> {
+    pub fn new(chunking_engine: Arc<ChunkerRegistry>) -> Arc<Self> {
         Arc::new(Self { chunking_engine })
     }
 
     pub async fn chunk_post(
         &self,
         post: &Post,
-        config: ChunkingConfig,
+        config: &ChunkingConfig,
         include_glossary: bool,
     ) -> Result<ChunkedPost, AppError> {
         let body_chunks = self

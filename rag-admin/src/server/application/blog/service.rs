@@ -58,12 +58,11 @@ impl PostService {
                 let manifest_pv = entry.map(|e| e.post_version.clone());
                 let effective_chunking = post_chunking_configs
                     .get(&p.slug)
-                    .copied()
-                    .unwrap_or(settings.default_chunking);
+                    .map_or(&settings.default_chunking, |c| c);
                 let is_dirty = entry
                     .map(|e| {
                         p.post_version != e.post_version
-                            || e.chunking_config != Some(effective_chunking)
+                            || e.chunking_config.as_ref() != Some(effective_chunking)
                             || e.embedding_model.as_ref() != Some(&settings.embedding_model)
                     })
                     .unwrap_or(true);
@@ -91,23 +90,28 @@ impl PostService {
         let manifest = self.manifest_store.load().await?;
         let entry = manifest.posts.get(slug);
 
-        let settings = self.settings.read().await.clone();
-        let default_chunking = settings.default_chunking;
+        let (default_chunking, embedding_model) = {
+            let s = self.settings.read().await;
+            (s.default_chunking.clone(), s.embedding_model.clone())
+        };
+
         let post_chunking_config = self.post_chunking_config_store.get(slug).await?;
         let effective = chunking_override
-            .or(post_chunking_config)
-            .unwrap_or(default_chunking);
+            .as_ref()
+            .or(post_chunking_config.as_ref())
+            .unwrap_or(&default_chunking);
+
         let is_dirty = entry
             .map(|e| {
                 post.is_dirty(Some(e))
-                    || e.chunking_config != Some(effective)
-                    || e.embedding_model.as_ref() != Some(&settings.embedding_model)
+                    || e.chunking_config.as_ref() != Some(effective)
+                    || e.embedding_model.as_ref() != Some(&embedding_model)
             })
             .unwrap_or(true);
 
         let skip_saved_llm_preview = !force_chunk_preview
             && chunking_override.is_none()
-            && effective.strategy == ChunkStrategy::Llm;
+            && effective.strategy() == ChunkStrategy::Llm;
         let (chunked_post, chunk_preview_notice) = if skip_saved_llm_preview {
             (
                 crate::server::application::chunking::ChunkedPost {
@@ -152,7 +156,7 @@ impl PostService {
             manifest_ingested_at: entry.map(|e| e.ingested_at.clone()),
             markdown_body_length: post.markdown_body().chars().count() as u32,
             embedding_token_limit: self.embedding_token_limit,
-            effective_chunking: effective,
+            effective_chunking: effective.clone(),
             default_chunking,
             post_chunking_config,
             chunk_preview_notice,
@@ -212,25 +216,20 @@ mod tests {
     use super::*;
     use crate::server::application::chunking::chunkers::BertChunker;
     use crate::server::application::chunking::chunkers::SectionChunker;
-    use crate::server::application::chunking::ChunkingEngine;
+    use crate::server::application::chunking::ChunkerRegistry;
     use crate::server::application::test_support::{
         make_blog_post, make_glossary_term, MockBlogSource, MockManifestStore,
         MockPostChunkingConfigStore, MockTokenizer,
     };
     use crate::server::domain::{ManifestEntry, PostVersion};
-    use crate::shared::{ChunkStrategy, ChunkingConfig, SettingsDto};
+    use crate::shared::LlmChunkingConfig;
+    use crate::shared::SectionChunkingConfig;
+    use crate::shared::{ChunkingConfig, SettingsDto};
 
     const TOKEN_LIMIT: u32 = 512;
 
     fn default_chunking() -> ChunkingConfig {
-        ChunkingConfig {
-            strategy: ChunkStrategy::Section,
-            max_section_tokens: 480,
-            target_tokens: 384,
-            overlap_tokens: 64,
-            min_tokens: 96,
-            llm_micro_chunk_tokens: 96,
-        }
+        ChunkingConfig::default()
     }
 
     fn markdown_parser() -> Arc<dyn crate::server::application::ports::MarkdownParser> {
@@ -239,7 +238,7 @@ mod tests {
 
     fn post_chunking_service() -> Arc<PostChunkingService> {
         let mut chunking_engine =
-            ChunkingEngine::new(Arc::new(MockTokenizer::new()), markdown_parser());
+            ChunkerRegistry::new(Arc::new(MockTokenizer::new()), markdown_parser());
         chunking_engine.add(Arc::new(SectionChunker {}));
         chunking_engine.add(Arc::new(BertChunker {}));
         PostChunkingService::new(Arc::new(chunking_engine))
@@ -401,13 +400,11 @@ mod tests {
             post_chunking_service(),
         );
 
-        let override_cfg = ChunkingConfig {
-            strategy: ChunkStrategy::Section,
+        let override_cfg = ChunkingConfig::Section(SectionChunkingConfig {
             max_section_tokens: 100,
-            ..ChunkingConfig::default()
-        };
+        });
         let detail = svc
-            .get_post_detail("a", Some(override_cfg), false)
+            .get_post_detail("a", Some(override_cfg.clone()), false)
             .await
             .unwrap();
         assert_eq!(detail.effective_chunking, override_cfg);
@@ -417,15 +414,11 @@ mod tests {
     #[tokio::test]
     async fn get_post_detail_skips_saved_llm_preview_on_initial_load() {
         let post = make_blog_post("a", "Alpha", "## A\n\nbody");
-        let llm_config = ChunkingConfig {
-            strategy: ChunkStrategy::Llm,
-            llm_micro_chunk_tokens: 96,
-            ..ChunkingConfig::default()
-        };
+        let llm_config = ChunkingConfig::Llm(LlmChunkingConfig::default());
         let svc = PostService::new(
             Arc::new(MockBlogSource::new().with_post(post)),
             Arc::new(MockManifestStore::new()),
-            Arc::new(MockPostChunkingConfigStore::new().with_config("a", llm_config)),
+            Arc::new(MockPostChunkingConfigStore::new().with_config("a", llm_config.clone())),
             Arc::new(MockTokenizer::new()),
             TOKEN_LIMIT,
             settings(),
