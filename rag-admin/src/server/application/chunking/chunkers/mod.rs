@@ -22,8 +22,5 @@ pub struct BuiltinChunkerDeps {
 pub fn register_builtin_chunkers(registry: &mut ChunkerRegistry, deps: BuiltinChunkerDeps) {
     registry.add(Arc::new(SectionChunker {}));
     registry.add(Arc::new(BertChunker {}));
-    registry.add(Arc::new(LlmChunker::create(
-        deps.chat_client,
-        deps.settings,
-    )));
+    registry.add(Arc::new(LlmChunker::create(deps.chat_client)));
 }

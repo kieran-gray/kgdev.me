@@ -8,6 +8,7 @@ pub async fn start_ingest(
     options: IngestOptions,
 ) -> Result<IngestJobInfo, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -16,5 +17,5 @@ pub async fn start_ingest(
         .ingest_service
         .start_ingest(slug, options)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }

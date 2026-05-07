@@ -298,3 +298,275 @@ fn mean_u32(values: &[u32]) -> u32 {
         values.iter().sum::<u32>() / values.len() as u32
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shared::{ChunkingConfig, EvaluationReference};
+
+    const EPS: f32 = 1e-4;
+
+    fn assert_close(actual: f32, expected: f32, label: &str) {
+        assert!(
+            (actual - expected).abs() < EPS,
+            "{label}: expected {expected}, got {actual}"
+        );
+    }
+
+    fn fixture_variant() -> ChunkingVariant {
+        ChunkingVariant {
+            label: "fixture".into(),
+            config: ChunkingConfig::default(),
+        }
+    }
+
+    // Three body chunks spanning chars 0..200, 10 tokens each.
+    fn fixture_chunks() -> Vec<EvalChunk> {
+        vec![
+            EvalChunk {
+                chunk_id: 0,
+                text: "c0".into(),
+                token_count: 10,
+                char_start: 0,
+                char_end: 50,
+                body_chunk: true,
+            },
+            EvalChunk {
+                chunk_id: 1,
+                text: "c1".into(),
+                token_count: 10,
+                char_start: 50,
+                char_end: 120,
+                body_chunk: true,
+            },
+            EvalChunk {
+                chunk_id: 2,
+                text: "c2".into(),
+                token_count: 10,
+                char_start: 120,
+                char_end: 200,
+                body_chunk: true,
+            },
+        ]
+    }
+
+    // Embeddings chosen so Q1 prefers C0 then C1, and Q2 prefers C2 then C1.
+    fn fixture_chunk_embeddings() -> Vec<Vec<f32>> {
+        vec![
+            vec![0.9, 0.1, 0.0, 0.0],
+            vec![0.5, 0.5, 0.0, 0.0],
+            vec![0.1, 0.9, 0.0, 0.0],
+        ]
+    }
+
+    // Q1 reference 30..80 straddles C0 and C1; Q2 reference 100..150 straddles C1 and C2.
+    fn fixture_questions() -> Vec<EvaluationQuestion> {
+        vec![
+            EvaluationQuestion {
+                question: "q1".into(),
+                references: vec![EvaluationReference {
+                    content: "ref1".into(),
+                    char_start: 30,
+                    char_end: 80,
+                    embedding: None,
+                }],
+                embedding: None,
+            },
+            EvaluationQuestion {
+                question: "q2".into(),
+                references: vec![EvaluationReference {
+                    content: "ref2".into(),
+                    char_start: 100,
+                    char_end: 150,
+                    embedding: None,
+                }],
+                embedding: None,
+            },
+        ]
+    }
+
+    fn fixture_question_embeddings() -> Vec<Vec<f32>> {
+        vec![vec![1.0, 0.0, 0.0, 0.0], vec![0.0, 1.0, 0.0, 0.0]]
+    }
+
+    fn options(top_k: u32) -> EvaluationRunOptions {
+        EvaluationRunOptions {
+            top_k,
+            min_score_milli: 0,
+            include_glossary: false,
+        }
+    }
+
+    #[test]
+    fn evaluate_variant_perfect_recall_with_top_k_2() {
+        // Q1 retrieves [C0, C1], fully covering ref 30..80 across both chunks.
+        // Q2 retrieves [C2, C1], fully covering ref 100..150.
+        let result = evaluate_variant(
+            fixture_variant(),
+            &fixture_questions(),
+            &fixture_chunks(),
+            &fixture_chunk_embeddings(),
+            &fixture_question_embeddings(),
+            &options(2),
+        );
+
+        assert_eq!(result.chunk_count, 3);
+        assert_eq!(result.average_chunk_tokens, 10);
+        assert_eq!(result.average_retrieved_tokens, 20);
+
+        // Hand-computed:
+        //   Q1: numerator=50, retrieved=120, missed=0  → recall=1, precision=50/120, iou=50/120
+        //   Q2: numerator=50, retrieved=150, missed=0  → recall=1, precision=50/150, iou=50/150
+        //   precision_omega is the same as precision when retrieved == touching.
+        let q1_p = 50.0 / 120.0;
+        let q2_p = 50.0 / 150.0;
+        let mean_p = (q1_p + q2_p) / 2.0;
+        assert_close(result.metrics.recall_mean, 1.0, "recall_mean");
+        assert_close(result.metrics.recall_std, 0.0, "recall_std");
+        assert_close(result.metrics.precision_mean, mean_p, "precision_mean");
+        assert_close(result.metrics.iou_mean, mean_p, "iou_mean");
+        assert_close(
+            result.metrics.precision_omega_mean,
+            mean_p,
+            "precision_omega_mean",
+        );
+
+        let q1 = &result.question_results[0];
+        assert_close(q1.recall, 1.0, "q1.recall");
+        assert_close(q1.precision, q1_p, "q1.precision");
+        assert_close(q1.iou, q1_p, "q1.iou");
+        assert_eq!(q1.missed_reference_count, 0);
+        assert_eq!(q1.retrieved_chunk_ids, vec![0, 1]);
+        assert_eq!(q1.reference_results.len(), 1);
+        assert_eq!(q1.reference_results[0].covered_chars, 50);
+        assert_eq!(q1.reference_results[0].total_chars, 50);
+        assert_close(q1.reference_results[0].recall, 1.0, "q1 ref recall");
+
+        let q2 = &result.question_results[1];
+        assert_close(q2.recall, 1.0, "q2.recall");
+        assert_close(q2.precision, q2_p, "q2.precision");
+        assert_close(q2.iou, q2_p, "q2.iou");
+        assert_eq!(q2.missed_reference_count, 0);
+        assert_eq!(q2.retrieved_chunk_ids, vec![2, 1]);
+    }
+
+    #[test]
+    fn evaluate_variant_partial_recall_with_top_k_1() {
+        // Q1 retrieves only [C0], missing the 50..80 portion of the reference.
+        // Q2 retrieves only [C2], missing the 100..120 portion.
+        let result = evaluate_variant(
+            fixture_variant(),
+            &fixture_questions(),
+            &fixture_chunks(),
+            &fixture_chunk_embeddings(),
+            &fixture_question_embeddings(),
+            &options(1),
+        );
+
+        // Q1: numerator=20, retrieved=50, missed=30  → recall=0.4, precision=0.4, iou=20/80=0.25
+        // Q2: numerator=30, retrieved=80, missed=20  → recall=0.6, precision=0.375, iou=30/100=0.30
+        let q1 = &result.question_results[0];
+        assert_close(q1.recall, 0.4, "q1.recall");
+        assert_close(q1.precision, 0.4, "q1.precision");
+        assert_close(q1.iou, 0.25, "q1.iou");
+        assert_eq!(q1.missed_reference_count, 1);
+        assert_eq!(q1.retrieved_chunk_ids, vec![0]);
+        assert_eq!(q1.reference_results[0].covered_chars, 20);
+        assert_eq!(q1.reference_results[0].total_chars, 50);
+
+        let q2 = &result.question_results[1];
+        assert_close(q2.recall, 0.6, "q2.recall");
+        assert_close(q2.precision, 0.375, "q2.precision");
+        assert_close(q2.iou, 0.30, "q2.iou");
+        assert_eq!(q2.missed_reference_count, 1);
+        assert_eq!(q2.retrieved_chunk_ids, vec![2]);
+
+        // precision_omega depends only on the chunks that touch the reference, not on top_k,
+        // so it stays at the same value as the top_k=2 case.
+        let omega = (50.0 / 120.0 + 50.0 / 150.0) / 2.0;
+        assert_close(
+            result.metrics.precision_omega_mean,
+            omega,
+            "precision_omega_mean",
+        );
+        assert_close(result.metrics.recall_mean, 0.5, "recall_mean");
+        assert_close(
+            result.metrics.precision_mean,
+            (0.4 + 0.375) / 2.0,
+            "precision_mean",
+        );
+        assert_close(
+            result.metrics.iou_mean,
+            (0.25 + 0.30) / 2.0,
+            "iou_mean",
+        );
+
+        // Each retrieval is one body chunk of 10 tokens.
+        assert_eq!(result.average_retrieved_tokens, 10);
+    }
+
+    #[test]
+    fn evaluate_variant_glossary_chunks_excluded_from_span_math() {
+        // A glossary chunk should never count toward span overlap, even if retrieved.
+        let mut chunks = fixture_chunks();
+        chunks.push(EvalChunk {
+            chunk_id: 99,
+            text: "glossary entry".into(),
+            token_count: 5,
+            char_start: 0,
+            char_end: 200,
+            body_chunk: false,
+        });
+        let mut chunk_embeddings = fixture_chunk_embeddings();
+        // Make the glossary chunk score highest for Q1 so it's retrieved first.
+        chunk_embeddings.push(vec![1.0, 0.0, 0.0, 0.0]);
+
+        let result = evaluate_variant(
+            fixture_variant(),
+            &fixture_questions(),
+            &chunks,
+            &chunk_embeddings,
+            &fixture_question_embeddings(),
+            &options(1),
+        );
+
+        // For Q1, only the glossary chunk is retrieved (top_k=1); it's body_chunk=false so it
+        // contributes zero overlap, but its `retrieved_len` (text length) inflates the denominator.
+        let q1 = &result.question_results[0];
+        assert_eq!(q1.retrieved_chunk_ids, vec![99]);
+        assert_close(q1.recall, 0.0, "q1.recall (glossary-only)");
+        assert_close(q1.precision, 0.0, "q1.precision (glossary-only)");
+        assert_eq!(q1.missed_reference_count, 1);
+    }
+
+    #[test]
+    fn evaluate_variant_handles_question_with_no_references() {
+        let questions = vec![EvaluationQuestion {
+            question: "q-empty".into(),
+            references: Vec::new(),
+            embedding: None,
+        }];
+        let question_embeddings = vec![vec![1.0, 0.0, 0.0, 0.0]];
+
+        let result = evaluate_variant(
+            fixture_variant(),
+            &questions,
+            &fixture_chunks(),
+            &fixture_chunk_embeddings(),
+            &question_embeddings,
+            &options(2),
+        );
+
+        let q = &result.question_results[0];
+        assert_close(q.recall, 0.0, "recall on no-refs question");
+        assert_close(q.precision, 0.0, "precision on no-refs question");
+        assert_close(q.iou, 0.0, "iou on no-refs question");
+        assert_eq!(q.missed_reference_count, 0);
+        assert!(q.reference_results.is_empty());
+        assert_close(
+            result.metrics.precision_omega_mean,
+            0.0,
+            "precision_omega on no-refs question",
+        );
+    }
+}

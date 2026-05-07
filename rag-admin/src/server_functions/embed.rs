@@ -9,6 +9,7 @@ pub async fn embed_texts(
     text_b: String,
 ) -> Result<EmbedResult, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -17,5 +18,5 @@ pub async fn embed_texts(
         .embedding_service
         .embed_texts(&model, &text_a, &text_b)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }

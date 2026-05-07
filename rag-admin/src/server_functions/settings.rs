@@ -15,6 +15,7 @@ pub async fn load_settings() -> Result<SettingsDto, ServerFnError> {
 #[server(name = SaveSettings, prefix = "/api", endpoint = "save_settings")]
 pub async fn save_settings(settings: SettingsDto) -> Result<(), ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_setup_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -22,5 +23,5 @@ pub async fn save_settings(settings: SettingsDto) -> Result<(), ServerFnError> {
     state
         .save_settings(settings)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_setup_error)
 }

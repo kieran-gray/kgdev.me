@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::sync::RwLock;
 
 use crate::server::application::chunking::{ChunkOutput, DocumentChunker, TokenBudget};
 use crate::server::application::markdown::{Document, TextUnit};
 use crate::server::application::ports::{ChatClient, ChatRequest, ChatResponseFormat, Tokenizer};
 use crate::server::application::AppError;
-use crate::shared::{ChunkStrategy, ChunkingConfig, SettingsDto};
+use crate::shared::{ChunkStrategy, ChunkingConfig};
 
 const SYSTEM_PROMPT: &str = "You split blog text into compact, self-contained retrieval chunks. \
     The text has been divided into numbered micro-chunks marked with <|start_chunk_X|> and \
@@ -34,15 +33,11 @@ struct MicroChunk {
 
 pub struct LlmChunker {
     chat_client: Arc<dyn ChatClient>,
-    settings: Arc<RwLock<SettingsDto>>,
 }
 
 impl LlmChunker {
-    pub fn create(chat_client: Arc<dyn ChatClient>, settings: Arc<RwLock<SettingsDto>>) -> Self {
-        Self {
-            chat_client,
-            settings,
-        }
+    pub fn create(chat_client: Arc<dyn ChatClient>) -> Self {
+        Self { chat_client }
     }
 }
 
@@ -72,15 +67,13 @@ impl DocumentChunker for LlmChunker {
             return Ok(Vec::new());
         }
 
-        let model = self
-            .settings
-            .read()
-            .await
-            .evaluation
-            .generation_model
-            .clone();
-        let split_points =
-            find_split_points(&micro_chunks, self.chat_client.as_ref(), &model, &budget).await?;
+        let split_points = find_split_points(
+            &micro_chunks,
+            self.chat_client.as_ref(),
+            &config.generation_model,
+            &budget,
+        )
+        .await?;
         let merged = merge_micro_chunks(&micro_chunks, &split_points, target_tokens, &budget)?;
 
         Ok(merged

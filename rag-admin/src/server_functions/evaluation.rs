@@ -14,6 +14,7 @@ pub async fn get_evaluation_dataset_status(
     slug: String,
 ) -> Result<EvaluationDatasetStatus, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -22,7 +23,7 @@ pub async fn get_evaluation_dataset_status(
         .chunking_evaluation_service
         .dataset_status(&slug)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -34,6 +35,7 @@ pub async fn start_generate_evaluation_dataset(
     slug: String,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -42,7 +44,7 @@ pub async fn start_generate_evaluation_dataset(
         .chunking_evaluation_service
         .start_generate_dataset(slug)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -56,6 +58,7 @@ pub async fn run_chunking_evaluation(
     options: EvaluationRunOptions,
 ) -> Result<EvaluationRunResult, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -64,7 +67,7 @@ pub async fn run_chunking_evaluation(
         .chunking_evaluation_service
         .run_evaluation(&slug, variants, options, None)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -76,6 +79,7 @@ pub async fn get_latest_evaluation_result(
     slug: String,
 ) -> Result<Option<EvaluationRunResult>, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -84,7 +88,7 @@ pub async fn get_latest_evaluation_result(
         .chunking_evaluation_service
         .latest_result(&slug)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -96,6 +100,7 @@ pub async fn get_evaluation_result_history(
     slug: String,
 ) -> Result<Vec<EvaluationRunSummary>, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -104,7 +109,7 @@ pub async fn get_evaluation_result_history(
         .chunking_evaluation_service
         .result_history(&slug)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -117,6 +122,7 @@ pub async fn get_evaluation_result_run(
     run_id: String,
 ) -> Result<Option<EvaluationRunResult>, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -125,7 +131,7 @@ pub async fn get_evaluation_result_run(
         .chunking_evaluation_service
         .result_run(&slug, &run_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -139,6 +145,7 @@ pub async fn start_run_evaluation(
     options: EvaluationRunOptions,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -147,7 +154,7 @@ pub async fn start_run_evaluation(
         .chunking_evaluation_service
         .start_run_evaluation(slug, variants, options)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -161,6 +168,7 @@ pub async fn start_run_evaluation_matrix(
     option_sets: Vec<EvaluationRunOptions>,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -169,7 +177,7 @@ pub async fn start_run_evaluation_matrix(
         .chunking_evaluation_service
         .start_run_evaluation_matrix(slug, variant, option_sets)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -182,6 +190,7 @@ pub async fn start_run_evaluation_autotune(
     request: EvaluationAutotuneRequest,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -190,5 +199,5 @@ pub async fn start_run_evaluation_autotune(
         .chunking_evaluation_service
         .start_run_evaluation_autotune(slug, request)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }

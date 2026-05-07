@@ -12,6 +12,7 @@ pub async fn save_post_chunking_config(
     config: ChunkingConfig,
 ) -> Result<(), ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -20,7 +21,7 @@ pub async fn save_post_chunking_config(
         .post_chunking_config_store
         .save(&slug, config)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -30,6 +31,7 @@ pub async fn save_post_chunking_config(
 )]
 pub async fn clear_post_chunking_config(slug: String) -> Result<(), ServerFnError> {
     use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
 
     let state: Arc<AppState> =
@@ -38,5 +40,5 @@ pub async fn clear_post_chunking_config(slug: String) -> Result<(), ServerFnErro
         .post_chunking_config_store
         .clear(&slug)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(map_app_error)
 }
