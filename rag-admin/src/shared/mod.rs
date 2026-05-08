@@ -1,9 +1,9 @@
 mod chunking;
 mod configuration_commands;
-mod pipeline_configuration;
 mod embedding;
 mod evaluation;
 mod ingest;
+mod pipeline_configuration;
 mod post;
 pub(crate) mod serde_compat;
 mod settings;
@@ -21,10 +21,6 @@ pub use configuration_commands::{
     UpdateAiProviderDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
     UpdateVectorStoreProviderDto,
 };
-pub use pipeline_configuration::{
-    AiProviderDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto,
-    VectorIndexDto, VectorStoreProviderDto,
-};
 pub use embedding::{
     catalog_for_backend, CatalogEntry, EmbedResult, EmbedderBackend, EmbeddingModel,
     CLOUDFLARE_EMBEDDING_MODELS, OLLAMA_EMBEDDING_MODELS,
@@ -38,6 +34,10 @@ pub use evaluation::{
     EvaluationScorePolicy, EvaluationScoreWeights, EvaluationSettings, EvaluationVariantResult,
 };
 pub use ingest::{IngestJobInfo, IngestOptions, LogEvent, LogLevel};
+pub use pipeline_configuration::{
+    AiProviderDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto, VectorIndexDto,
+    VectorStoreProviderDto,
+};
 pub use post::{ChunkPreview, GlossaryTermDto, PostDetailDto, PostSummary};
 pub use settings::SettingsDto;
 pub use vector::{VectorIndexConfig, VectorProvider};

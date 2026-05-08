@@ -2,8 +2,8 @@ use leptos::prelude::*;
 use uuid::Uuid;
 
 use crate::shared::{
-    AiProviderDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto,
-    VectorIndexDto, VectorStoreProviderDto,
+    AiProviderDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto, VectorIndexDto,
+    VectorStoreProviderDto,
 };
 
 use super::commands::{provider_name_for, short_uuid, vector_store_provider_name_for};

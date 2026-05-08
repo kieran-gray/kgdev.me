@@ -1,5 +1,4 @@
 pub mod blog;
-pub mod postgres;
 pub mod chunking;
 pub mod clients;
 pub mod configuration;
@@ -10,5 +9,6 @@ pub mod ingest;
 pub mod kv;
 pub mod llm;
 pub mod markdown;
+pub mod postgres;
 pub mod tokenizer;
 pub mod vector;

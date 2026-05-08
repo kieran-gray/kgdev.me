@@ -1,2 +1,2 @@
-pub mod sse;
 pub mod health;
+pub mod sse;

@@ -8,9 +8,9 @@ use crate::server::{
         embedding::EmbeddingService,
         evaluation::{
             generator::build_question_prompt,
-            question_filter::{GeneratedQuestionGate, QuestionFilterDecision},
             ports::{EvaluationDatasetStore, EvaluationGenerator},
             progress::EvaluationProgress,
+            question_filter::{GeneratedQuestionGate, QuestionFilterDecision},
             reference_locator::ReferenceLocator,
         },
         AppError,

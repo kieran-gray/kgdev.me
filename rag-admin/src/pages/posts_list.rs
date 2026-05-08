@@ -14,7 +14,7 @@ pub fn PostsListPage() -> impl IntoView {
                 <span class="tech-label opacity-40">"SYSTEM_VIEW / BLOG_POSTS"</span>
                 <h1 class="text-3xl font-bold tracking-tight">"POST_INDEX"</h1>
             </div>
-            
+
             <Suspense fallback=|| view! { <div class="px-6"><p class="tech-label animate-pulse">"LOADING_DATA..."</p></div> }>
                 {move || {
                     posts

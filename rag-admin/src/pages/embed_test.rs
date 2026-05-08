@@ -158,7 +158,7 @@ pub fn EmbedTestPage() -> impl IntoView {
                                         )>{format!("{:.4}", norm_b)}</div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="px-6 py-4 bg-black/40 border-t border-[var(--color-border)]">
                                     <p class="text-[10px] font-mono opacity-40 leading-relaxed text-center italic">
                                         "PROTIP: Well-behaved models normalize to ~1.0. Significant deviation suggests misconfiguration."
@@ -171,7 +171,6 @@ pub fn EmbedTestPage() -> impl IntoView {
         </div>
     }
 }
-
 
 fn similarity_class(s: f32) -> &'static str {
     if s >= 0.85 {

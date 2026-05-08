@@ -22,7 +22,6 @@ use crate::server::infrastructure::blog::HttpBlogSource;
 use crate::server::infrastructure::chunking::FilePostChunkingConfigStore;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::configuration::PostgresPipelineConfigurationRepository;
-use crate::server::infrastructure::postgres::PostgresEventStore;
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{
     FileEvaluationDatasetStore, FileEvaluationResultStore, OllamaEvaluationGenerator,
@@ -32,19 +31,20 @@ use crate::server::infrastructure::ingest::FileManifestStore;
 use crate::server::infrastructure::kv::CloudflareKvStore;
 use crate::server::infrastructure::llm::OllamaChatClient;
 use crate::server::infrastructure::markdown::MarkdownRsParser;
+use crate::server::infrastructure::postgres::PostgresEventStore;
 use crate::server::infrastructure::tokenizer::{HuggingFaceTokenizer, EMBEDDING_TOKEN_LIMIT};
 use crate::server::infrastructure::vector::{CloudflareVectorRecordMapper, VectorizeVectorIndex};
 use crate::server::setup::config::Config;
+use crate::server::setup::exceptions::SetupError;
 use crate::server::setup::settings::{
     evaluations_dir, load_settings, manifest_path, post_chunking_config_path, save_settings,
     settings_path, tokenizer_path,
 };
-use crate::server::setup::exceptions::SetupError;
 use crate::server::setup::validation;
 use crate::server::{
     domain::configuration::aggregate::Configuration,
     domain::pipeline_configuration::{
-        PipelineConfigurationRepository, PipelineConfigurationProjector,
+        PipelineConfigurationProjector, PipelineConfigurationRepository,
     },
 };
 use crate::shared::{EmbedderBackend, SettingsDto};
@@ -102,10 +102,8 @@ impl AppState {
         let pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository> =
             Arc::new(PostgresPipelineConfigurationRepository::new(pool.clone()));
 
-        let vector_store: Arc<dyn VectorIndex> = VectorizeVectorIndex::new(
-            cf_api.clone(),
-            pipeline_configuration_repository.clone(),
-        );
+        let vector_store: Arc<dyn VectorIndex> =
+            VectorizeVectorIndex::new(cf_api.clone(), pipeline_configuration_repository.clone());
         let vector_record_mapper = Arc::new(CloudflareVectorRecordMapper);
         let kv_store = CloudflareKvStore::new(cf_api.clone());
         let chat_client = OllamaChatClient::new(http.clone(), config.ollama.base_url.clone());
@@ -125,10 +123,7 @@ impl AppState {
         let embedding_service = EmbeddingService::new(embedder.clone());
 
         let mut chunking_engine = ChunkerRegistry::new(tokenizer.clone(), markdown_parser);
-        register_builtin_chunkers(
-            &mut chunking_engine,
-            BuiltinChunkerDeps { chat_client },
-        );
+        register_builtin_chunkers(&mut chunking_engine, BuiltinChunkerDeps { chat_client });
         let chunking_engine = Arc::new(chunking_engine);
         let post_chunking_service = PostChunkingService::new(chunking_engine);
 

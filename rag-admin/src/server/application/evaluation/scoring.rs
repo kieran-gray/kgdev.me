@@ -495,11 +495,7 @@ mod tests {
             (0.4 + 0.375) / 2.0,
             "precision_mean",
         );
-        assert_close(
-            result.metrics.iou_mean,
-            (0.25 + 0.30) / 2.0,
-            "iou_mean",
-        );
+        assert_close(result.metrics.iou_mean, (0.25 + 0.30) / 2.0, "iou_mean");
 
         // Each retrieval is one body chunk of 10 tokens.
         assert_eq!(result.average_retrieved_tokens, 10);

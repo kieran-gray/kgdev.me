@@ -6,7 +6,7 @@ use crate::server::domain::VectorRecord;
 
 pub enum MetadataFilterOperation {
     Equal,
-    NotEqual
+    NotEqual,
 }
 
 pub struct MetadataFilter {

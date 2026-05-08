@@ -96,7 +96,12 @@ impl<'a> GeneratedQuestionGate<'a> {
 
         let mut texts = Vec::with_capacity(question.references.len() + 1);
         texts.push(question.question.clone());
-        texts.extend(question.references.iter().map(|reference| reference.content.clone()));
+        texts.extend(
+            question
+                .references
+                .iter()
+                .map(|reference| reference.content.clone()),
+        );
 
         let embeddings = self
             .embedding_service
@@ -112,7 +117,8 @@ impl<'a> GeneratedQuestionGate<'a> {
             self.duplicate_similarity_threshold,
         ) {
             CandidateClassification::Accepted => {
-                let question_embedding = question_embedding.expect("accepted candidate has embedding");
+                let question_embedding =
+                    question_embedding.expect("accepted candidate has embedding");
                 let mut question = question;
                 question.embedding = Some(ordered_f32_vec(question_embedding.clone()));
                 for (reference, reference_embedding) in question

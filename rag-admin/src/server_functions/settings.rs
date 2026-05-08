@@ -20,8 +20,5 @@ pub async fn save_settings(settings: SettingsDto) -> Result<(), ServerFnError> {
 
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-    state
-        .save_settings(settings)
-        .await
-        .map_err(map_setup_error)
+    state.save_settings(settings).await.map_err(map_setup_error)
 }

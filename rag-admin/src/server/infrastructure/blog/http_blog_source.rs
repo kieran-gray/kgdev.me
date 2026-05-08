@@ -23,9 +23,7 @@ impl HttpBlogSource {
     fn base_url(&self) -> Result<String, AppError> {
         let url = self.blog_url.trim().trim_end_matches('/').to_string();
         if url.is_empty() {
-            return Err(AppError::Validation(
-                "blog URL is not configured".into(),
-            ));
+            return Err(AppError::Validation("blog URL is not configured".into()));
         }
         Ok(url)
     }

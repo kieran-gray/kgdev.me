@@ -2,12 +2,12 @@ use leptos::prelude::*;
 use uuid::Uuid;
 
 use crate::shared::{
-    AddEmbeddingModelDto, AddGenerationModelDto, AddProviderDto, AddVectorIndexDto,
-    AiProviderDto, ConfigurationCommandDto, EmbeddingModelDto, GenerationModelDto,
-    PipelineConfigurationDto, ProviderType, RemoveAiProviderDto, RemoveEmbeddingModelDto,
-    RemoveGenerationModelDto, RemoveVectorIndexDto, RemoveVectorStoreProviderDto,
-    SetCurrentEmbeddingModelDto, SetCurrentGenerationModelDto, SetCurrentVectorIndexDto,
-    UpdateAiProviderDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
+    AddEmbeddingModelDto, AddGenerationModelDto, AddProviderDto, AddVectorIndexDto, AiProviderDto,
+    ConfigurationCommandDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto,
+    ProviderType, RemoveAiProviderDto, RemoveEmbeddingModelDto, RemoveGenerationModelDto,
+    RemoveVectorIndexDto, RemoveVectorStoreProviderDto, SetCurrentEmbeddingModelDto,
+    SetCurrentGenerationModelDto, SetCurrentVectorIndexDto, UpdateAiProviderDto,
+    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
     UpdateVectorStoreProviderDto, VectorIndexDto, VectorStoreProviderDto,
 };
 
@@ -19,7 +19,9 @@ use super::components::{
     CurrentStepCard, DialogActions, DialogShell, DialogStatus, Field, TabButton,
 };
 use super::dialogs::{delete_dialog_label, AddDialog, DeleteDialog, EditDialog};
-use super::panels::{EmbeddingModelsPanel, GenerationModelsPanel, ProvidersPanel, VectorIndexesPanel};
+use super::panels::{
+    EmbeddingModelsPanel, GenerationModelsPanel, ProvidersPanel, VectorIndexesPanel,
+};
 
 #[component]
 pub fn NewSettingsView(
@@ -211,7 +213,9 @@ pub fn NewSettingsView(
     let submit_add_vector_index = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let Some(provider_id) = vector_store_provider_id.get_untracked() else {
-            set_dialog_status.set(Some("ADD_VECTOR_STORE_PROVIDER_BEFORE_CREATING_INDEX".into()));
+            set_dialog_status.set(Some(
+                "ADD_VECTOR_STORE_PROVIDER_BEFORE_CREATING_INDEX".into(),
+            ));
             return;
         };
         if busy.get_untracked() {
@@ -347,7 +351,9 @@ pub fn NewSettingsView(
             return;
         };
         let Some(provider_id) = vector_store_provider_id.get_untracked() else {
-            set_dialog_status.set(Some("ADD_VECTOR_STORE_PROVIDER_BEFORE_CREATING_INDEX".into()));
+            set_dialog_status.set(Some(
+                "ADD_VECTOR_STORE_PROVIDER_BEFORE_CREATING_INDEX".into(),
+            ));
             return;
         };
         if busy.get_untracked() {

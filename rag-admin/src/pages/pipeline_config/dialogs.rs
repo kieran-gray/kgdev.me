@@ -31,7 +31,10 @@ pub enum DeleteDialog {
 pub fn delete_dialog_label(dialog: Option<DeleteDialog>) -> String {
     match dialog {
         Some(DeleteDialog::AiProvider(p)) => {
-            format!("Delete AI provider '{}' and clear it from the registry.", p.name)
+            format!(
+                "Delete AI provider '{}' and clear it from the registry.",
+                p.name
+            )
         }
         Some(DeleteDialog::VectorStoreProvider(p)) => {
             format!(

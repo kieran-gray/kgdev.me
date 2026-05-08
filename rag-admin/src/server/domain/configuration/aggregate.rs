@@ -332,10 +332,12 @@ impl Aggregate for Configuration {
             Self::Command::AddVectorStoreProvider(cmd) => {
                 Self::validate_non_empty("vector store provider name", &cmd.name)?;
                 Self::ensure_unique_vector_store_provider_name(state, &cmd.name, None)?;
-                vec![Self::Event::VectorStoreProviderAdded(VectorStoreProviderAdded {
-                    provider_id: Uuid::new_v4(),
-                    name: cmd.name,
-                })]
+                vec![Self::Event::VectorStoreProviderAdded(
+                    VectorStoreProviderAdded {
+                        provider_id: Uuid::new_v4(),
+                        name: cmd.name,
+                    },
+                )]
             }
             Self::Command::UpdateVectorStoreProvider(cmd) => {
                 let provider = Self::find_vector_store_provider(state, cmd.provider_id)?;
@@ -345,10 +347,12 @@ impl Aggregate for Configuration {
                     &cmd.name,
                     Some(provider.provider_id),
                 )?;
-                vec![Self::Event::VectorStoreProviderUpdated(VectorStoreProviderUpdated {
-                    provider_id: provider.provider_id,
-                    name: cmd.name,
-                })]
+                vec![Self::Event::VectorStoreProviderUpdated(
+                    VectorStoreProviderUpdated {
+                        provider_id: provider.provider_id,
+                        name: cmd.name,
+                    },
+                )]
             }
             Self::Command::RemoveVectorStoreProvider(cmd) => {
                 let provider = Self::find_vector_store_provider(state, cmd.provider_id)?;
@@ -362,9 +366,11 @@ impl Aggregate for Configuration {
                         provider.name
                     )));
                 }
-                vec![Self::Event::VectorStoreProviderRemoved(VectorStoreProviderRemoved {
-                    provider_id: provider.provider_id,
-                })]
+                vec![Self::Event::VectorStoreProviderRemoved(
+                    VectorStoreProviderRemoved {
+                        provider_id: provider.provider_id,
+                    },
+                )]
             }
             Self::Command::AddVectorIndex(cmd) => {
                 Self::find_vector_store_provider(state, cmd.vector_store_provider_id)?;

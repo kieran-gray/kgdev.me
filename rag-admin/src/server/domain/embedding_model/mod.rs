@@ -1,3 +1,3 @@
 pub mod commands;
-pub mod events;
 pub mod entity;
+pub mod events;

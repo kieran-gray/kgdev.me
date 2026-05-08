@@ -62,8 +62,6 @@ pub struct RemoveGenerationModelDto {
     pub model_id: Uuid,
 }
 
-
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateVectorStoreProviderDto {
     pub provider_id: Uuid,

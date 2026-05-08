@@ -18,7 +18,7 @@ pub fn SettingsPage() -> impl IntoView {
                 <span class="tech-label opacity-40">"SYSTEM_VIEW / LEGACY_SETTINGS"</span>
                 <h1 class="text-3xl font-bold tracking-tight uppercase">"SETTINGS_PANEL"</h1>
             </div>
-            
+
             <Suspense fallback=|| view! { <div class="px-6"><p class="tech-label animate-pulse">"FETCHING_CONFIG..."</p></div> }>
                 {move || {
                     initial

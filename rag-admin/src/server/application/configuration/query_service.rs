@@ -5,8 +5,8 @@ use crate::server::domain::pipeline_configuration::{
     PipelineConfiguration, PipelineConfigurationRepository, PipelineConfigurationRepositoryError,
 };
 use crate::shared::{
-    AiProviderDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto,
-    VectorIndexDto, VectorStoreProviderDto,
+    AiProviderDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto, VectorIndexDto,
+    VectorStoreProviderDto,
 };
 
 pub struct PipelineConfigurationService {
@@ -36,7 +36,11 @@ fn map_repository_error(error: PipelineConfigurationRepositoryError) -> AppError
 fn map_pipeline_configuration(configuration: PipelineConfiguration) -> PipelineConfigurationDto {
     PipelineConfigurationDto {
         configuration_id: configuration.configuration_id,
-        ai_providers: configuration.ai_providers.iter().map(map_ai_provider).collect(),
+        ai_providers: configuration
+            .ai_providers
+            .iter()
+            .map(map_ai_provider)
+            .collect(),
         vector_store_providers: configuration
             .vector_store_providers
             .iter()
@@ -60,8 +64,12 @@ fn map_pipeline_configuration(configuration: PipelineConfiguration) -> PipelineC
         current_embedding_model_id: configuration.current_embedding_model_id,
         current_generation_model_id: configuration.current_generation_model_id,
         current_vector_index_id: configuration.current_vector_index_id,
-        current_embedding_model: configuration.current_embedding_model().map(map_embedding_model),
-        current_generation_model: configuration.current_generation_model().map(map_generation_model),
+        current_embedding_model: configuration
+            .current_embedding_model()
+            .map(map_embedding_model),
+        current_generation_model: configuration
+            .current_generation_model()
+            .map(map_generation_model),
         current_vector_index: configuration.current_vector_index().map(map_vector_index),
     }
 }

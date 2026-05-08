@@ -59,9 +59,11 @@ impl From<ConfigurationCommandDto> for ConfigurationCommand {
                 ProviderType::Ai => {
                     ConfigurationCommand::AddAiProvider(AddAiProvider { name: dto.name })
                 }
-                ProviderType::VectorStore => ConfigurationCommand::AddVectorStoreProvider(
-                    AddVectorStoreProvider { name: dto.name },
-                ),
+                ProviderType::VectorStore => {
+                    ConfigurationCommand::AddVectorStoreProvider(AddVectorStoreProvider {
+                        name: dto.name,
+                    })
+                }
             },
             ConfigurationCommandDto::UpdateAiProvider(dto) => {
                 ConfigurationCommand::UpdateAiProvider(UpdateAiProvider {
