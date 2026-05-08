@@ -12,6 +12,7 @@ mod ssr {
 
     pub fn map_app_error(err: AppError) -> ServerFnError {
         let status = match &err {
+            AppError::Domain(_) => StatusCode::BAD_REQUEST,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::Validation(_) => StatusCode::BAD_REQUEST,
             AppError::Upstream(_) => StatusCode::BAD_GATEWAY,
@@ -24,6 +25,9 @@ mod ssr {
     pub fn map_setup_error(err: SetupError) -> ServerFnError {
         let status = match &err {
             SetupError::Config(_) => StatusCode::BAD_REQUEST,
+            SetupError::MissingVariable(_) | SetupError::InvalidVariable(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
             SetupError::Io(_) | SetupError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         set_status(status);

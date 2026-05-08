@@ -2,56 +2,33 @@ use std::sync::Arc;
 
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::Method;
-use tokio::sync::RwLock;
 
 use crate::server::application::AppError;
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
-use crate::shared::SettingsDto;
+use crate::server::setup::config::CloudflareConfig;
 
 pub const CLOUDFLARE_API_BASE: &str = "https://api.cloudflare.com/client/v4";
 
-#[derive(Debug, Clone)]
-pub struct CloudflareCredentials {
-    pub account_id: String,
-    pub api_token: String,
-    pub kv_namespace_id: String,
-}
-
-impl CloudflareCredentials {
-    pub fn from_settings(s: &SettingsDto) -> Result<Self, AppError> {
-        if s.cloudflare_account_id.is_empty()
-            || s.cloudflare_api_token.is_empty()
-            || s.kv_namespace_id.is_empty()
-        {
-            return Err(AppError::Validation(
-                "Cloudflare settings incomplete; check Settings page".into(),
-            ));
-        }
-        Ok(Self {
-            account_id: s.cloudflare_account_id.clone(),
-            api_token: s.cloudflare_api_token.clone(),
-            kv_namespace_id: s.kv_namespace_id.clone(),
-        })
-    }
-}
-
 pub struct CloudflareApi {
     http: Arc<ReqwestHttpClient>,
-    settings: Arc<RwLock<SettingsDto>>,
+    config: CloudflareConfig,
 }
 
 impl CloudflareApi {
-    pub fn new(http: Arc<ReqwestHttpClient>, settings: Arc<RwLock<SettingsDto>>) -> Self {
-        Self { http, settings }
+    pub fn new(http: Arc<ReqwestHttpClient>, config: CloudflareConfig) -> Self {
+        Self { http, config }
     }
 
-    pub async fn credentials(&self) -> Result<CloudflareCredentials, AppError> {
-        let s = self.settings.read().await;
-        CloudflareCredentials::from_settings(&s)
+    pub fn account_id(&self) -> &str {
+        &self.config.account_id
     }
 
-    pub async fn vector_index_name(&self) -> String {
-        self.settings.read().await.vector_index.name().to_string()
+    pub fn api_token(&self) -> &str {
+        &self.config.api_token
+    }
+
+    pub fn kv_namespace_id(&self) -> &str {
+        &self.config.kv_namespace_id
     }
 
     fn auth_headers(token: &str, content_type: &str) -> Result<HeaderMap, AppError> {
@@ -77,8 +54,7 @@ impl CloudflareApi {
         content_type: &str,
         label: &str,
     ) -> Result<String, AppError> {
-        let creds = self.credentials().await?;
-        let headers = Self::auth_headers(&creds.api_token, content_type)?;
+        let headers = Self::auth_headers(self.api_token(), content_type)?;
         let body_opt = if body.is_empty() { None } else { Some(body) };
         let (status, body_text) = self
             .http

@@ -1,101 +1,69 @@
-use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
-use tokio::fs;
+use super::exceptions::SetupError;
 
-use crate::server::setup::exceptions::SetupError;
-use crate::shared::{
-    ChunkingConfig, EmbeddingModel, EvaluationSettings, SettingsDto, VectorIndexConfig,
-};
-
-pub fn data_dir() -> PathBuf {
-    std::env::current_dir()
-        .map(|p| p.join("rag-admin").join("data"))
-        .unwrap_or_else(|_| PathBuf::from("rag-admin/data"))
+trait FromEnv: Sized {
+    fn from_env() -> Result<Self, SetupError>;
 }
 
-pub fn settings_path() -> PathBuf {
-    data_dir().join("settings.toml")
+#[derive(Clone)]
+pub struct Config {
+    pub blog_url: String,
+    pub database_url: String,
+    pub cloudflare: CloudflareConfig,
+    pub ollama: OllamaConfig,
 }
 
-pub fn manifest_path() -> PathBuf {
-    data_dir().join("manifest.json")
+#[derive(Clone)]
+pub struct CloudflareConfig {
+    pub account_id: String,
+    pub api_token: String,
+    pub kv_namespace_id: String,
 }
 
-pub fn post_chunking_config_path() -> PathBuf {
-    data_dir().join("post-chunking.json")
+#[derive(Clone)]
+pub struct OllamaConfig {
+    pub base_url: String,
 }
 
-pub fn tokenizer_path() -> PathBuf {
-    data_dir().join("tokenizer.json")
-}
-
-pub fn evaluations_dir() -> PathBuf {
-    data_dir().join("evaluations")
-}
-
-pub fn defaults() -> SettingsDto {
-    SettingsDto {
-        blog_url: "http://localhost:4321".into(),
-        cloudflare_account_id: String::new(),
-        cloudflare_api_token: String::new(),
-        kv_namespace_id: String::new(),
-        vector_index: VectorIndexConfig::default(),
-        embedding_model: EmbeddingModel::default(),
-        default_chunking: ChunkingConfig::default(),
-        evaluation: EvaluationSettings::default(),
+impl FromEnv for CloudflareConfig {
+    fn from_env() -> Result<Self, SetupError> {
+        Ok(Self {
+            account_id: Config::parse("CLOUDFLARE_ACCOUNT_ID")?,
+            api_token: Config::parse("CLOUDFLARE_API_TOKEN")?,
+            kv_namespace_id: Config::parse("CLOUDFLARE_KV_NAMESPACE_ID")?,
+        })
     }
 }
 
-pub async fn load_settings(path: &Path) -> Result<SettingsDto, SetupError> {
-    let mut settings = defaults();
-    if path.exists() {
-        let bytes = fs::read(path)
-            .await
-            .map_err(|e| SetupError::Io(format!("read settings: {e}")))?;
-        if !bytes.is_empty() {
-            let text = std::str::from_utf8(&bytes)
-                .map_err(|e| SetupError::Config(format!("settings.toml not utf-8: {e}")))?;
-            let parsed: SettingsDto = toml::from_str(text)
-                .map_err(|e| SetupError::Config(format!("parse settings.toml: {e}")))?;
-            settings = parsed;
-        }
+impl FromEnv for OllamaConfig {
+    fn from_env() -> Result<Self, SetupError> {
+        Ok(Self {
+            base_url: Config::parse_optional("OLLAMA_BASE_URL")
+                .unwrap_or_else(|| "http://localhost:11434".into()),
+        })
     }
-    overlay_env(&mut settings);
-    Ok(settings)
 }
 
-pub async fn save_settings(path: &Path, settings: &SettingsDto) -> Result<(), SetupError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .await
-            .map_err(|e| SetupError::Io(format!("create settings dir: {e}")))?;
+impl Config {
+    pub fn from_env() -> Result<Self, SetupError> {
+        Ok(Self {
+            blog_url: Self::parse("BLOG_URL")?,
+            database_url: Self::parse("DATABASE_URL")?,
+            cloudflare: CloudflareConfig::from_env()?,
+            ollama: OllamaConfig::from_env()?,
+        })
     }
-    let s = toml::to_string_pretty(settings)
-        .map_err(|e| SetupError::Internal(format!("encode settings: {e}")))?;
-    fs::write(path, s)
-        .await
-        .map_err(|e| SetupError::Io(format!("write settings: {e}")))
-}
 
-fn overlay_env(s: &mut SettingsDto) {
-    if let Ok(v) = std::env::var("BLOG_URL") {
-        if !v.is_empty() {
-            s.blog_url = v;
-        }
+    fn parse<T: FromStr>(var: &str) -> Result<T, SetupError> {
+        let type_name = std::any::type_name::<T>();
+        std::env::var(var)
+            .map_err(|_| SetupError::MissingVariable(var.to_string()))?
+            .parse()
+            .map_err(|_| SetupError::InvalidVariable(format!("{var} must be {type_name}")))
     }
-    if let Ok(v) = std::env::var("CLOUDFLARE_ACCOUNT_ID") {
-        if !v.is_empty() {
-            s.cloudflare_account_id = v;
-        }
-    }
-    if let Ok(v) = std::env::var("CLOUDFLARE_RAG_INGEST_API_TOKEN") {
-        if !v.is_empty() {
-            s.cloudflare_api_token = v;
-        }
-    }
-    if let Ok(v) = std::env::var("BLOG_POST_QA_CACHE_KV_NAMESPACE_ID") {
-        if !v.is_empty() {
-            s.kv_namespace_id = v;
-        }
+
+    fn parse_optional<T: FromStr>(var: &str) -> Option<T> {
+        std::env::var(var).ok()?.parse().ok()
     }
 }

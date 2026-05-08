@@ -293,58 +293,72 @@ fn PostDetailView(
             set_history_refresh=set_history_refresh
         />
 
-        <div class="space-y-4">
-            <div class="flex flex-col justify-between gap-4 border-b border-[var(--color-border)] pb-4">
-                <div class="space-y-1">
+        <div class="space-y-8">
+            <div class="px-6 flex flex-col justify-between gap-6">
+                <div class="space-y-2">
                     <div class="flex items-center gap-3">
                         {dirty_badge}
                         <span class="tech-label opacity-40">{format!("./posts/{}", slug_disp)}</span>
                     </div>
-                    <h1 class="text-3xl font-bold tracking-tight uppercase">{title}</h1>
+                    <h1 class="text-4xl font-black tracking-tight uppercase leading-none">{title}</h1>
                 </div>
 
-                <div class="flex gap-2">
+                <div class="flex gap-2 border-b border-[var(--color-border)] pb-4">
                     <button
-                        class="btn btn-primary px-6"
+                        class="btn btn-primary px-8"
                         on:click=move |_| open_ingest_dialog(make_ingest_options(false, false))
                     >
                         "EXECUTE_INGEST"
                     </button>
                     <button
-                        class="btn"
+                        class="btn px-6"
                         on:click=move |_| open_ingest_dialog(make_ingest_options(true, false))
                     >
-                        "FORCE"
+                        "FORCE_REBUILD"
                     </button>
                 </div>
             </div>
 
-            <div class="flex flex-wrap gap-6 py-2 px-4 bg-[var(--color-card-inner)]/30 border border-[var(--color-border)]">
-                <MiniStat label="BODY" value=format!("{} B", body_len) />
-                <MiniStat label="GLOSSARY" value=format!("{:02}", glossary.with_value(|g| g.len())) />
-                <MiniStat label="CHUNKS" value=detail.manifest_chunk_count.map(|c| c.to_string()).unwrap_or_else(|| "0".into()) />
-                <MiniStat label="HASH" value=short_hash(&detail.current_post_version) />
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--color-border)] border-y border-x border-[var(--color-border)]">
+                <div class="bg-[var(--color-page-bg)] px-6 py-4 flex flex-col">
+                    <span class="tech-label opacity-40 text-[9px] mb-1">"BODY_SIZE"</span>
+                    <span class="font-mono text-sm font-bold">{format!("{} BYTES", body_len)}</span>
+                </div>
+                <div class="bg-[var(--color-page-bg)] px-4 py-4 flex flex-col">
+                    <span class="tech-label opacity-40 text-[9px] mb-1">"GLOSSARY"</span>
+                    <span class="font-mono text-sm font-bold">{format!("{:02} TERMS", glossary.with_value(|g| g.len()))}</span>
+                </div>
+                <div class="bg-[var(--color-page-bg)] px-4 py-4 flex flex-col">
+                    <span class="tech-label opacity-40 text-[9px] mb-1">"CHUNKS"</span>
+                    <span class="font-mono text-sm font-bold">{detail.manifest_chunk_count.map(|c| c.to_string()).unwrap_or_else(|| "0".into())}</span>
+                </div>
+                <div class="bg-[var(--color-page-bg)] px-6 py-4 flex flex-col">
+                    <span class="tech-label opacity-40 text-[9px] mb-1">"VERSION_HASH"</span>
+                    <span class="font-mono text-sm font-bold">{short_hash(&detail.current_post_version)}</span>
+                </div>
             </div>
 
-            <div class="flex gap-1 border-b border-[var(--color-border)]">
-                <TabButton
-                    label="REFINEMENT"
-                    active=move || active_tab.get() == Tab::Refinement
-                    on_click=Box::new(move || set_active_tab.set(Tab::Refinement))
-                />
-                <TabButton
-                    label="CHUNKS"
-                    active=move || active_tab.get() == Tab::Chunks
-                    on_click=Box::new(move || set_active_tab.set(Tab::Chunks))
-                />
-                <TabButton
-                    label="METADATA"
-                    active=move || active_tab.get() == Tab::Overview
-                    on_click=Box::new(move || set_active_tab.set(Tab::Overview))
-                />
+            <div class="border-b border-[var(--color-border)]">
+                <div class="px-6 flex gap-1">
+                    <TabButton
+                        label="REFINEMENT_LAB"
+                        active=move || active_tab.get() == Tab::Refinement
+                        on_click=Box::new(move || set_active_tab.set(Tab::Refinement))
+                    />
+                    <TabButton
+                        label="CHUNK_STREAM"
+                        active=move || active_tab.get() == Tab::Chunks
+                        on_click=Box::new(move || set_active_tab.set(Tab::Chunks))
+                    />
+                    <TabButton
+                        label="METADATA_EXPLORER"
+                        active=move || active_tab.get() == Tab::Overview
+                        on_click=Box::new(move || set_active_tab.set(Tab::Overview))
+                    />
+                </div>
             </div>
 
-            <div class="pt-4">
+            <div class="px-6 pt-4">
                 {move || match active_tab.get() {
                     Tab::Refinement => view! {
                         <div class="space-y-6">
@@ -747,16 +761,6 @@ fn EvaluationHistory(
 
 fn fmt_percent(value: f32) -> String {
     format!("{:.1}%", value * 100.0)
-}
-
-#[component]
-fn MiniStat(label: &'static str, value: String) -> impl IntoView {
-    view! {
-        <div class="flex flex-col">
-            <span class="tech-label opacity-40 text-[9px] uppercase">{label}</span>
-            <span class="font-mono text-[11px] font-bold">{value}</span>
-        </div>
-    }
 }
 
 #[component]

@@ -1,4 +1,6 @@
 mod chunking;
+mod configuration_commands;
+mod pipeline_configuration;
 mod embedding;
 mod evaluation;
 mod ingest;
@@ -10,6 +12,18 @@ mod vector;
 pub use chunking::{
     BertChunkingConfig, ChunkParamDefinition, ChunkParamKey, ChunkStrategy, ChunkerDefinition,
     ChunkingConfig, LlmChunkingConfig, SectionChunkingConfig,
+};
+pub use configuration_commands::{
+    AddEmbeddingModelDto, AddGenerationModelDto, AddProviderDto, AddVectorIndexDto,
+    ConfigurationCommandDto, ProviderType, RemoveAiProviderDto, RemoveEmbeddingModelDto,
+    RemoveGenerationModelDto, RemoveVectorIndexDto, RemoveVectorStoreProviderDto,
+    SetCurrentEmbeddingModelDto, SetCurrentGenerationModelDto, SetCurrentVectorIndexDto,
+    UpdateAiProviderDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
+    UpdateVectorStoreProviderDto,
+};
+pub use pipeline_configuration::{
+    AiProviderDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto,
+    VectorIndexDto, VectorStoreProviderDto,
 };
 pub use embedding::{
     catalog_for_backend, CatalogEntry, EmbedResult, EmbedderBackend, EmbeddingModel,

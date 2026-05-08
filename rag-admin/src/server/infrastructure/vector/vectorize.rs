@@ -11,10 +11,12 @@ use crate::server::application::ingest::ports::vector_index::{
 use crate::server::application::ingest::ports::VectorIndex;
 use crate::server::application::AppError;
 use crate::server::domain::VectorRecord;
+use crate::server::domain::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
 
 pub struct VectorizeVectorIndex {
     api: Arc<CloudflareApi>,
+    pipeline_configuration: Arc<dyn PipelineConfigurationRepository>,
 }
 
 enum VectorizeOperation {
@@ -78,17 +80,31 @@ struct DescribeConfig {
 }
 
 impl VectorizeVectorIndex {
-    pub fn new(api: Arc<CloudflareApi>) -> Arc<Self> {
-        Arc::new(Self { api })
+    pub fn new(
+        api: Arc<CloudflareApi>,
+        pipeline_configuration: Arc<dyn PipelineConfigurationRepository>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            api,
+            pipeline_configuration,
+        })
     }
 
     async fn url(&self, operation: &VectorizeOperation) -> Result<String, AppError> {
-        let creds = self.api.credentials().await?;
-        let index = self.api.vector_index_name().await;
+        let config = self
+            .pipeline_configuration
+            .load()
+            .await
+            .map_err(|e| AppError::Internal(format!("load pipeline configuration: {e}")))?;
+        let index = config
+            .current_vector_index()
+            .map(|i| i.name.as_str())
+            .ok_or_else(|| AppError::Validation("no current vector index is set".into()))?
+            .to_string();
         Ok(format!(
             "{}/accounts/{}/vectorize/v2/indexes/{}/{}",
             CLOUDFLARE_API_BASE,
-            creds.account_id,
+            self.api.account_id(),
             index,
             operation.as_api_path()
         ))

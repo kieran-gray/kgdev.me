@@ -21,7 +21,7 @@ pub async fn get_evaluation_dataset_status(
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
         .chunking_evaluation_service
-        .dataset_status(&slug)
+        .get_dataset_status(&slug)
         .await
         .map_err(map_app_error)
 }
@@ -41,7 +41,7 @@ pub async fn start_generate_evaluation_dataset(
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .chunking_evaluation_service
+        .evaluation_job_service
         .start_generate_dataset(slug)
         .await
         .map_err(map_app_error)
@@ -86,7 +86,7 @@ pub async fn get_latest_evaluation_result(
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
         .chunking_evaluation_service
-        .latest_result(&slug)
+        .get_latest_result(&slug)
         .await
         .map_err(map_app_error)
 }
@@ -107,7 +107,7 @@ pub async fn get_evaluation_result_history(
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
         .chunking_evaluation_service
-        .result_history(&slug)
+        .get_result_history(&slug)
         .await
         .map_err(map_app_error)
 }
@@ -129,7 +129,7 @@ pub async fn get_evaluation_result_run(
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
         .chunking_evaluation_service
-        .result_run(&slug, &run_id)
+        .get_result_run_by_id(&slug, &run_id)
         .await
         .map_err(map_app_error)
 }
@@ -151,7 +151,7 @@ pub async fn start_run_evaluation(
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .chunking_evaluation_service
+        .evaluation_job_service
         .start_run_evaluation(slug, variants, options)
         .await
         .map_err(map_app_error)
@@ -174,7 +174,7 @@ pub async fn start_run_evaluation_matrix(
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .chunking_evaluation_service
+        .evaluation_job_service
         .start_run_evaluation_matrix(slug, variant, option_sets)
         .await
         .map_err(map_app_error)
@@ -196,7 +196,7 @@ pub async fn start_run_evaluation_autotune(
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
     state
-        .chunking_evaluation_service
+        .evaluation_job_service
         .start_run_evaluation_autotune(slug, request)
         .await
         .map_err(map_app_error)

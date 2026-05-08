@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::AppError;
-use crate::server::infrastructure::clients::{OllamaApi, OLLAMA_API_BASE};
+use crate::server::infrastructure::clients::OllamaApi;
 use crate::shared::SettingsDto;
 
 pub struct OllamaEmbedder {
@@ -37,7 +37,7 @@ struct EmbedResult {
 impl Embedder for OllamaEmbedder {
     async fn embed_batch(&self, model: &str, texts: &[String]) -> Result<Vec<Vec<f32>>, AppError> {
         let dims = self.settings.read().await.embedding_model.dims;
-        let url = format!("{}/api/embed", OLLAMA_API_BASE);
+        let url = format!("{}/api/embed", self.api.base_url);
         let request = EmbedRequest {
             model: model.to_string(),
             input: texts.to_vec(),

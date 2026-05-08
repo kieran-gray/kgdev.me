@@ -5,6 +5,7 @@ async fn main() {
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
     use rag_admin::app::{shell, App};
+    use rag_admin::server::api::health::health_check;
     use rag_admin::server::api::sse::ingest_logs_handler;
     use rag_admin::server::setup::AppState;
     use std::sync::Arc;
@@ -32,6 +33,7 @@ async fn main() {
             "/api/ingest/logs/{job_id}",
             axum::routing::get(ingest_logs_handler),
         )
+        .route("/api/health", axum::routing::get(health_check))
         .leptos_routes_with_context(
             &leptos_options,
             routes,

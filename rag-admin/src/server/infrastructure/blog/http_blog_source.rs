@@ -4,30 +4,27 @@ use async_trait::async_trait;
 use reqwest::header::HeaderMap;
 use reqwest::Method;
 use serde::Deserialize;
-use tokio::sync::RwLock;
 
 use crate::server::application::blog::ports::BlogSource;
 use crate::server::application::AppError;
 use crate::server::domain::{BlogPost, BlogPostSummary, GlossarySource, GlossaryTerm, PostVersion};
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
-use crate::shared::SettingsDto;
 
 pub struct HttpBlogSource {
     http: Arc<ReqwestHttpClient>,
-    settings: Arc<RwLock<SettingsDto>>,
+    blog_url: String,
 }
 
 impl HttpBlogSource {
-    pub fn new(http: Arc<ReqwestHttpClient>, settings: Arc<RwLock<SettingsDto>>) -> Arc<Self> {
-        Arc::new(Self { http, settings })
+    pub fn new(http: Arc<ReqwestHttpClient>, blog_url: String) -> Arc<Self> {
+        Arc::new(Self { http, blog_url })
     }
 
-    async fn base_url(&self) -> Result<String, AppError> {
-        let s = self.settings.read().await;
-        let url = s.blog_url.trim().trim_end_matches('/').to_string();
+    fn base_url(&self) -> Result<String, AppError> {
+        let url = self.blog_url.trim().trim_end_matches('/').to_string();
         if url.is_empty() {
             return Err(AppError::Validation(
-                "blog URL is not configured (Settings → Blog base URL)".into(),
+                "blog URL is not configured".into(),
             ));
         }
         Ok(url)
@@ -91,7 +88,7 @@ struct GlossarySourceWire {
 #[async_trait]
 impl BlogSource for HttpBlogSource {
     async fn list(&self) -> Result<Vec<BlogPostSummary>, AppError> {
-        let base = self.base_url().await?;
+        let base = self.base_url()?;
         let url = format!("{base}/api/posts/index.json");
         let res: PostsListResponse = self.get_json(&url).await?;
         Ok(res
@@ -107,7 +104,7 @@ impl BlogSource for HttpBlogSource {
     }
 
     async fn fetch(&self, slug: &str) -> Result<BlogPost, AppError> {
-        let base = self.base_url().await?;
+        let base = self.base_url()?;
         let url = format!("{base}/api/posts/{slug}.json");
         let detail: PostDetailWire = self.get_json(&url).await?;
         let glossary_terms = detail

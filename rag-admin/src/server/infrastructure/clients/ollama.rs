@@ -6,15 +6,14 @@ use reqwest::Method;
 use crate::server::application::AppError;
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
 
-pub const OLLAMA_API_BASE: &str = "http://localhost:11434";
-
 pub struct OllamaApi {
     http: Arc<ReqwestHttpClient>,
+    pub base_url: String,
 }
 
 impl OllamaApi {
-    pub fn new(http: Arc<ReqwestHttpClient>) -> Self {
-        Self { http }
+    pub fn new(http: Arc<ReqwestHttpClient>, base_url: String) -> Self {
+        Self { http, base_url }
     }
 
     fn headers(content_type: &str) -> Result<HeaderMap, AppError> {

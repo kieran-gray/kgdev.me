@@ -1,12 +1,29 @@
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::retrieval::cosine_similarity;
 use crate::server::application::AppError;
-use crate::shared::{EmbeddingModel, EvaluationQuestion};
+use crate::shared::{ordered_f32_vec, EmbeddingModel, EvaluationQuestion};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct QuestionFilterStats {
     pub low_excerpt_similarity: u32,
     pub duplicate: u32,
+}
+
+pub enum QuestionFilterDecision {
+    Accepted { kept: usize },
+    RejectedLowExcerptSimilarity { similarity: f32 },
+    RejectedDuplicate { similarity: f32 },
+}
+
+pub struct GeneratedQuestionGate<'a> {
+    embedding_service: &'a EmbeddingService,
+    embedding_model: &'a EmbeddingModel,
+    excerpt_similarity_threshold: f32,
+    duplicate_similarity_threshold: f32,
+    questions: Vec<EvaluationQuestion>,
+    question_embeddings: Vec<Vec<f32>>,
+    stats: QuestionFilterStats,
+    generated_count: usize,
 }
 
 pub async fn filter_generated_questions(
@@ -52,6 +69,99 @@ pub async fn filter_generated_questions(
     ))
 }
 
+impl<'a> GeneratedQuestionGate<'a> {
+    pub fn new(
+        embedding_service: &'a EmbeddingService,
+        embedding_model: &'a EmbeddingModel,
+        excerpt_similarity_threshold: f32,
+        duplicate_similarity_threshold: f32,
+    ) -> Self {
+        Self {
+            embedding_service,
+            embedding_model,
+            excerpt_similarity_threshold,
+            duplicate_similarity_threshold,
+            questions: Vec::new(),
+            question_embeddings: Vec::new(),
+            stats: QuestionFilterStats::default(),
+            generated_count: 0,
+        }
+    }
+
+    pub async fn try_accept(
+        &mut self,
+        question: EvaluationQuestion,
+    ) -> Result<QuestionFilterDecision, AppError> {
+        self.generated_count += 1;
+
+        let mut texts = Vec::with_capacity(question.references.len() + 1);
+        texts.push(question.question.clone());
+        texts.extend(question.references.iter().map(|reference| reference.content.clone()));
+
+        let embeddings = self
+            .embedding_service
+            .embed_batch(self.embedding_model, &texts)
+            .await?;
+        let question_embedding = embeddings.first().cloned();
+
+        match classify_candidate(
+            question_embedding.as_deref(),
+            &embeddings[1..],
+            &self.question_embeddings,
+            self.excerpt_similarity_threshold,
+            self.duplicate_similarity_threshold,
+        ) {
+            CandidateClassification::Accepted => {
+                let question_embedding = question_embedding.expect("accepted candidate has embedding");
+                let mut question = question;
+                question.embedding = Some(ordered_f32_vec(question_embedding.clone()));
+                for (reference, reference_embedding) in question
+                    .references
+                    .iter_mut()
+                    .zip(embeddings.iter().skip(1))
+                {
+                    reference.embedding = Some(ordered_f32_vec(reference_embedding.clone()));
+                }
+
+                self.question_embeddings.push(question_embedding);
+                self.questions.push(question);
+                Ok(QuestionFilterDecision::Accepted {
+                    kept: self.questions.len(),
+                })
+            }
+            CandidateClassification::RejectedLowExcerptSimilarity { similarity } => {
+                self.stats.low_excerpt_similarity += 1;
+                Ok(QuestionFilterDecision::RejectedLowExcerptSimilarity { similarity })
+            }
+            CandidateClassification::RejectedDuplicate { similarity } => {
+                self.stats.duplicate += 1;
+                Ok(QuestionFilterDecision::RejectedDuplicate { similarity })
+            }
+        }
+    }
+
+    pub fn kept_count(&self) -> usize {
+        self.questions.len()
+    }
+
+    pub fn generated_count(&self) -> usize {
+        self.generated_count
+    }
+
+    pub fn stats(&self) -> QuestionFilterStats {
+        self.stats
+    }
+
+    pub fn latest_question(&self) -> Option<&EvaluationQuestion> {
+        self.questions.last()
+    }
+
+    pub fn into_questions(mut self, target_questions: usize) -> Vec<EvaluationQuestion> {
+        self.questions.truncate(target_questions);
+        self.questions
+    }
+}
+
 fn filter_questions_by_embeddings(
     questions: Vec<EvaluationQuestion>,
     question_embeddings: &[Vec<f32>],
@@ -73,47 +183,83 @@ fn filter_questions_by_embeddings(
     let mut stats = QuestionFilterStats::default();
 
     for (question_index, question) in questions.into_iter().enumerate() {
-        let Some(question_embedding) = question_embeddings.get(question_index) else {
-            stats.low_excerpt_similarity += 1;
-            continue;
-        };
-        let reference_indexes = &references_by_question[question_index];
-        if reference_indexes.is_empty() {
-            stats.low_excerpt_similarity += 1;
-            continue;
-        }
-
-        let min_reference_similarity = reference_indexes
+        let reference_embeddings_for_question = references_by_question[question_index]
             .iter()
             .filter_map(|i| reference_embeddings.get(*i))
-            .map(|reference_embedding| cosine_similarity(question_embedding, reference_embedding))
-            .fold(f32::INFINITY, f32::min);
-        if !min_reference_similarity.is_finite()
-            || min_reference_similarity < excerpt_similarity_threshold
-        {
-            stats.low_excerpt_similarity += 1;
-            continue;
-        }
+            .cloned()
+            .collect::<Vec<_>>();
+        let kept_embeddings = kept_embedding_indexes
+            .iter()
+            .filter_map(|kept_index| question_embeddings.get(*kept_index))
+            .cloned()
+            .collect::<Vec<_>>();
 
-        let is_duplicate = kept_embedding_indexes.iter().any(|kept_index| {
-            question_embeddings
-                .get(*kept_index)
-                .map(|kept_embedding| {
-                    cosine_similarity(question_embedding, kept_embedding)
-                        >= duplicate_similarity_threshold
-                })
-                .unwrap_or(false)
-        });
-        if is_duplicate {
-            stats.duplicate += 1;
-            continue;
+        match classify_candidate(
+            question_embeddings.get(question_index).map(Vec::as_slice),
+            &reference_embeddings_for_question,
+            &kept_embeddings,
+            excerpt_similarity_threshold,
+            duplicate_similarity_threshold,
+        ) {
+            CandidateClassification::Accepted => {
+                kept_embedding_indexes.push(question_index);
+                kept.push(question);
+            }
+            CandidateClassification::RejectedLowExcerptSimilarity { .. } => {
+                stats.low_excerpt_similarity += 1;
+            }
+            CandidateClassification::RejectedDuplicate { .. } => {
+                stats.duplicate += 1;
+            }
         }
-
-        kept_embedding_indexes.push(question_index);
-        kept.push(question);
     }
 
     (kept, stats)
+}
+
+enum CandidateClassification {
+    Accepted,
+    RejectedLowExcerptSimilarity { similarity: f32 },
+    RejectedDuplicate { similarity: f32 },
+}
+
+fn classify_candidate(
+    question_embedding: Option<&[f32]>,
+    reference_embeddings: &[Vec<f32>],
+    kept_embeddings: &[Vec<f32>],
+    excerpt_similarity_threshold: f32,
+    duplicate_similarity_threshold: f32,
+) -> CandidateClassification {
+    let Some(question_embedding) = question_embedding else {
+        return CandidateClassification::RejectedLowExcerptSimilarity { similarity: 0.0 };
+    };
+    if reference_embeddings.is_empty() {
+        return CandidateClassification::RejectedLowExcerptSimilarity { similarity: 0.0 };
+    }
+
+    let min_reference_similarity = reference_embeddings
+        .iter()
+        .map(|reference_embedding| cosine_similarity(question_embedding, reference_embedding))
+        .fold(f32::INFINITY, f32::min);
+    if !min_reference_similarity.is_finite()
+        || min_reference_similarity < excerpt_similarity_threshold
+    {
+        return CandidateClassification::RejectedLowExcerptSimilarity {
+            similarity: min_reference_similarity.max(0.0),
+        };
+    }
+
+    let max_duplicate_similarity = kept_embeddings
+        .iter()
+        .map(|kept_embedding| cosine_similarity(question_embedding, kept_embedding))
+        .fold(0.0, f32::max);
+    if max_duplicate_similarity >= duplicate_similarity_threshold {
+        return CandidateClassification::RejectedDuplicate {
+            similarity: max_duplicate_similarity,
+        };
+    }
+
+    CandidateClassification::Accepted
 }
 
 #[cfg(test)]
@@ -184,5 +330,31 @@ mod tests {
         assert_eq!(kept[1].question, "different?");
         assert_eq!(stats.low_excerpt_similarity, 0);
         assert_eq!(stats.duplicate, 1);
+    }
+
+    #[test]
+    fn classification_rejects_missing_references() {
+        let decision = classify_candidate(Some(&[1.0, 0.0]), &[], &[], 0.5, 0.95);
+
+        assert!(matches!(
+            decision,
+            CandidateClassification::RejectedLowExcerptSimilarity { similarity: 0.0 }
+        ));
+    }
+
+    #[test]
+    fn classification_rejects_duplicates() {
+        let decision = classify_candidate(
+            Some(&[1.0, 0.0]),
+            &[vec![1.0, 0.0]],
+            &[vec![0.99, 0.01]],
+            0.5,
+            0.95,
+        );
+
+        assert!(matches!(
+            decision,
+            CandidateClassification::RejectedDuplicate { .. }
+        ));
     }
 }

@@ -1,6 +1,4 @@
-use crate::shared::{
-    catalog_for_backend, EmbedderBackend, EvaluationGenerationBackend, SettingsDto,
-};
+use crate::shared::{catalog_for_backend, EmbedderBackend, SettingsDto};
 
 pub fn validate_local(s: &SettingsDto) -> Result<(), String> {
     if s.embedding_model.id.is_empty() {
@@ -59,16 +57,6 @@ pub fn validate_local(s: &SettingsDto) -> Result<(), String> {
     if s.evaluation.min_score_milli > 1000 {
         return Err("evaluation min score must be <= 1000".into());
     }
-    if matches!(
-        s.evaluation.generation_backend,
-        EvaluationGenerationBackend::Ollama
-    ) {
-        let url = s.evaluation.ollama_base_url.trim();
-        if !(url.starts_with("http://") || url.starts_with("https://")) {
-            return Err("evaluation Ollama base URL must start with http:// or https://".into());
-        }
-    }
-
     Ok(())
 }
 

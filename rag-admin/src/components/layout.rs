@@ -1,35 +1,56 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
-
 #[component]
 pub fn Layout(children: Children) -> impl IntoView {
     view! {
-        <div class="min-h-screen flex flex-col relative">
-            <header class="card-outer border-x-0 border-t-0 px-6 py-4 flex items-center justify-between z-10">
-                <div class="flex items-center gap-8 w-full max-w-6xl mx-auto">
-                    <div class="flex flex-col">
-                        <div class="cyber-title cursor-default">
-                            <span class="cyber-title-text" attr:data-text="RAG_ADMIN">
-                                "RAG_ADMIN"
-                            </span>
+        <div class="min-h-screen flex flex-col relative bg-[var(--color-page-bg)]">
+            // Structural Framing Lines
+            <div class="hidden xl:block">
+                // Main framing lines
+                <div class="framing-line-v left-1/2 -ml-[576px]"></div>
+                <div class="framing-line-v left-1/2 ml-[576px]"></div>
+
+                // Secondary framing lines (approx 1/3 distance to edge)
+                // Calculated as: (100vw - 1152px) / 2 = side margin. 1/3 of that.
+                <div class="framing-line-v" style="left: calc(50% - 576px - (50vw - 576px) / 3)"></div>
+                <div class="framing-line-v" style="left: calc(50% + 576px + (50vw - 576px) / 3)"></div>
+            </div>
+
+            <header class="flex items-center justify-between z-10 relative">
+                <div class="w-full relative">
+                    <div class="max-w-6xl mx-auto flex items-center gap-8 px-6 py-4">
+                        <div class="flex flex-col">
+                            <div class="cyber-title cursor-default">
+                                <span class="cyber-title-text" attr:data-text="RAG_ADMIN">
+                                    "RAG_ADMIN"
+                                </span>
+                            </div>
                         </div>
+                        <nav class="flex gap-6 text-sm font-medium pt-3 flex-1">
+                            <A href="/" attr:class="hover:text-[var(--color-accent)] transition-colors">
+                                <span class="opacity-50 mr-1">"01"</span>"POSTS"
+                            </A>
+                            <A href="/embed" attr:class="hover:text-[var(--color-accent)] transition-colors">
+                                <span class="opacity-50 mr-1">"02"</span>"EMBED_TEST"
+                            </A>
+                            <A href="/new-settings" attr:class="hover:text-[var(--color-accent)] transition-colors">
+                                <span class="opacity-50 mr-1">"03"</span>"PIPELINE_CONFIG"
+                            </A>
+                            <A href="/settings" attr:class="hover:text-[var(--color-accent)] transition-colors ml-auto">
+                                <span class="opacity-50 mr-1">"04"</span>"LEGACY_SETTINGS"
+                            </A>
+                        </nav>
                     </div>
-                    <nav class="flex gap-6 text-sm font-medium pt-3 flex-1">
-                        <A href="/" attr:class="hover:text-[var(--color-accent)] transition-colors">
-                            <span class="opacity-50 mr-1">"01"</span>"POSTS"
-                        </A>
-                        <A href="/embed" attr:class="hover:text-[var(--color-accent)] transition-colors">
-                            <span class="opacity-50 mr-1">"02"</span>"EMBED_TEST"
-                        </A>
-                        <A href="/settings" attr:class="hover:text-[var(--color-accent)] transition-colors ml-auto">
-                            <span class="opacity-50 mr-1">"03"</span>"SETTINGS"
-                        </A>
-                    </nav>
+                    // Horizontal framing line for header - 100% width
+                    <div class="absolute bottom-0 left-0 right-0 framing-line-h"></div>
                 </div>
             </header>
-            <main class="flex-1 px-6 py-8 max-w-6xl mx-auto w-full relative">
-                <div class="relative z-10">{children()}</div>
+
+            <main class="flex-1 max-w-6xl mx-auto w-full relative">
+                <div class="relative z-10 py-8">{children()}</div>
             </main>
         </div>
     }
 }
+
+

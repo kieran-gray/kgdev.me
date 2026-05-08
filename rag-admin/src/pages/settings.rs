@@ -13,14 +13,13 @@ pub fn SettingsPage() -> impl IntoView {
     let initial = Resource::new(|| (), |_| async move { load_settings().await });
 
     view! {
-        <div class="space-y-6 max-w-6xl">
-            <div class="flex flex-col border-b border-[var(--color-border)] pb-4">
-                <h1 class="text-2xl font-bold tracking-tight uppercase">"CONFIGURATION_PANEL"</h1>
-                <p class="text-[10px] mt-2 font-mono opacity-50">
-                    "LOCAL_STORAGE_REF: ./rag-admin/data/settings.toml"
-                </p>
+        <div class="space-y-8">
+            <div class="px-6 flex flex-col gap-1">
+                <span class="tech-label opacity-40">"SYSTEM_VIEW / LEGACY_SETTINGS"</span>
+                <h1 class="text-3xl font-bold tracking-tight uppercase">"SETTINGS_PANEL"</h1>
             </div>
-            <Suspense fallback=|| view! { <p class="tech-label animate-pulse">"FETCHING_CONFIG..."</p> }>
+            
+            <Suspense fallback=|| view! { <div class="px-6"><p class="tech-label animate-pulse">"FETCHING_CONFIG..."</p></div> }>
                 {move || {
                     initial
                         .get()
@@ -28,8 +27,10 @@ pub fn SettingsPage() -> impl IntoView {
                             Ok(s) => view! { <SettingsForm initial=s /> }.into_any(),
                             Err(e) => {
                                 view! {
-                                    <div class="card-outer p-4 log-line-error font-mono text-sm">
-                                        {format!("CONFIG_LOAD_FAULT: {e}")}
+                                    <div class="px-6">
+                                        <div class="card-outer p-4 log-line-error font-mono text-sm">
+                                            {format!("CONFIG_LOAD_FAULT: {e}")}
+                                        </div>
                                     </div>
                                 }
                                     .into_any()
@@ -43,10 +44,6 @@ pub fn SettingsPage() -> impl IntoView {
 
 #[component]
 fn SettingsForm(initial: SettingsDto) -> impl IntoView {
-    let (blog_url, set_blog_url) = signal(initial.blog_url);
-    let (account, set_account) = signal(initial.cloudflare_account_id);
-    let (token, set_token) = signal(initial.cloudflare_api_token);
-    let (kv_ns, set_kv_ns) = signal(initial.kv_namespace_id);
     let (vector_index, set_vector_index) = signal(initial.vector_index);
     let (model, set_model) = signal(initial.embedding_model);
     let (default_chunking, set_default_chunking) = signal(initial.default_chunking);
@@ -58,10 +55,6 @@ fn SettingsForm(initial: SettingsDto) -> impl IntoView {
         ev.prevent_default();
         set_status.set(None);
         let payload = SettingsDto {
-            blog_url: blog_url.get(),
-            cloudflare_account_id: account.get(),
-            cloudflare_api_token: token.get(),
-            kv_namespace_id: kv_ns.get(),
             vector_index: vector_index.get(),
             embedding_model: model.get(),
             default_chunking: default_chunking.get(),
@@ -76,7 +69,7 @@ fn SettingsForm(initial: SettingsDto) -> impl IntoView {
     };
 
     view! {
-        <form on:submit=on_save class="space-y-6">
+        <form on:submit=on_save class="space-y-10">
             <VectorIndexCard
                 vector_index=vector_index
                 set_vector_index=set_vector_index
@@ -98,52 +91,7 @@ fn SettingsForm(initial: SettingsDto) -> impl IntoView {
                 set_config=set_evaluation
             />
 
-            <div class="card-outer p-6 space-y-4">
-                <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
-                    <span class="tech-label">"cloudflare.config"</span>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Field label="KV_NAMESPACE_ID" hint="STORAGE_CACHE_ID">
-                        <input
-                            class="input font-mono text-sm"
-                            prop:value=kv_ns
-                            on:input=move |e| set_kv_ns.set(event_target_value(&e))
-                        />
-                    </Field>
-                    <Field label="CF_ACCOUNT_ID" hint="CLOUDFLARE_AUTH_CONTEXT">
-                        <input
-                            class="input font-mono text-sm"
-                            prop:value=account
-                            on:input=move |e| set_account.set(event_target_value(&e))
-                        />
-                    </Field>
-                    <Field label="CF_API_TOKEN" hint="ENCRYPTED_AUTH_TOKEN">
-                        <input
-                            class="input font-mono text-sm"
-                            type="password"
-                            prop:value=token
-                            on:input=move |e| set_token.set(event_target_value(&e))
-                        />
-                    </Field>
-                </div>
-            </div>
-
-            <div class="card-outer p-6 space-y-4">
-                <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
-                    <span class="tech-label">"blog.config"</span>
-                </div>
-                <div class="grid grid-cols-1 gap-6">
-                    <Field label="BLOG_BASE_URL" hint="TARGET_URI (e.g. https://kgdev.me)">
-                        <input
-                            class="input font-mono text-sm"
-                            prop:value=blog_url
-                            on:input=move |e| set_blog_url.set(event_target_value(&e))
-                        />
-                    </Field>
-                </div>
-            </div>
-
-            <div class="flex items-center gap-4">
+            <div class="px-6 flex items-center gap-4 pb-8">
                 <button class="btn btn-primary px-8" type="submit">"SAVE_CHANGES"</button>
                 {move || {
                     status
@@ -164,10 +112,10 @@ fn EvaluationDefaultsSection(
     set_config: WriteSignal<EvaluationSettings>,
 ) -> impl IntoView {
     view! {
-        <div class="card-outer p-6 space-y-4">
+        <div class="border-y border-[var(--color-border)] py-8 px-6 space-y-6 bg-black/5">
             <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
                 <span class="tech-label">"chunking.evaluation"</span>
-                <p class="tech-label opacity-50 mt-2">
+                <p class="tech-label opacity-50 mt-2 max-w-2xl">
                     "Defaults for synthetic chunking evaluation. Generation is Ollama-first so local runs do not spend Workers AI credits."
                 </p>
             </div>
@@ -189,16 +137,6 @@ fn EvaluationDefaultsSection(
                         <option value="ollama">"ollama"</option>
                         <option value="workers_ai" disabled=true>"workers_ai (later)"</option>
                     </select>
-                </Field>
-                <Field label="OLLAMA_BASE_URL" hint="local Ollama daemon URL">
-                    <input
-                        class="input font-mono text-sm"
-                        prop:value=move || config.get().ollama_base_url
-                        on:input=move |e| {
-                            let v = event_target_value(&e);
-                            set_config.update(|c| c.ollama_base_url = v);
-                        }
-                    />
                 </Field>
                 <Field label="GENERATION_MODEL" hint="chat model used to create questions">
                     <input
@@ -311,10 +249,10 @@ fn VectorIndexCard(
     };
 
     view! {
-        <div class="card-outer p-6 space-y-4">
+        <div class="border-y border-[var(--color-border)] py-8 px-6 space-y-6 bg-black/5">
             <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
                 <span class="tech-label">"vector_index"</span>
-                <p class="tech-label opacity-50 mt-2">
+                <p class="tech-label opacity-50 mt-2 max-w-2xl">
                     "Where ingested vectors are written and where the Q&A backend reads from. \
                      The index dimensions are immutable on the provider."
                 </p>
@@ -455,10 +393,10 @@ fn ModelCard(
     };
 
     view! {
-        <div class="card-outer p-6 space-y-4">
+        <div class="border-y border-[var(--color-border)] py-8 px-6 space-y-6 bg-black/5">
             <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
                 <span class="tech-label">"embedding_model"</span>
-                <p class="tech-label opacity-50 mt-2">
+                <p class="tech-label opacity-50 mt-2 max-w-2xl">
                     "Pick a backend (Cloudflare Workers AI or local Ollama) and a model. \
                      The vector index dimensions and the model output dimensions must match. \
                      Note: production Q&A expects ingest vectors to come from the same model the Q&A worker uses."
@@ -528,11 +466,13 @@ fn ModelCard(
             {move || {
                 if matches!(backend(), EmbedderBackend::Cloudflare) && suggested_models().is_empty() {
                     view! {
-                        <div class="tech-label log-line-error">
-                            {format!(
-                                "NO COMPATIBLE CLOUDFLARE MODELS at {} dims — adjust index dimensions or switch backend.",
-                                target_dims()
-                            )}
+                        <div class="px-6">
+                            <div class="tech-label log-line-error">
+                                {format!(
+                                    "NO COMPATIBLE CLOUDFLARE MODELS at {} dims — adjust index dimensions or switch backend.",
+                                    target_dims()
+                                )}
+                            </div>
                         </div>
                     }.into_any()
                 } else {
@@ -549,10 +489,10 @@ fn ChunkingDefaultsSection(
     set_config: WriteSignal<ChunkingConfig>,
 ) -> impl IntoView {
     view! {
-        <div class="card-outer p-6 space-y-4">
+        <div class="border-y border-[var(--color-border)] py-8 px-6 space-y-6 bg-black/5">
             <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
                 <span class="tech-label">"chunking.defaults"</span>
-                <p class="tech-label opacity-50 mt-2">
+                <p class="tech-label opacity-50 mt-2 max-w-2xl">
                     "Default chunking parameters for ingest. \
                      Per-post overrides can be previewed and saved from the post detail page."
                 </p>

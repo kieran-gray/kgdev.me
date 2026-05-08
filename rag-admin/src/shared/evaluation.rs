@@ -23,8 +23,6 @@ impl EvaluationGenerationBackend {
 pub struct EvaluationSettings {
     #[serde(default)]
     pub generation_backend: EvaluationGenerationBackend,
-    #[serde(default = "default_ollama_base_url")]
-    pub ollama_base_url: String,
     #[serde(default = "default_generation_model")]
     pub generation_model: String,
     #[serde(
@@ -60,7 +58,6 @@ impl Default for EvaluationSettings {
     fn default() -> Self {
         Self {
             generation_backend: EvaluationGenerationBackend::Ollama,
-            ollama_base_url: default_ollama_base_url(),
             generation_model: default_generation_model(),
             question_count: default_question_count(),
             excerpt_similarity_threshold_milli: default_excerpt_similarity_threshold_milli(),
@@ -342,6 +339,37 @@ pub struct EvaluationRunResult {
     pub variants: Vec<EvaluationVariantResult>,
 }
 
+impl EvaluationRunResult {
+    pub fn new(
+        slug: String,
+        post_version: String,
+        created_at: String,
+        options: EvaluationRunOptions,
+        autotune: Option<EvaluationAutotuneSummary>,
+        variants: Vec<EvaluationVariantResult>,
+    ) -> Self {
+        Self {
+            run_id: Self::run_id(),
+            slug,
+            post_version,
+            created_at,
+            options,
+            autotune,
+            variants,
+        }
+    }
+
+    fn run_id() -> String {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        format!("run-{nanos}")
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationRunSummary {
     pub run_id: String,
@@ -359,10 +387,6 @@ pub struct EvaluationRunSummary {
 
 fn milli_to_f32(value: u32) -> f32 {
     value as f32 / 1000.0
-}
-
-fn default_ollama_base_url() -> String {
-    "http://localhost:11434".into()
 }
 
 fn default_generation_model() -> String {

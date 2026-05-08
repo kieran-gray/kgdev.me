@@ -1,0 +1,49 @@
+services:
+
+  rag-admin:
+    image: 'rag-admin:latest'
+    build:
+      context: .
+      target: runtime
+    restart: "no"
+    networks:
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+    env_file:
+      - ./.env
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:18.2
+    restart: "no"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    volumes:
+      - app-db-data:/var/lib/postgresql/data/pgdata
+    env_file:
+      - .env
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?unset}
+      - POSTGRES_USER=${POSTGRES_USER?unset}
+      - POSTGRES_DB=${POSTGRES_DB?unset}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+
+volumes:
+  app-db-data:

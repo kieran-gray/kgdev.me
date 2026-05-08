@@ -1,5 +1,6 @@
 pub mod blog;
 pub mod chunking;
+pub mod configuration;
 pub mod embedding;
 pub mod evaluation;
 pub mod exceptions;

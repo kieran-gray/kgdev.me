@@ -1,6 +1,8 @@
 pub mod blog;
+pub mod postgres;
 pub mod chunking;
 pub mod clients;
+pub mod configuration;
 pub mod embedding;
 pub mod evaluation;
 pub mod http_client;

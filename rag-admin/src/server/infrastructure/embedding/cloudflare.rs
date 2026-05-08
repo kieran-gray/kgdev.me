@@ -37,10 +37,11 @@ struct AiResult {
 #[async_trait]
 impl Embedder for WorkersAiEmbedder {
     async fn embed_batch(&self, model: &str, texts: &[String]) -> Result<Vec<Vec<f32>>, AppError> {
-        let creds = self.api.credentials().await?;
         let url = format!(
             "{}/accounts/{}/ai/run/{}",
-            CLOUDFLARE_API_BASE, creds.account_id, model
+            CLOUDFLARE_API_BASE,
+            self.api.account_id(),
+            model
         );
         let body = json!({ "text": texts });
         let body_bytes = serde_json::to_vec(&body)

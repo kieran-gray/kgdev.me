@@ -9,16 +9,13 @@ pub fn PostsListPage() -> impl IntoView {
     let posts = Resource::new(|| (), |_| async move { list_posts().await });
 
     view! {
-        <div class="space-y-6">
-            <div class="flex items-end justify-between border-b border-[var(--color-border)] pb-2">
-                <div class="flex flex-col">
-                    <h1 class="text-2xl font-bold tracking-tight">"BLOG_POSTS"</h1>
-                        <p class="text-[10px] mt-2 font-mono opacity-50">
-                            "MANAGE_POST_EMBEDDINGS"
-                        </p>
-                </div>
+        <div class="space-y-8">
+            <div class="px-6 flex flex-col gap-1">
+                <span class="tech-label opacity-40">"SYSTEM_VIEW / BLOG_POSTS"</span>
+                <h1 class="text-3xl font-bold tracking-tight">"POST_INDEX"</h1>
             </div>
-            <Suspense fallback=|| view! { <p class="tech-label animate-pulse">"LOADING_DATA..."</p> }>
+            
+            <Suspense fallback=|| view! { <div class="px-6"><p class="tech-label animate-pulse">"LOADING_DATA..."</p></div> }>
                 {move || {
                     posts
                         .get()
@@ -26,8 +23,10 @@ pub fn PostsListPage() -> impl IntoView {
                             Ok(list) => view! { <PostsTable posts=list /> }.into_any(),
                             Err(e) => {
                                 view! {
-                                    <div class="card-outer p-4 log-line-error font-mono text-sm">
-                                        {format!("ERROR_LOG: {e}")}
+                                    <div class="px-6">
+                                        <div class="card-outer p-4 log-line-error font-mono text-sm">
+                                            {format!("ERROR_LOG: {e}")}
+                                        </div>
                                     </div>
                                 }
                                     .into_any()
@@ -42,32 +41,32 @@ pub fn PostsListPage() -> impl IntoView {
 #[component]
 fn PostsTable(posts: Vec<PostSummary>) -> impl IntoView {
     if posts.is_empty() {
-        return view! { <div class="card-outer p-4 tech-label">"NO_RECORDS_FOUND"</div> }
+        return view! { <div class="px-6"><div class="card-outer p-8 text-center tech-label opacity-40">"NO_RECORDS_FOUND"</div></div> }
             .into_any();
     }
     let total_records = posts.len();
     view! {
-        <div class="card-outer overflow-hidden">
+        <div class="border-y border-[var(--color-border)] bg-black/10 overflow-hidden">
             <table class="w-full text-sm border-collapse">
                 <thead>
-                    <tr style="background-color: var(--color-card-inner);">
-                        <th class="text-left px-4 py-2 tech-label border-b border-[var(--color-border)]">"SLUG"</th>
-                        <th class="text-left px-4 py-2 tech-label border-b border-[var(--color-border)]">"TITLE"</th>
-                        <th class="text-left px-4 py-2 tech-label border-b border-[var(--color-border)]">"STATUS"</th>
-                        <th class="text-left px-4 py-2 tech-label border-b border-[var(--color-border)] text-center">"CHUNKS"</th>
-                        <th class="text-right px-4 py-2 tech-label border-b border-[var(--color-border)]">"LAST_INGESTED"</th>
+                    <tr class="bg-[var(--color-card-inner)]/50">
+                        <th class="text-left px-6 py-3 tech-label opacity-50 border-b border-[var(--color-border)]">"SLUG"</th>
+                        <th class="text-left px-4 py-3 tech-label opacity-50 border-b border-[var(--color-border)]">"TITLE"</th>
+                        <th class="text-left px-4 py-3 tech-label opacity-50 border-b border-[var(--color-border)]">"STATUS"</th>
+                        <th class="text-left px-4 py-3 tech-label opacity-50 border-b border-[var(--color-border)] text-center">"CHUNKS"</th>
+                        <th class="text-right px-6 py-3 tech-label opacity-50 border-b border-[var(--color-border)]">"LAST_INGESTED"</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-[var(--color-border)]">
                     {posts
                         .into_iter()
                         .map(|p| {
                             let status_label = if p.manifest_post_version.is_none() {
-                                ("NEVER_INGESTED", "text-amber-500")
+                                ("NEVER_INGESTED", "text-amber-500/80")
                             } else if p.is_dirty {
-                                ("DIRTY", "text-amber-500")
+                                ("DIRTY", "text-amber-500/80")
                             } else {
-                                ("UP_TO_DATE", "text-emerald-500")
+                                ("UP_TO_DATE", "text-emerald-500/80")
                             };
                             let chunks = p
                                 .manifest_chunk_count
@@ -81,22 +80,22 @@ fn PostsTable(posts: Vec<PostSummary>) -> impl IntoView {
 
                             let href = format!("/posts/{}", p.slug);
                             view! {
-                                <tr class="hover:bg-[var(--color-card-inner)] transition-colors group">
-                                    <td class="px-4 py-2 font-mono text-xs border-b border-[var(--color-border)]">
-                                        <A href=href.clone() attr:class="text-[var(--color-accent)]">
+                                <tr class="hover:bg-[var(--color-accent)]/5 transition-colors group">
+                                    <td class="px-6 py-3 font-mono text-xs">
+                                        <A href=href.clone() attr:class="text-[var(--color-accent)] hover:underline">
                                             {format!("./{}", p.slug)}
                                         </A>
                                     </td>
-                                    <td class="px-4 py-2 font-medium border-b border-[var(--color-border)]">{p.title}</td>
-                                    <td class="px-4 py-2 border-b border-[var(--color-border)]">
+                                    <td class="px-4 py-3 font-medium text-sm">{p.title}</td>
+                                    <td class="px-4 py-3">
                                         <span class=format!("text-[10px] font-bold tracking-widest {}", status_label.1)>
                                             {status_label.0}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-2 font-mono text-xs text-center border-b border-[var(--color-border)]">
+                                    <td class="px-4 py-3 font-mono text-xs text-center opacity-60">
                                         {format!("{:02}", chunks.parse::<i32>().unwrap_or(0))}
                                     </td>
-                                    <td class="px-4 py-2 text-[10px] font-mono text-right border-b border-[var(--color-border)]" style="color: var(--color-muted);">
+                                    <td class="px-6 py-3 text-[10px] font-mono text-right opacity-40">
                                         {last}
                                     </td>
                                 </tr>
@@ -105,9 +104,9 @@ fn PostsTable(posts: Vec<PostSummary>) -> impl IntoView {
                         .collect_view()}
                 </tbody>
             </table>
-            <div class="px-4 py-1 bg-[var(--color-page-bg)] flex justify-between items-center border-t border-[var(--color-border)]">
-                <span class="tech-label opacity-50">{format!("TOTAL_RECORDS: {:03}", total_records)}</span>
-                <span class="tech-label opacity-50">"PAGE_01_OF_01"</span>
+            <div class="px-6 py-2 bg-black/40 flex justify-between items-center border-t border-[var(--color-border)]">
+                <span class="tech-label opacity-40 text-[9px]">{format!("TOTAL_RECORDS: {:03}", total_records)}</span>
+                <span class="tech-label opacity-40 text-[9px]">"SYSTEM_STABLE // PAGE_01"</span>
             </div>
         </div>
     }

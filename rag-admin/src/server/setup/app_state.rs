@@ -8,7 +8,11 @@ use crate::server::application::chunking::chunkers::{
     register_builtin_chunkers, BuiltinChunkerDeps,
 };
 use crate::server::application::chunking::{ChunkerRegistry, PostChunkingService};
+use crate::server::application::configuration::{
+    ports::ConfigurationEventStore, ConfigurationCommandHandler, PipelineConfigurationService,
+};
 use crate::server::application::embedding::{ports::Embedder, EmbeddingService};
+use crate::server::application::evaluation::jobs::EvaluationJobService;
 use crate::server::application::evaluation::{
     ports::EvaluationGenerator, ChunkingEvaluationService, ChunkingEvaluationServiceDeps,
 };
@@ -17,6 +21,8 @@ use crate::server::application::{AppError, JobRegistry};
 use crate::server::infrastructure::blog::HttpBlogSource;
 use crate::server::infrastructure::chunking::FilePostChunkingConfigStore;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
+use crate::server::infrastructure::configuration::PostgresPipelineConfigurationRepository;
+use crate::server::infrastructure::postgres::PostgresEventStore;
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{
     FileEvaluationDatasetStore, FileEvaluationResultStore, OllamaEvaluationGenerator,
@@ -28,29 +34,40 @@ use crate::server::infrastructure::llm::OllamaChatClient;
 use crate::server::infrastructure::markdown::MarkdownRsParser;
 use crate::server::infrastructure::tokenizer::{HuggingFaceTokenizer, EMBEDDING_TOKEN_LIMIT};
 use crate::server::infrastructure::vector::{CloudflareVectorRecordMapper, VectorizeVectorIndex};
-use crate::server::setup::config::{
+use crate::server::setup::config::Config;
+use crate::server::setup::settings::{
     evaluations_dir, load_settings, manifest_path, post_chunking_config_path, save_settings,
     settings_path, tokenizer_path,
 };
 use crate::server::setup::exceptions::SetupError;
 use crate::server::setup::validation;
+use crate::server::{
+    domain::configuration::aggregate::Configuration,
+    domain::pipeline_configuration::{
+        PipelineConfigurationRepository, PipelineConfigurationProjector,
+    },
+};
 use crate::shared::{EmbedderBackend, SettingsDto};
 
 pub struct AppState {
     pub settings: Arc<RwLock<SettingsDto>>,
+    pub configuration_command_handler: Arc<ConfigurationCommandHandler>,
+    pub pipeline_configuration_service: Arc<PipelineConfigurationService>,
     pub ingest_service: Arc<IngestService>,
     pub post_service: Arc<PostService>,
     pub chunking_evaluation_service: Arc<ChunkingEvaluationService>,
+    pub evaluation_job_service: Arc<EvaluationJobService>,
     pub embedding_service: Arc<EmbeddingService>,
     pub job_registry: Arc<JobRegistry>,
     pub vector_store: Arc<dyn VectorIndex>,
     pub embedder: Arc<dyn Embedder>,
-    pub evaluation_generator: Arc<dyn EvaluationGenerator>,
     pub post_chunking_config_store: Arc<dyn PostChunkingConfigStore>,
 }
 
 impl AppState {
     pub async fn initialize() -> Result<Self, SetupError> {
+        let config = Config::from_env()?;
+
         let settings = load_settings(&settings_path()).await?;
         let settings = Arc::new(RwLock::new(settings));
 
@@ -59,10 +76,10 @@ impl AppState {
                 .map_err(|e| SetupError::Internal(format!("http client: {e}")))?,
         );
 
-        let blog_source = HttpBlogSource::new(http.clone(), settings.clone());
+        let blog_source = HttpBlogSource::new(http.clone(), config.blog_url.clone());
 
-        let cf_api = Arc::new(CloudflareApi::new(http.clone(), settings.clone()));
-        let ollama_api = Arc::new(OllamaApi::new(http.clone()));
+        let cf_api = Arc::new(CloudflareApi::new(http.clone(), config.cloudflare.clone()));
+        let ollama_api = Arc::new(OllamaApi::new(http.clone(), config.ollama.base_url.clone()));
 
         let embedder: Arc<dyn Embedder> = Arc::new(BackendEmbedder {
             cloudflare: WorkersAiEmbedder::new(cf_api.clone()),
@@ -70,10 +87,28 @@ impl AppState {
             settings: settings.clone(),
         });
 
-        let vector_store: Arc<dyn VectorIndex> = VectorizeVectorIndex::new(cf_api.clone());
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&config.database_url)
+            .await
+            .map_err(|e| SetupError::Internal(format!("postgres pool: {e}")))?;
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .map_err(|e| SetupError::Internal(format!("migrations: {e}")))?;
+
+        let configuration_event_store: Arc<dyn ConfigurationEventStore> =
+            Arc::new(PostgresEventStore::new(pool.clone(), "configuration"));
+        let pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository> =
+            Arc::new(PostgresPipelineConfigurationRepository::new(pool.clone()));
+
+        let vector_store: Arc<dyn VectorIndex> = VectorizeVectorIndex::new(
+            cf_api.clone(),
+            pipeline_configuration_repository.clone(),
+        );
         let vector_record_mapper = Arc::new(CloudflareVectorRecordMapper);
         let kv_store = CloudflareKvStore::new(cf_api.clone());
-        let chat_client = OllamaChatClient::new(http.clone(), settings.clone());
+        let chat_client = OllamaChatClient::new(http.clone(), config.ollama.base_url.clone());
         let evaluation_generator: Arc<dyn EvaluationGenerator> =
             OllamaEvaluationGenerator::new(chat_client.clone());
         let markdown_parser = Arc::new(MarkdownRsParser);
@@ -81,6 +116,7 @@ impl AppState {
         let manifest_store = FileManifestStore::new(manifest_path());
         let post_chunking_config_store: Arc<dyn PostChunkingConfigStore> =
             FilePostChunkingConfigStore::new(post_chunking_config_path());
+
         let tokenizer = HuggingFaceTokenizer::load_or_fetch(tokenizer_path(), http.clone())
             .await
             .map_err(|e| SetupError::Internal(format!("tokenizer: {e}")))?;
@@ -91,13 +127,30 @@ impl AppState {
         let mut chunking_engine = ChunkerRegistry::new(tokenizer.clone(), markdown_parser);
         register_builtin_chunkers(
             &mut chunking_engine,
-            BuiltinChunkerDeps {
-                chat_client,
-                settings: settings.clone(),
-            },
+            BuiltinChunkerDeps { chat_client },
         );
         let chunking_engine = Arc::new(chunking_engine);
         let post_chunking_service = PostChunkingService::new(chunking_engine);
+
+        let pipeline_configuration = PipelineConfigurationProjector::project(
+            &configuration_event_store
+                .load(Configuration::singleton_id())
+                .await
+                .map_err(|e| SetupError::Internal(format!("load configuration events: {e}")))?,
+        )
+        .map_err(|e| SetupError::Internal(format!("project pipeline configuration: {e}")))?;
+        pipeline_configuration_repository
+            .save(pipeline_configuration)
+            .await
+            .map_err(|e| {
+                SetupError::Internal(format!("save pipeline configuration projection: {e}"))
+            })?;
+        let configuration_command_handler = ConfigurationCommandHandler::new(
+            configuration_event_store,
+            pipeline_configuration_repository.clone(),
+        );
+        let pipeline_configuration_service =
+            PipelineConfigurationService::new(pipeline_configuration_repository);
 
         let ingest_service = IngestService::new(IngestServiceDeps {
             blog_source: blog_source.clone(),
@@ -131,23 +184,27 @@ impl AppState {
                 generator: evaluation_generator.clone(),
                 embedding_service: embedding_service.clone(),
                 settings: settings.clone(),
-                job_registry: job_registry.clone(),
                 evaluation_dataset_store,
                 evaluation_result_store,
                 post_chunking_service,
                 tokenizer,
             });
 
+        let evaluation_job_service =
+            EvaluationJobService::new(job_registry.clone(), chunking_evaluation_service.clone());
+
         let state = Self {
             settings,
+            configuration_command_handler,
+            pipeline_configuration_service,
             ingest_service,
             post_service,
             chunking_evaluation_service,
+            evaluation_job_service,
             embedding_service,
             job_registry,
             vector_store,
             embedder,
-            evaluation_generator,
             post_chunking_config_store,
         };
 

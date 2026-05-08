@@ -21,11 +21,13 @@ impl CloudflareKvStore {
 #[async_trait]
 impl KvStore for CloudflareKvStore {
     async fn put_json(&self, key: &str, value: &Value) -> Result<(), AppError> {
-        let creds = self.api.credentials().await?;
         let encoded_key = urlencode(key);
         let url = format!(
             "{}/accounts/{}/storage/kv/namespaces/{}/values/{}",
-            CLOUDFLARE_API_BASE, creds.account_id, creds.kv_namespace_id, encoded_key
+            CLOUDFLARE_API_BASE,
+            self.api.account_id(),
+            self.api.kv_namespace_id(),
+            encoded_key
         );
         let body_bytes = serde_json::to_vec(value)
             .map_err(|e| AppError::Internal(format!("encode kv value: {e}")))?;

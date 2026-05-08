@@ -1,3 +1,4 @@
+pub mod pipeline_config;
 pub mod embed_test;
 pub mod post_detail;
 pub mod posts_list;

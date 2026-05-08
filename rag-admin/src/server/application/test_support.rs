@@ -1,6 +1,15 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use tokio::sync::RwLock;
+use uuid::Uuid;
+
+use crate::server::application::configuration::ports::ConfigurationEventStore;
+use crate::server::domain::configuration::events::ConfigurationEvent;
+use crate::server::domain::pipeline_configuration::{
+    PipelineConfiguration, PipelineConfigurationRepository, PipelineConfigurationRepositoryError,
+};
+
 use async_trait::async_trait;
 use serde_json::Value;
 
@@ -369,5 +378,61 @@ impl ChatClient for NullChatClient {
         panic!(
             "NullChatClient: LLM chunker strategy was used in a test - provide a real client or avoid LLM strategy"
         )
+    }
+}
+
+#[derive(Default)]
+pub struct InMemoryConfigurationEventStore {
+    events: RwLock<HashMap<Uuid, Vec<ConfigurationEvent>>>,
+}
+
+#[async_trait]
+impl ConfigurationEventStore for InMemoryConfigurationEventStore {
+    async fn load(&self, aggregate_id: Uuid) -> Result<Vec<ConfigurationEvent>, AppError> {
+        Ok(self
+            .events
+            .read()
+            .await
+            .get(&aggregate_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn append(
+        &self,
+        aggregate_id: Uuid,
+        expected_version: usize,
+        events: &[ConfigurationEvent],
+    ) -> Result<(), AppError> {
+        let mut guard = self.events.write().await;
+        let stream = guard.entry(aggregate_id).or_default();
+        if stream.len() != expected_version {
+            return Err(AppError::Validation(format!(
+                "configuration stream version conflict: expected {expected_version}, actual {}",
+                stream.len()
+            )));
+        }
+        stream.extend(events.iter().cloned());
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct InMemoryPipelineConfigurationRepository {
+    pipeline_configuration: RwLock<PipelineConfiguration>,
+}
+
+#[async_trait]
+impl PipelineConfigurationRepository for InMemoryPipelineConfigurationRepository {
+    async fn load(&self) -> Result<PipelineConfiguration, PipelineConfigurationRepositoryError> {
+        Ok(self.pipeline_configuration.read().await.clone())
+    }
+
+    async fn save(
+        &self,
+        pipeline_configuration: PipelineConfiguration,
+    ) -> Result<(), PipelineConfigurationRepositoryError> {
+        *self.pipeline_configuration.write().await = pipeline_configuration;
+        Ok(())
     }
 }

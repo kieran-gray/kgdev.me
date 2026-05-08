@@ -4,23 +4,21 @@ use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 
 use crate::server::application::ports::{
     ChatClient, ChatRequest as AppChatRequest, ChatResponse as AppChatResponse, ChatResponseFormat,
 };
 use crate::server::application::AppError;
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
-use crate::shared::SettingsDto;
 
 pub struct OllamaChatClient {
     http: Arc<ReqwestHttpClient>,
-    settings: Arc<RwLock<SettingsDto>>,
+    base_url: String,
 }
 
 impl OllamaChatClient {
-    pub fn new(http: Arc<ReqwestHttpClient>, settings: Arc<RwLock<SettingsDto>>) -> Arc<Self> {
-        Arc::new(Self { http, settings })
+    pub fn new(http: Arc<ReqwestHttpClient>, base_url: String) -> Arc<Self> {
+        Arc::new(Self { http, base_url })
     }
 }
 
@@ -58,19 +56,7 @@ struct OllamaChatResponseMessage {
 #[async_trait]
 impl ChatClient for OllamaChatClient {
     async fn chat(&self, request: AppChatRequest) -> Result<AppChatResponse, AppError> {
-        let base_url = self
-            .settings
-            .read()
-            .await
-            .evaluation
-            .ollama_base_url
-            .trim()
-            .trim_end_matches('/')
-            .to_string();
-
-        if base_url.is_empty() {
-            return Err(AppError::Validation("Ollama base URL is empty".into()));
-        }
+        let base_url = self.base_url.trim().trim_end_matches('/');
 
         let request = OllamaChatRequest {
             model: request.model,
@@ -101,7 +87,7 @@ impl ChatClient for OllamaChatClient {
             .http
             .request_text(
                 Method::POST,
-                &format!("{base_url}/api/chat"),
+                &format!("{}/api/chat", base_url),
                 json_headers(),
                 Some(body),
             )
