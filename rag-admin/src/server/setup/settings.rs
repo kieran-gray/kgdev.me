@@ -6,9 +6,7 @@ use crate::server::setup::exceptions::SetupError;
 use crate::shared::SettingsDto;
 
 pub fn data_dir() -> PathBuf {
-    std::env::current_dir()
-        .map(|p| p.join("rag-admin").join("data"))
-        .unwrap_or_else(|_| PathBuf::from("rag-admin/data"))
+    PathBuf::from("data")
 }
 
 pub fn settings_path() -> PathBuf {
