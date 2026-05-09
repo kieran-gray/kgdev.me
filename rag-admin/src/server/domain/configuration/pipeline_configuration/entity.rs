@@ -15,4 +15,4 @@ pub struct PipelineConfiguration {
 // pipeline_configuration_id so we know where it was indexed to
 // and with what models.
 // Could be as simple as replaying the events up to the indexed_at
-// time. 
+// time.

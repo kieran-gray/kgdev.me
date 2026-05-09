@@ -124,9 +124,7 @@ impl EmbeddingSetRepository for PostgresEmbeddingSetRepository {
         .await
         .map_err(|e| AppError::Internal(format!("load_embeddings: {e}")))?;
 
-        rows.into_iter()
-            .map(ChunkEmbedding::try_from)
-            .collect()
+        rows.into_iter().map(ChunkEmbedding::try_from).collect()
     }
 }
 
@@ -162,9 +160,7 @@ impl TryFrom<EmbeddingSetRow> for EmbeddingSet {
             chunk_set_id: row.chunk_set_id,
             embedding_model_id: row.embedding_model_id,
             embedding_model_snapshot: serde_json::from_value(row.embedding_model_snapshot)
-                .map_err(|e| {
-                    AppError::Internal(format!("deserialize model_snapshot: {e}"))
-                })?,
+                .map_err(|e| AppError::Internal(format!("deserialize model_snapshot: {e}")))?,
             dimensions: row.dimensions as u32,
             created_at: row.created_at,
         })

@@ -11,7 +11,7 @@ use super::{
         IngestRequested, IngestionFailed, IngestionRetried,
     },
     exceptions::IndexingError,
-    status::{IngestStage, IndexingStatus},
+    status::{IndexingStatus, IngestStage},
 };
 
 /// Namespace UUID for computing deterministic indexing IDs via UUIDv5.
@@ -115,28 +115,26 @@ impl Aggregate for Indexing {
         command: Self::Command,
     ) -> Result<Vec<Self::Event>, Self::Error> {
         match command {
-            Self::Command::RequestIngest(cmd) => {
-                match state {
-                    None => Ok(vec![Self::Event::IngestRequested(IngestRequested {
-                        document_id: cmd.document_id,
-                        pipeline_configuration_id: cmd.pipeline_configuration_id,
-                        document_version: cmd.document_version,
-                        chunking_config: cmd.chunking_config,
-                        request_id: cmd.request_id,
-                        occurred_at: cmd.occurred_at,
-                    })]),
-                    Some(s) if s.removed => Err(IndexingError::Removed),
-                    Some(s) if s.last_request_id == Some(cmd.request_id) => Ok(vec![]),
-                    Some(_) => Ok(vec![Self::Event::IngestRequested(IngestRequested {
-                        document_id: cmd.document_id,
-                        pipeline_configuration_id: cmd.pipeline_configuration_id,
-                        document_version: cmd.document_version,
-                        chunking_config: cmd.chunking_config,
-                        request_id: cmd.request_id,
-                        occurred_at: cmd.occurred_at,
-                    })]),
-                }
-            }
+            Self::Command::RequestIngest(cmd) => match state {
+                None => Ok(vec![Self::Event::IngestRequested(IngestRequested {
+                    document_id: cmd.document_id,
+                    pipeline_configuration_id: cmd.pipeline_configuration_id,
+                    document_version: cmd.document_version,
+                    chunking_config: cmd.chunking_config,
+                    request_id: cmd.request_id,
+                    occurred_at: cmd.occurred_at,
+                })]),
+                Some(s) if s.removed => Err(IndexingError::Removed),
+                Some(s) if s.last_request_id == Some(cmd.request_id) => Ok(vec![]),
+                Some(_) => Ok(vec![Self::Event::IngestRequested(IngestRequested {
+                    document_id: cmd.document_id,
+                    pipeline_configuration_id: cmd.pipeline_configuration_id,
+                    document_version: cmd.document_version,
+                    chunking_config: cmd.chunking_config,
+                    request_id: cmd.request_id,
+                    occurred_at: cmd.occurred_at,
+                })]),
+            },
 
             Self::Command::CompleteChunking(cmd) => {
                 let s = state.ok_or(IndexingError::NotFound)?;
@@ -500,13 +498,12 @@ mod tests {
 
     #[test]
     fn replay_requires_ingest_requested_as_first_event() {
-        let result = Indexing::from_events(&[IndexingEvent::ChunkingCompleted(
-            ChunkingCompleted {
+        let result =
+            Indexing::from_events(&[IndexingEvent::ChunkingCompleted(ChunkingCompleted {
                 chunk_set_id: Uuid::new_v4(),
                 chunk_count: 5,
                 occurred_at: "2024-01-01T00:00:00Z".to_string(),
-            },
-        )]);
+            })]);
         assert!(result.is_none());
     }
 

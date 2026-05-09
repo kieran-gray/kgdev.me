@@ -10,8 +10,8 @@ use crate::server::application::ingest::ports::vector_index::{
 };
 use crate::server::application::ingest::ports::VectorIndex;
 use crate::server::application::AppError;
-use crate::server::domain::configuration::ConfigurationRepository;
 use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
+use crate::server::domain::configuration::ConfigurationRepository;
 use crate::server::domain::VectorRecord;
 use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
 

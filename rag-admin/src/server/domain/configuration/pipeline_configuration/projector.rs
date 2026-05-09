@@ -52,7 +52,13 @@ impl PipelineConfigurationProjector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::domain::configuration::{events::ConfigurationCreated, pipeline_configuration::events::{PipelineConfigurationCreated, PipelineConfigurationDeleted, PipelineConfigurationUpdated}};
+    use crate::server::domain::configuration::{
+        events::ConfigurationCreated,
+        pipeline_configuration::events::{
+            PipelineConfigurationCreated, PipelineConfigurationDeleted,
+            PipelineConfigurationUpdated,
+        },
+    };
     use uuid::Uuid;
 
     #[test]

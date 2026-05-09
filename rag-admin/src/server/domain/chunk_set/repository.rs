@@ -18,15 +18,9 @@ pub trait ChunkSetRepository: Send + Sync {
         chunks: Vec<Chunk>,
     ) -> Result<(), ChunkSetRepositoryError>;
 
-    async fn load(
-        &self,
-        chunk_set_id: Uuid,
-    ) -> Result<Option<ChunkSet>, ChunkSetRepositoryError>;
+    async fn load(&self, chunk_set_id: Uuid) -> Result<Option<ChunkSet>, ChunkSetRepositoryError>;
 
-    async fn load_chunks(
-        &self,
-        chunk_set_id: Uuid,
-    ) -> Result<Vec<Chunk>, ChunkSetRepositoryError>;
+    async fn load_chunks(&self, chunk_set_id: Uuid) -> Result<Vec<Chunk>, ChunkSetRepositoryError>;
 
     async fn list_for_document(
         &self,

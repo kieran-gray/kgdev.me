@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::server::domain::source_document::{
     read_model::SourceDocumentReadModel,
     repository::{SourceDocumentRepository, SourceDocumentRepositoryError},
+    source_ref::SourceRef,
 };
 
 pub struct PostgresSourceDocumentRepository {
@@ -23,21 +24,18 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
         &self,
         document_id: Uuid,
     ) -> Result<Option<SourceDocumentReadModel>, SourceDocumentRepositoryError> {
-        let row: Option<(serde_json::Value,)> = sqlx::query_as(
-            "SELECT read_model FROM source_documents WHERE document_id = $1",
-        )
-        .bind(document_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| SourceDocumentRepositoryError::Internal(format!("load: {e}")))?;
+        let row: Option<(serde_json::Value,)> =
+            sqlx::query_as("SELECT read_model FROM source_documents WHERE document_id = $1")
+                .bind(document_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| SourceDocumentRepositoryError::Internal(format!("load: {e}")))?;
 
         match row {
             None => Ok(None),
             Some((json,)) => serde_json::from_value(json)
                 .map(Some)
-                .map_err(|e| {
-                    SourceDocumentRepositoryError::Internal(format!("deserialize: {e}"))
-                }),
+                .map_err(|e| SourceDocumentRepositoryError::Internal(format!("deserialize: {e}"))),
         }
     }
 
@@ -75,11 +73,34 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
 
         rows.into_iter()
             .map(|(json,)| {
-                serde_json::from_value(json)
-                    .map_err(|e| {
-                        SourceDocumentRepositoryError::Internal(format!("deserialize: {e}"))
-                    })
+                serde_json::from_value(json).map_err(|e| {
+                    SourceDocumentRepositoryError::Internal(format!("deserialize: {e}"))
+                })
             })
             .collect()
+    }
+
+    async fn find_by_source_ref(
+        &self,
+        source_ref: &SourceRef,
+    ) -> Result<Option<SourceDocumentReadModel>, SourceDocumentRepositoryError> {
+        let source_ref_json = serde_json::to_value(source_ref).map_err(|e| {
+            SourceDocumentRepositoryError::Internal(format!("serialize source_ref: {e}"))
+        })?;
+
+        let row: Option<(serde_json::Value,)> = sqlx::query_as(
+            "SELECT read_model FROM source_documents WHERE read_model->'source_ref' = $1 LIMIT 1",
+        )
+        .bind(&source_ref_json)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| SourceDocumentRepositoryError::Internal(format!("find_by_source_ref: {e}")))?;
+
+        match row {
+            None => Ok(None),
+            Some((json,)) => serde_json::from_value(json)
+                .map(Some)
+                .map_err(|e| SourceDocumentRepositoryError::Internal(format!("deserialize: {e}"))),
+        }
     }
 }

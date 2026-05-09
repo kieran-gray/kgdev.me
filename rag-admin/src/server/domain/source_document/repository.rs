@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use thiserror::Error;
 use uuid::Uuid;
 
-use super::read_model::SourceDocumentReadModel;
+use super::{read_model::SourceDocumentReadModel, source_ref::SourceRef};
 
 #[derive(Debug, Error)]
 pub enum SourceDocumentRepositoryError {
@@ -23,4 +23,9 @@ pub trait SourceDocumentRepository: Send + Sync {
     ) -> Result<(), SourceDocumentRepositoryError>;
 
     async fn list(&self) -> Result<Vec<SourceDocumentReadModel>, SourceDocumentRepositoryError>;
+
+    async fn find_by_source_ref(
+        &self,
+        source_ref: &SourceRef,
+    ) -> Result<Option<SourceDocumentReadModel>, SourceDocumentRepositoryError>;
 }

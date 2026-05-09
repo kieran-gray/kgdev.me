@@ -4,11 +4,8 @@ use tracing::info;
 
 use crate::server::application::AppError;
 use crate::server::domain::indexing::{
-    aggregate::Indexing,
-    commands::IndexingCommand,
-    events::IndexingEvent,
-    projector::IndexingProjector,
-    repository::IndexingRepository,
+    aggregate::Indexing, commands::IndexingCommand, events::IndexingEvent,
+    projector::IndexingProjector, repository::IndexingRepository,
 };
 use crate::server::domain::Aggregate;
 
@@ -98,9 +95,10 @@ impl IndexingCommandHandler {
         let state = if stored_events.is_empty() {
             None
         } else {
-            Some(Indexing::from_events(&stored_events).ok_or_else(|| {
-                AppError::Internal("indexing event stream is invalid".into())
-            })?)
+            Some(
+                Indexing::from_events(&stored_events)
+                    .ok_or_else(|| AppError::Internal("indexing event stream is invalid".into()))?,
+            )
         };
 
         let new_events = Indexing::handle_command(state.as_ref(), command)?;
@@ -140,8 +138,8 @@ mod tests {
         repository::IndexingRepositoryError,
         status::IndexingStatus,
     };
-    use crate::shared::SectionChunkingConfig;
     use crate::shared::ChunkingConfig;
+    use crate::shared::SectionChunkingConfig;
 
     #[derive(Default)]
     struct MockEventStore {
@@ -184,10 +182,7 @@ mod tests {
             Ok(self.saved.lock().unwrap().last().cloned())
         }
 
-        async fn save(
-            &self,
-            read_model: IndexingReadModel,
-        ) -> Result<(), IndexingRepositoryError> {
+        async fn save(&self, read_model: IndexingReadModel) -> Result<(), IndexingRepositoryError> {
             self.saved.lock().unwrap().push(read_model);
             Ok(())
         }

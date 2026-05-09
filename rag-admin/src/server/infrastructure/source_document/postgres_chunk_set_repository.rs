@@ -103,9 +103,7 @@ impl ChunkSetRepository for PostgresChunkSetRepository {
         .await
         .map_err(|e| AppError::Internal(format!("list chunk_sets: {e}")))?;
 
-        rows.into_iter()
-            .map(ChunkSet::try_from)
-            .collect()
+        rows.into_iter().map(ChunkSet::try_from).collect()
     }
 }
 

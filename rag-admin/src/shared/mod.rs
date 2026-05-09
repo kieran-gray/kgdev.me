@@ -1,17 +1,22 @@
 mod chunking;
+mod configuration;
 mod configuration_commands;
 mod embedding;
 mod evaluation;
 mod ingest;
-mod configuration;
 mod post;
 pub(crate) mod serde_compat;
 mod settings;
+mod source_document;
 mod vector;
 
 pub use chunking::{
     BertChunkingConfig, ChunkParamDefinition, ChunkParamKey, ChunkStrategy, ChunkerDefinition,
     ChunkingConfig, LlmChunkingConfig, SectionChunkingConfig,
+};
+pub use configuration::{
+    AiProviderDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
+    PipelineConfigurationDto, VectorIndexDto, VectorStoreProviderDto,
 };
 pub use configuration_commands::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddProviderDto, AddVectorIndexDto,
@@ -34,10 +39,7 @@ pub use evaluation::{
     EvaluationScorePolicy, EvaluationScoreWeights, EvaluationSettings, EvaluationVariantResult,
 };
 pub use ingest::{IngestJobInfo, IngestOptions, LogEvent, LogLevel};
-pub use configuration::{
-    AiProviderDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
-    PipelineConfigurationDto, VectorIndexDto, VectorStoreProviderDto,
-};
 pub use post::{ChunkPreview, GlossaryTermDto, PostDetailDto, PostSummary};
 pub use settings::SettingsDto;
+pub use source_document::{IndexingDto, SourceDocumentDetailDto, SourceDocumentDto};
 pub use vector::{VectorIndexConfig, VectorProvider};

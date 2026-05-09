@@ -38,10 +38,7 @@ impl IndexingRepository for PostgresIndexingRepository {
         }
     }
 
-    async fn save(
-        &self,
-        read_model: IndexingReadModel,
-    ) -> Result<(), IndexingRepositoryError> {
+    async fn save(&self, read_model: IndexingReadModel) -> Result<(), IndexingRepositoryError> {
         let json = serde_json::to_value(&read_model)
             .map_err(|e| IndexingRepositoryError::Internal(format!("serialize: {e}")))?;
 

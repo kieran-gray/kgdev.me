@@ -1,0 +1,30 @@
+use async_trait::async_trait;
+
+use crate::server::application::AppError;
+use crate::server::domain::source_document::{
+    document_type::DocumentType, source_ref::SourceRef, version::DocumentMetadata,
+};
+
+pub struct DocumentSummary {
+    pub source_ref: SourceRef,
+    pub title: String,
+}
+
+/// Raw document content fetched from a source.
+pub struct FetchedDocument {
+    /// Natural identifier in source terms.
+    pub source_ref: SourceRef,
+    /// Raw bytes to be stored in the blob store.
+    pub content: Vec<u8>,
+    /// Extracted plain text used for chunking.
+    pub plain_text: String,
+    /// Typed metadata (title, published_at, etc.).
+    pub metadata: DocumentMetadata,
+}
+
+#[async_trait]
+pub trait SourceAdapter: Send + Sync {
+    fn document_type(&self) -> DocumentType;
+    async fn list(&self) -> Result<Vec<DocumentSummary>, AppError>;
+    async fn fetch(&self, source_ref: &SourceRef) -> Result<FetchedDocument, AppError>;
+}

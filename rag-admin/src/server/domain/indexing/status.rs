@@ -45,10 +45,7 @@ impl IndexingStatus {
     }
 
     pub fn is_at_least_embedding(&self) -> bool {
-        matches!(
-            self,
-            IndexingStatus::Embedding | IndexingStatus::Indexed
-        )
+        matches!(self, IndexingStatus::Embedding | IndexingStatus::Indexed)
     }
 
     pub fn is_indexed(&self) -> bool {

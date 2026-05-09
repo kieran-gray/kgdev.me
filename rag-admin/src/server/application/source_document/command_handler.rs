@@ -4,11 +4,8 @@ use tracing::info;
 
 use crate::server::application::AppError;
 use crate::server::domain::source_document::{
-    aggregate::SourceDocument,
-    commands::SourceDocumentCommand,
-    events::SourceDocumentEvent,
-    projector::SourceDocumentProjector,
-    repository::SourceDocumentRepository,
+    aggregate::SourceDocument, commands::SourceDocumentCommand, events::SourceDocumentEvent,
+    projector::SourceDocumentProjector, repository::SourceDocumentRepository,
 };
 use crate::server::domain::Aggregate;
 
@@ -40,14 +37,12 @@ impl SourceDocumentCommandHandler {
         let state = if stored_events.is_empty() {
             None
         } else {
-            Some(
-                SourceDocument::from_events(&stored_events).ok_or_else(|| {
-                    AppError::Internal(
-                        "source document event stream is invalid: missing or duplicate create event"
-                            .into(),
-                    )
-                })?,
-            )
+            Some(SourceDocument::from_events(&stored_events).ok_or_else(|| {
+                AppError::Internal(
+                    "source document event stream is invalid: missing or duplicate create event"
+                        .into(),
+                )
+            })?)
         };
 
         let new_events = SourceDocument::handle_command(state.as_ref(), command)?;
@@ -143,6 +138,13 @@ mod tests {
             &self,
         ) -> Result<Vec<SourceDocumentReadModel>, SourceDocumentRepositoryError> {
             Ok(self.saved.lock().unwrap().clone())
+        }
+
+        async fn find_by_source_ref(
+            &self,
+            _source_ref: &crate::server::domain::source_document::source_ref::SourceRef,
+        ) -> Result<Option<SourceDocumentReadModel>, SourceDocumentRepositoryError> {
+            Ok(None)
         }
     }
 

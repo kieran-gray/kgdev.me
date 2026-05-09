@@ -7,3 +7,4 @@ pub mod ingest;
 pub mod posts;
 pub mod schema;
 pub mod settings;
+pub mod source_document;

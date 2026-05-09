@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::configuration::{
     exceptions::ConfigurationError, pipeline_configuration::PipelineConfigurationRepositoryError,
     ConfigurationRepositoryError,
 };
-use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepositoryError;
 use crate::server::domain::indexing::{
     exceptions::IndexingError, repository::IndexingRepositoryError,

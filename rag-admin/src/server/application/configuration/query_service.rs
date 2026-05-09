@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use crate::server::application::AppError;
-use crate::server::domain::configuration::{
-    ConfigurationReadModel, ConfigurationRepository, ConfigurationRepositoryError,
-};
 use crate::server::domain::configuration::pipeline_configuration::{
     PipelineConfigurationRepository, PipelineConfigurationRepositoryError,
+};
+use crate::server::domain::configuration::{
+    ConfigurationReadModel, ConfigurationRepository, ConfigurationRepositoryError,
 };
 use crate::shared::{
     AiProviderDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,

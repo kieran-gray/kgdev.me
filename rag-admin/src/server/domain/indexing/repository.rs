@@ -17,10 +17,7 @@ pub trait IndexingRepository: Send + Sync {
         indexing_id: Uuid,
     ) -> Result<Option<IndexingReadModel>, IndexingRepositoryError>;
 
-    async fn save(
-        &self,
-        read_model: IndexingReadModel,
-    ) -> Result<(), IndexingRepositoryError>;
+    async fn save(&self, read_model: IndexingReadModel) -> Result<(), IndexingRepositoryError>;
 
     async fn list_for_document(
         &self,

@@ -381,14 +381,13 @@ mod tests {
 
     #[test]
     fn replay_requires_document_created_as_first_event() {
-        let result = SourceDocument::from_events(&[SourceDocumentEvent::VersionAdded(
-            VersionAdded {
+        let result =
+            SourceDocument::from_events(&[SourceDocumentEvent::VersionAdded(VersionAdded {
                 version_number: 1,
                 content_hash: make_hash("abc"),
                 metadata: make_metadata(),
                 occurred_at: "2024-01-01T00:00:00Z".to_string(),
-            },
-        )]);
+            })]);
 
         assert!(result.is_none());
     }

@@ -17,10 +17,21 @@ use crate::server::application::evaluation::jobs::EvaluationJobService;
 use crate::server::application::evaluation::{
     ports::EvaluationGenerator, ChunkingEvaluationService, ChunkingEvaluationServiceDeps,
 };
+use crate::server::application::indexing::ports::IndexingEventStore;
+use crate::server::application::indexing::IndexingCommandHandler;
 use crate::server::application::ingest::{ports::VectorIndex, IngestService, IngestServiceDeps};
+use crate::server::application::source_document::ports::{
+    SourceAdapterRegistry, SourceDocumentEventStore,
+};
+use crate::server::application::source_document::{
+    SourceDocumentCommandHandler, SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
+    SourceDocumentQueryService,
+};
 use crate::server::application::{AppError, JobRegistry};
 use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::domain::configuration::ConfigurationRepository;
+use crate::server::domain::indexing::repository::IndexingRepository;
+use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::infrastructure::blog::HttpBlogSource;
 use crate::server::infrastructure::chunking::FilePostChunkingConfigStore;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
@@ -32,13 +43,20 @@ use crate::server::infrastructure::evaluation::{
     FileEvaluationDatasetStore, FileEvaluationResultStore, OllamaEvaluationGenerator,
 };
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
+use crate::server::infrastructure::indexing::PostgresIndexingRepository;
 use crate::server::infrastructure::ingest::FileManifestStore;
 use crate::server::infrastructure::kv::CloudflareKvStore;
 use crate::server::infrastructure::llm::OllamaChatClient;
 use crate::server::infrastructure::markdown::MarkdownRsParser;
 use crate::server::infrastructure::postgres::PostgresEventStore;
+use crate::server::infrastructure::source_document::{
+    HttpBlogAdapter, PostgresBlobStore, PostgresChunkSetRepository, PostgresEmbeddingSetRepository,
+    PostgresSourceDocumentRepository,
+};
 use crate::server::infrastructure::tokenizer::{HuggingFaceTokenizer, EMBEDDING_TOKEN_LIMIT};
-use crate::server::infrastructure::vector::{CloudflareVectorRecordMapper, VectorizeVectorIndex};
+use crate::server::infrastructure::vector::{
+    CloudflareVectorIndexFactory, CloudflareVectorRecordMapper, VectorizeVectorIndex,
+};
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
 use crate::server::setup::settings::{
@@ -62,6 +80,8 @@ pub struct AppState {
     pub vector_store: Arc<dyn VectorIndex>,
     pub embedder: Arc<dyn Embedder>,
     pub post_chunking_config_store: Arc<dyn PostChunkingConfigStore>,
+    pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
+    pub source_document_query_service: Arc<SourceDocumentQueryService>,
 }
 
 impl AppState {
@@ -104,6 +124,19 @@ impl AppState {
         let pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository> =
             Arc::new(PostgresPipelineConfigurationRepository::new(pool.clone()));
 
+        let source_document_event_store: Arc<dyn SourceDocumentEventStore> =
+            Arc::new(PostgresEventStore::new(pool.clone(), "source_document"));
+        let indexing_event_store: Arc<dyn IndexingEventStore> =
+            Arc::new(PostgresEventStore::new(pool.clone(), "indexing"));
+        let source_document_repository: Arc<dyn SourceDocumentRepository> =
+            Arc::new(PostgresSourceDocumentRepository::new(pool.clone()));
+        let indexing_repository: Arc<dyn IndexingRepository> =
+            Arc::new(PostgresIndexingRepository::new(pool.clone()));
+        let blob_store = Arc::new(PostgresBlobStore::new(pool.clone()));
+        let chunk_set_repository = Arc::new(PostgresChunkSetRepository::new(pool.clone()));
+        let embedding_set_repository = Arc::new(PostgresEmbeddingSetRepository::new(pool.clone()));
+        let vector_index_factory = CloudflareVectorIndexFactory::new(cf_api.clone());
+
         let vector_store: Arc<dyn VectorIndex> = VectorizeVectorIndex::new(
             cf_api.clone(),
             configuration_repository.clone(),
@@ -130,7 +163,7 @@ impl AppState {
         let mut chunking_engine = ChunkerRegistry::new(tokenizer.clone(), markdown_parser);
         register_builtin_chunkers(&mut chunking_engine, BuiltinChunkerDeps { chat_client });
         let chunking_engine = Arc::new(chunking_engine);
-        let post_chunking_service = PostChunkingService::new(chunking_engine);
+        let post_chunking_service = PostChunkingService::new(chunking_engine.clone());
 
         let configuration_command_handler = ConfigurationCommandHandler::new(
             configuration_event_store,
@@ -141,8 +174,15 @@ impl AppState {
             ConfigurationQueryService::new(configuration_repository.clone());
         let pipeline_configuration_query_service = PipelineConfigurationQueryService::new(
             pipeline_configuration_repository.clone(),
-            configuration_repository,
+            configuration_repository.clone(),
         );
+
+        let source_document_command_handler = SourceDocumentCommandHandler::new(
+            source_document_event_store,
+            source_document_repository.clone(),
+        );
+        let indexing_command_handler =
+            IndexingCommandHandler::new(indexing_event_store, indexing_repository.clone());
 
         let ingest_service = IngestService::new(IngestServiceDeps {
             blog_source: blog_source.clone(),
@@ -172,7 +212,7 @@ impl AppState {
 
         let chunking_evaluation_service =
             ChunkingEvaluationService::new(ChunkingEvaluationServiceDeps {
-                blog_source,
+                blog_source: blog_source.clone(),
                 generator: evaluation_generator.clone(),
                 embedding_service: embedding_service.clone(),
                 settings: settings.clone(),
@@ -184,6 +224,30 @@ impl AppState {
 
         let evaluation_job_service =
             EvaluationJobService::new(job_registry.clone(), chunking_evaluation_service.clone());
+
+        let mut source_adapter_registry = SourceAdapterRegistry::new();
+        source_adapter_registry.register(HttpBlogAdapter::new(blog_source.clone()));
+        let source_adapter_registry = Arc::new(source_adapter_registry);
+
+        let source_document_ingest_service =
+            SourceDocumentIngestService::new(SourceDocumentIngestServiceDeps {
+                source_document_command_handler,
+                indexing_command_handler,
+                source_document_repository: source_document_repository.clone(),
+                blob_store,
+                chunk_set_repository,
+                embedding_set_repository,
+                source_adapter_registry,
+                chunker_registry: chunking_engine,
+                embedding_service: embedding_service.clone(),
+                vector_index_factory,
+                configuration_repository,
+                pipeline_configuration_repository,
+                job_registry: job_registry.clone(),
+            });
+
+        let source_document_query_service =
+            SourceDocumentQueryService::new(source_document_repository, indexing_repository);
 
         let state = Self {
             settings,
@@ -199,6 +263,8 @@ impl AppState {
             vector_store,
             embedder,
             post_chunking_config_store,
+            source_document_ingest_service,
+            source_document_query_service,
         };
 
         if let Err(e) = state.validate_active_settings().await {
