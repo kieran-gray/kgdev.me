@@ -2,13 +2,11 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::server::domain::{
-    configuration::{
-        read_model::ConfigurationReadModel,
-        repository::{ConfigurationRepository, ConfigurationRepositoryError},
-    },
+use crate::server::domain::configuration::{
     embedding_model::entity::EmbeddingModel,
     generation_model::entity::GenerationModel,
+    read_model::ConfigurationReadModel,
+    repository::{ConfigurationRepository, ConfigurationRepositoryError},
     vector_index::entity::VectorIndex,
 };
 

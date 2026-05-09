@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::{
-    ai_provider::entity::AiProvdier, embedding_model::entity::EmbeddingModel,
-    generation_model::entity::GenerationModel, vector_index::entity::VectorIndex,
-    vector_store_provider::entity::VectorStoreProvider,
+use crate::server::domain::configuration::{
+    ai_provider::AiProvdier, embedding_model::EmbeddingModel, generation_model::GenerationModel,
+    vector_index::VectorIndex, vector_store_provider::VectorStoreProvider,
 };
 
 use super::aggregate::Configuration;

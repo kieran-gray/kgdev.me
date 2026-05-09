@@ -5,12 +5,12 @@ use tracing::info;
 use crate::server::application::configuration::ports::ConfigurationEventStore;
 use crate::server::application::AppError;
 use crate::server::domain::aggregate::Aggregate;
+use crate::server::domain::configuration::pipeline_configuration::{
+    PipelineConfigurationProjector, PipelineConfigurationRepository,
+};
 use crate::server::domain::configuration::{
     aggregate::Configuration, commands::ConfigurationCommand, events::ConfigurationEvent,
     ConfigurationProjector, ConfigurationRepository,
-};
-use crate::server::domain::pipeline_configuration::{
-    PipelineConfigurationProjector, PipelineConfigurationRepository,
 };
 use crate::shared::ConfigurationCommandDto;
 
@@ -90,7 +90,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::server::domain::ai_provider::commands::AddAiProvider;
+    use crate::server::domain::configuration::ai_provider::commands::AddAiProvider;
     use crate::server::domain::configuration::events::{
         AiProviderAdded, ConfigurationCreated, ConfigurationEvent,
     };
@@ -98,7 +98,7 @@ mod tests {
         read_model::ConfigurationReadModel,
         repository::{ConfigurationRepository, ConfigurationRepositoryError},
     };
-    use crate::server::domain::pipeline_configuration::{
+    use crate::server::domain::configuration::pipeline_configuration::{
         PipelineConfigurationReadModel, PipelineConfigurationRepositoryError,
     };
 

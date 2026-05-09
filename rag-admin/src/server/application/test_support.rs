@@ -5,13 +5,13 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::server::application::configuration::ports::ConfigurationEventStore;
+use crate::server::domain::configuration::pipeline_configuration::{
+    PipelineConfigurationReadModel, PipelineConfigurationRepository,
+    PipelineConfigurationRepositoryError,
+};
 use crate::server::domain::configuration::{
     events::ConfigurationEvent, ConfigurationReadModel, ConfigurationRepository,
     ConfigurationRepositoryError,
-};
-use crate::server::domain::pipeline_configuration::{
-    PipelineConfigurationReadModel, PipelineConfigurationRepository,
-    PipelineConfigurationRepositoryError,
 };
 
 use async_trait::async_trait;

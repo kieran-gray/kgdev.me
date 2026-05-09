@@ -1,6 +1,5 @@
-use crate::server::domain::{
-    configuration::exceptions::ConfigurationError, embedding_model::entity::EmbeddingModel,
-    vector_index::entity::VectorIndex,
+use crate::server::domain::configuration::{
+    embedding_model::EmbeddingModel, exceptions::ConfigurationError, vector_index::VectorIndex,
 };
 
 pub struct PipelineConfigurationValidator;

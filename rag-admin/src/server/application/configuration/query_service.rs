@@ -4,7 +4,7 @@ use crate::server::application::AppError;
 use crate::server::domain::configuration::{
     ConfigurationReadModel, ConfigurationRepository, ConfigurationRepositoryError,
 };
-use crate::server::domain::pipeline_configuration::{
+use crate::server::domain::configuration::pipeline_configuration::{
     PipelineConfigurationRepository, PipelineConfigurationRepositoryError,
 };
 use crate::shared::{
@@ -124,7 +124,7 @@ fn map_configuration(read_model: ConfigurationReadModel) -> ConfigurationDto {
 }
 
 fn map_pipeline_configuration(
-    pc: &crate::server::domain::pipeline_configuration::PipelineConfigurationReadModel,
+    pc: &crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationReadModel,
     catalog: &ConfigurationReadModel,
 ) -> PipelineConfigurationDto {
     let embedding_model_name = catalog

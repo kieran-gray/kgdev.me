@@ -3,32 +3,30 @@ use uuid::Uuid;
 
 use crate::server::domain::{
     aggregate::Aggregate,
-    ai_provider::{
-        entity::AiProvdier,
-        events::{AiProviderAdded, AiProviderRemoved, AiProviderUpdated},
-    },
     configuration::{
+        ai_provider::{AiProvdier, AiProviderAdded, AiProviderRemoved, AiProviderUpdated},
         commands::ConfigurationCommand,
-        events::{
-            ConfigurationCreated, ConfigurationEvent, EmbeddingModelAdded, EmbeddingModelRemoved,
-            EmbeddingModelUpdated, GenerationModelAdded, GenerationModelRemoved,
-            GenerationModelUpdated, VectorIndexAdded, VectorIndexRemoved, VectorIndexUpdated,
-            VectorStoreProviderAdded, VectorStoreProviderRemoved, VectorStoreProviderUpdated,
+        embedding_model::{
+            EmbeddingModel, EmbeddingModelAdded, EmbeddingModelRemoved, EmbeddingModelUpdated,
         },
+        events::{ConfigurationCreated, ConfigurationEvent},
         exceptions::ConfigurationError,
-    },
-    embedding_model::entity::EmbeddingModel,
-    generation_model::entity::GenerationModel,
-    pipeline_configuration::{
-        entity::PipelineConfiguration,
-        events::{
-            PipelineConfigurationCreated, PipelineConfigurationDeleted,
-            PipelineConfigurationUpdated,
+        generation_model::{
+            GenerationModel, GenerationModelAdded, GenerationModelRemoved, GenerationModelUpdated,
         },
-        PipelineConfigurationValidator,
+        pipeline_configuration::{
+            events::{
+                PipelineConfigurationCreated, PipelineConfigurationDeleted,
+                PipelineConfigurationUpdated,
+            },
+            PipelineConfiguration, PipelineConfigurationValidator,
+        },
+        vector_index::{VectorIndex, VectorIndexAdded, VectorIndexRemoved, VectorIndexUpdated},
+        vector_store_provider::{
+            VectorStoreProvider, VectorStoreProviderAdded, VectorStoreProviderRemoved,
+            VectorStoreProviderUpdated,
+        },
     },
-    vector_index::entity::VectorIndex,
-    vector_store_provider::entity::VectorStoreProvider,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -646,13 +644,13 @@ impl Configuration {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::server::domain::{
-        configuration::commands::{
-            AddAiProvider, AddEmbeddingModel, RemoveAiProvider, UpdateEmbeddingModel,
-        },
+    use crate::server::domain::configuration::{
+        ai_provider::{AddAiProvider, RemoveAiProvider},
+        embedding_model::{AddEmbeddingModel, UpdateEmbeddingModel},
         pipeline_configuration::commands::CreatePipelineConfiguration,
     };
+
+    use super::*;
 
     #[test]
     fn first_command_bootstraps_configuration() {
@@ -696,9 +694,6 @@ mod tests {
 
     #[test]
     fn cannot_remove_provider_that_is_still_referenced() {
-        use crate::server::domain::configuration::events::{
-            AiProviderAdded, ConfigurationCreated, EmbeddingModelAdded,
-        };
         let provider_id = Uuid::new_v4();
         let configuration = Configuration::from_events(&[
             ConfigurationEvent::ConfigurationCreated(ConfigurationCreated {
@@ -728,7 +723,6 @@ mod tests {
 
     #[test]
     fn replay_requires_configuration_created_as_first_event() {
-        use crate::server::domain::configuration::events::AiProviderAdded;
         let configuration =
             Configuration::from_events(&[ConfigurationEvent::AiProviderAdded(AiProviderAdded {
                 provider_id: Uuid::new_v4(),
@@ -740,9 +734,6 @@ mod tests {
 
     #[test]
     fn can_move_embedding_model_to_another_provider() {
-        use crate::server::domain::configuration::events::{
-            AiProviderAdded, ConfigurationCreated, EmbeddingModelAdded, EmbeddingModelUpdated,
-        };
         let first_provider_id = Uuid::new_v4();
         let second_provider_id = Uuid::new_v4();
         let model_id = Uuid::new_v4();
@@ -793,10 +784,6 @@ mod tests {
 
     #[test]
     fn create_pipeline_configuration_validates_dimensions_match() {
-        use crate::server::domain::configuration::events::{
-            AiProviderAdded, ConfigurationCreated, EmbeddingModelAdded, VectorIndexAdded,
-            VectorStoreProviderAdded,
-        };
         let provider_id = Uuid::new_v4();
         let vs_provider_id = Uuid::new_v4();
         let embedding_model_id = Uuid::new_v4();
@@ -817,13 +804,11 @@ mod tests {
                 model: "text-embedding-3-small".into(),
                 dimensions: 1536,
             }),
-            ConfigurationEvent::GenerationModelAdded(
-                crate::server::domain::configuration::events::GenerationModelAdded {
-                    model_id: generation_model_id,
-                    provider_id,
-                    model: "gpt-4o".into(),
-                },
-            ),
+            ConfigurationEvent::GenerationModelAdded(GenerationModelAdded {
+                model_id: generation_model_id,
+                provider_id,
+                model: "gpt-4o".into(),
+            }),
             ConfigurationEvent::VectorStoreProviderAdded(VectorStoreProviderAdded {
                 provider_id: vs_provider_id,
                 name: "Cloudflare".into(),
@@ -853,10 +838,6 @@ mod tests {
 
     #[test]
     fn create_pipeline_configuration_succeeds_with_matching_dimensions() {
-        use crate::server::domain::configuration::events::{
-            AiProviderAdded, ConfigurationCreated, EmbeddingModelAdded, GenerationModelAdded,
-            VectorIndexAdded, VectorStoreProviderAdded,
-        };
         let provider_id = Uuid::new_v4();
         let vs_provider_id = Uuid::new_v4();
         let embedding_model_id = Uuid::new_v4();

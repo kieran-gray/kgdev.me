@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::server::domain::{
-    configuration::{exceptions::ConfigurationError, ConfigurationRepositoryError},
-    pipeline_configuration::PipelineConfigurationRepositoryError,
+use crate::server::domain::configuration::{
+    exceptions::ConfigurationError, pipeline_configuration::PipelineConfigurationRepositoryError,
+    ConfigurationRepositoryError,
 };
 
 #[derive(Debug, Error, Serialize, Deserialize)]

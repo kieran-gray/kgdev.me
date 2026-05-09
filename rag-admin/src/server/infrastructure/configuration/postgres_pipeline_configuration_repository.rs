@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::server::domain::pipeline_configuration::{
+use crate::server::domain::configuration::pipeline_configuration::{
     PipelineConfigurationReadModel, PipelineConfigurationRepository,
     PipelineConfigurationRepositoryError,
 };

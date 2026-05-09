@@ -1,11 +1,11 @@
-pub use crate::server::domain::ai_provider::commands::*;
-pub use crate::server::domain::embedding_model::commands::*;
-pub use crate::server::domain::generation_model::commands::*;
-pub use crate::server::domain::vector_index::commands::*;
-pub use crate::server::domain::vector_store_provider::commands::*;
+pub use crate::server::domain::configuration::ai_provider::commands::*;
+pub use crate::server::domain::configuration::embedding_model::commands::*;
+pub use crate::server::domain::configuration::generation_model::commands::*;
+pub use crate::server::domain::configuration::vector_index::commands::*;
+pub use crate::server::domain::configuration::vector_store_provider::commands::*;
 
 use crate::{
-    server::domain::pipeline_configuration::commands::{
+    server::domain::configuration::pipeline_configuration::{
         CreatePipelineConfiguration, DeletePipelineConfiguration, UpdatePipelineConfiguration,
     },
     shared::{ConfigurationCommandDto, ProviderType},

@@ -19,8 +19,8 @@ use crate::server::application::evaluation::{
 };
 use crate::server::application::ingest::{ports::VectorIndex, IngestService, IngestServiceDeps};
 use crate::server::application::{AppError, JobRegistry};
+use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::domain::configuration::ConfigurationRepository;
-use crate::server::domain::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::infrastructure::blog::HttpBlogSource;
 use crate::server::infrastructure::chunking::FilePostChunkingConfigStore;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};

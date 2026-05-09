@@ -1,11 +1,9 @@
-pub use crate::server::domain::ai_provider::events::*;
-pub use crate::server::domain::embedding_model::events::*;
-pub use crate::server::domain::generation_model::events::*;
-use crate::server::domain::pipeline_configuration::events::{
-    PipelineConfigurationCreated, PipelineConfigurationDeleted, PipelineConfigurationUpdated,
-};
-pub use crate::server::domain::vector_index::events::*;
-pub use crate::server::domain::vector_store_provider::events::*;
+pub use crate::server::domain::configuration::ai_provider::events::*;
+pub use crate::server::domain::configuration::embedding_model::events::*;
+pub use crate::server::domain::configuration::generation_model::events::*;
+use crate::server::domain::configuration::pipeline_configuration::events::*;
+pub use crate::server::domain::configuration::vector_index::events::*;
+pub use crate::server::domain::configuration::vector_store_provider::events::*;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
