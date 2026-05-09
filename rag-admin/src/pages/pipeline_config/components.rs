@@ -39,17 +39,6 @@ pub fn EmptyState(message: &'static str) -> impl IntoView {
 }
 
 #[component]
-pub fn CurrentStepCard(label: &'static str, value: String, detail: String) -> impl IntoView {
-    view! {
-        <div class="border border-[var(--color-border)] bg-black/20 p-4 space-y-2 min-h-[108px]">
-            <div class="tech-label opacity-50">{label}</div>
-            <div class="font-semibold break-all">{value}</div>
-            <div class="tech-label opacity-60 break-words">{detail}</div>
-        </div>
-    }
-}
-
-#[component]
 pub fn MetaPill(label: String) -> impl IntoView {
     view! { <span class="badge">{label}</span> }
 }

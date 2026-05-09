@@ -1,7 +1,8 @@
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::domain::{
+    aggregate::Aggregate,
     ai_provider::{
         entity::AiProvdier,
         events::{AiProviderAdded, AiProviderRemoved, AiProviderUpdated},
@@ -9,38 +10,26 @@ use crate::server::domain::{
     configuration::{
         commands::ConfigurationCommand,
         events::{
-            ConfigurationCreated, ConfigurationEvent, CurrentEmbeddingModelSet,
-            CurrentGenerationModelSet, CurrentVectorIndexSet, EmbeddingModelAdded,
-            EmbeddingModelRemoved, EmbeddingModelUpdated, GenerationModelAdded,
-            GenerationModelRemoved, GenerationModelUpdated, VectorIndexAdded, VectorIndexRemoved,
-            VectorIndexUpdated, VectorStoreProviderAdded, VectorStoreProviderRemoved,
-            VectorStoreProviderUpdated,
+            ConfigurationCreated, ConfigurationEvent, EmbeddingModelAdded, EmbeddingModelRemoved,
+            EmbeddingModelUpdated, GenerationModelAdded, GenerationModelRemoved,
+            GenerationModelUpdated, VectorIndexAdded, VectorIndexRemoved, VectorIndexUpdated,
+            VectorStoreProviderAdded, VectorStoreProviderRemoved, VectorStoreProviderUpdated,
         },
         exceptions::ConfigurationError,
     },
     embedding_model::entity::EmbeddingModel,
     generation_model::entity::GenerationModel,
+    pipeline_configuration::{
+        entity::PipelineConfiguration,
+        events::{
+            PipelineConfigurationCreated, PipelineConfigurationDeleted,
+            PipelineConfigurationUpdated,
+        },
+        PipelineConfigurationValidator,
+    },
     vector_index::entity::VectorIndex,
     vector_store_provider::entity::VectorStoreProvider,
 };
-
-// TODO: move elsewhere
-pub trait Aggregate: Sized + Clone + Serialize + DeserializeOwned {
-    type Event: Clone;
-    type Command;
-    type Error: std::error::Error;
-
-    fn aggregate_id(&self) -> String;
-
-    fn apply(&mut self, event: &Self::Event);
-
-    fn handle_command(
-        state: Option<&Self>,
-        command: Self::Command,
-    ) -> Result<Vec<Self::Event>, Self::Error>;
-
-    fn from_events(events: &[Self::Event]) -> Option<Self>;
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Configuration {
@@ -50,9 +39,7 @@ pub struct Configuration {
     pub embedding_models: Vec<EmbeddingModel>,
     pub generation_models: Vec<GenerationModel>,
     pub vector_indexes: Vec<VectorIndex>,
-    pub current_embedding_model_id: Option<Uuid>,
-    pub current_generation_model_id: Option<Uuid>,
-    pub current_vector_index_id: Option<Uuid>,
+    pub pipeline_configurations: Vec<PipelineConfiguration>,
 }
 
 impl Aggregate for Configuration {
@@ -128,9 +115,6 @@ impl Aggregate for Configuration {
             Self::Event::EmbeddingModelRemoved(e) => {
                 self.embedding_models
                     .retain(|m| m.embedding_model_id != e.model_id);
-                if self.current_embedding_model_id == Some(e.model_id) {
-                    self.current_embedding_model_id = None;
-                }
             }
             Self::Event::GenerationModelAdded(e) => {
                 self.generation_models.push(GenerationModel {
@@ -152,9 +136,6 @@ impl Aggregate for Configuration {
             Self::Event::GenerationModelRemoved(e) => {
                 self.generation_models
                     .retain(|m| m.generation_model_id != e.model_id);
-                if self.current_generation_model_id == Some(e.model_id) {
-                    self.current_generation_model_id = None;
-                }
             }
             Self::Event::VectorIndexAdded(e) => {
                 self.vector_indexes.push(VectorIndex {
@@ -177,18 +158,31 @@ impl Aggregate for Configuration {
             }
             Self::Event::VectorIndexRemoved(e) => {
                 self.vector_indexes.retain(|v| v.index_id != e.index_id);
-                if self.current_vector_index_id == Some(e.index_id) {
-                    self.current_vector_index_id = None;
+            }
+            Self::Event::PipelineConfigurationCreated(e) => {
+                self.pipeline_configurations.push(PipelineConfiguration {
+                    pipeline_configuration_id: e.pipeline_configuration_id,
+                    name: e.name.clone(),
+                    embedding_model_id: e.embedding_model_id,
+                    generation_model_id: e.generation_model_id,
+                    vector_index_id: e.vector_index_id,
+                });
+            }
+            Self::Event::PipelineConfigurationUpdated(e) => {
+                if let Some(pc) = self
+                    .pipeline_configurations
+                    .iter_mut()
+                    .find(|pc| pc.pipeline_configuration_id == e.pipeline_configuration_id)
+                {
+                    pc.name = e.name.clone();
+                    pc.embedding_model_id = e.embedding_model_id;
+                    pc.generation_model_id = e.generation_model_id;
+                    pc.vector_index_id = e.vector_index_id;
                 }
             }
-            Self::Event::CurrentEmbeddingModelSet(e) => {
-                self.current_embedding_model_id = Some(e.model_id);
-            }
-            Self::Event::CurrentGenerationModelSet(e) => {
-                self.current_generation_model_id = Some(e.model_id);
-            }
-            Self::Event::CurrentVectorIndexSet(e) => {
-                self.current_vector_index_id = Some(e.index_id);
+            Self::Event::PipelineConfigurationDeleted(e) => {
+                self.pipeline_configurations
+                    .retain(|pc| pc.pipeline_configuration_id != e.pipeline_configuration_id);
             }
         }
     }
@@ -403,27 +397,55 @@ impl Aggregate for Configuration {
                     index_id: index.index_id,
                 })]
             }
-            Self::Command::SetCurrentEmbeddingModel(cmd) => {
-                let model = Self::find_embedding_model(state, cmd.model_id)?;
-                vec![Self::Event::CurrentEmbeddingModelSet(
-                    CurrentEmbeddingModelSet {
-                        model_id: model.embedding_model_id,
+
+            Self::Command::CreatePipelineConfiguration(cmd) => {
+                Self::validate_non_empty("pipeline configuration name", &cmd.name)?;
+                let embedding_model = Self::find_embedding_model(state, cmd.embedding_model_id)?;
+                Self::find_generation_model(state, cmd.generation_model_id)?;
+                let vector_index = Self::find_vector_index(state, cmd.vector_index_id)?;
+                PipelineConfigurationValidator::validate_combination(
+                    embedding_model,
+                    vector_index,
+                )?;
+                vec![Self::Event::PipelineConfigurationCreated(
+                    PipelineConfigurationCreated {
+                        pipeline_configuration_id: Uuid::new_v4(),
+                        name: cmd.name,
+                        embedding_model_id: cmd.embedding_model_id,
+                        generation_model_id: cmd.generation_model_id,
+                        vector_index_id: cmd.vector_index_id,
                     },
                 )]
             }
-            Self::Command::SetCurrentGenerationModel(cmd) => {
-                let model = Self::find_generation_model(state, cmd.model_id)?;
-                vec![Self::Event::CurrentGenerationModelSet(
-                    CurrentGenerationModelSet {
-                        model_id: model.generation_model_id,
+
+            Self::Command::UpdatePipelineConfiguration(cmd) => {
+                Self::find_pipeline_configuration(state, cmd.pipeline_configuration_id)?;
+                Self::validate_non_empty("pipeline configuration name", &cmd.name)?;
+                let embedding_model = Self::find_embedding_model(state, cmd.embedding_model_id)?;
+                Self::find_generation_model(state, cmd.generation_model_id)?;
+                let vector_index = Self::find_vector_index(state, cmd.vector_index_id)?;
+                PipelineConfigurationValidator::validate_combination(
+                    embedding_model,
+                    vector_index,
+                )?;
+                vec![Self::Event::PipelineConfigurationUpdated(
+                    PipelineConfigurationUpdated {
+                        pipeline_configuration_id: cmd.pipeline_configuration_id,
+                        name: cmd.name,
+                        embedding_model_id: cmd.embedding_model_id,
+                        generation_model_id: cmd.generation_model_id,
+                        vector_index_id: cmd.vector_index_id,
                     },
                 )]
             }
-            Self::Command::SetCurrentVectorIndex(cmd) => {
-                let index = Self::find_vector_index(state, cmd.index_id)?;
-                vec![Self::Event::CurrentVectorIndexSet(CurrentVectorIndexSet {
-                    index_id: index.index_id,
-                })]
+
+            Self::Command::DeletePipelineConfiguration(cmd) => {
+                Self::find_pipeline_configuration(state, cmd.pipeline_configuration_id)?;
+                vec![Self::Event::PipelineConfigurationDeleted(
+                    PipelineConfigurationDeleted {
+                        pipeline_configuration_id: cmd.pipeline_configuration_id,
+                    },
+                )]
             }
         };
         bootstrap_events.append(&mut events);
@@ -461,9 +483,7 @@ impl Configuration {
             embedding_models: Vec::new(),
             generation_models: Vec::new(),
             vector_indexes: Vec::new(),
-            current_embedding_model_id: None,
-            current_generation_model_id: None,
-            current_vector_index_id: None,
+            pipeline_configurations: Vec::new(),
         }
     }
 
@@ -523,6 +543,16 @@ impl Configuration {
         self.vector_indexes
             .iter()
             .find(|index| index.index_id == index_id)
+            .ok_or(ConfigurationError::NotFound)
+    }
+
+    fn find_pipeline_configuration(
+        &self,
+        id: Uuid,
+    ) -> Result<&PipelineConfiguration, ConfigurationError> {
+        self.pipeline_configurations
+            .iter()
+            .find(|pc| pc.pipeline_configuration_id == id)
             .ok_or(ConfigurationError::NotFound)
     }
 
@@ -617,8 +647,11 @@ impl Configuration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::domain::configuration::commands::{
-        AddAiProvider, AddEmbeddingModel, RemoveAiProvider, UpdateEmbeddingModel,
+    use crate::server::domain::{
+        configuration::commands::{
+            AddAiProvider, AddEmbeddingModel, RemoveAiProvider, UpdateEmbeddingModel,
+        },
+        pipeline_configuration::commands::CreatePipelineConfiguration,
     };
 
     #[test]
@@ -663,6 +696,9 @@ mod tests {
 
     #[test]
     fn cannot_remove_provider_that_is_still_referenced() {
+        use crate::server::domain::configuration::events::{
+            AiProviderAdded, ConfigurationCreated, EmbeddingModelAdded,
+        };
         let provider_id = Uuid::new_v4();
         let configuration = Configuration::from_events(&[
             ConfigurationEvent::ConfigurationCreated(ConfigurationCreated {
@@ -692,6 +728,7 @@ mod tests {
 
     #[test]
     fn replay_requires_configuration_created_as_first_event() {
+        use crate::server::domain::configuration::events::AiProviderAdded;
         let configuration =
             Configuration::from_events(&[ConfigurationEvent::AiProviderAdded(AiProviderAdded {
                 provider_id: Uuid::new_v4(),
@@ -703,6 +740,9 @@ mod tests {
 
     #[test]
     fn can_move_embedding_model_to_another_provider() {
+        use crate::server::domain::configuration::events::{
+            AiProviderAdded, ConfigurationCreated, EmbeddingModelAdded, EmbeddingModelUpdated,
+        };
         let first_provider_id = Uuid::new_v4();
         let second_provider_id = Uuid::new_v4();
         let model_id = Uuid::new_v4();
@@ -749,5 +789,127 @@ mod tests {
                 }
             )]
         );
+    }
+
+    #[test]
+    fn create_pipeline_configuration_validates_dimensions_match() {
+        use crate::server::domain::configuration::events::{
+            AiProviderAdded, ConfigurationCreated, EmbeddingModelAdded, VectorIndexAdded,
+            VectorStoreProviderAdded,
+        };
+        let provider_id = Uuid::new_v4();
+        let vs_provider_id = Uuid::new_v4();
+        let embedding_model_id = Uuid::new_v4();
+        let generation_model_id = Uuid::new_v4();
+        let vector_index_id = Uuid::new_v4();
+
+        let configuration = Configuration::from_events(&[
+            ConfigurationEvent::ConfigurationCreated(ConfigurationCreated {
+                configuration_id: Configuration::singleton_id(),
+            }),
+            ConfigurationEvent::AiProviderAdded(AiProviderAdded {
+                provider_id,
+                name: "OpenAI".into(),
+            }),
+            ConfigurationEvent::EmbeddingModelAdded(EmbeddingModelAdded {
+                model_id: embedding_model_id,
+                provider_id,
+                model: "text-embedding-3-small".into(),
+                dimensions: 1536,
+            }),
+            ConfigurationEvent::GenerationModelAdded(
+                crate::server::domain::configuration::events::GenerationModelAdded {
+                    model_id: generation_model_id,
+                    provider_id,
+                    model: "gpt-4o".into(),
+                },
+            ),
+            ConfigurationEvent::VectorStoreProviderAdded(VectorStoreProviderAdded {
+                provider_id: vs_provider_id,
+                name: "Cloudflare".into(),
+            }),
+            ConfigurationEvent::VectorIndexAdded(VectorIndexAdded {
+                index_id: vector_index_id,
+                vector_store_provider_id: vs_provider_id,
+                name: "my-index".into(),
+                dimensions: 1024, // mismatch: embedding is 1536
+            }),
+        ])
+        .unwrap();
+
+        let error = Configuration::handle_command(
+            Some(&configuration),
+            ConfigurationCommand::CreatePipelineConfiguration(CreatePipelineConfiguration {
+                name: "production".into(),
+                embedding_model_id,
+                generation_model_id,
+                vector_index_id,
+            }),
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, ConfigurationError::ValidationError(_)));
+    }
+
+    #[test]
+    fn create_pipeline_configuration_succeeds_with_matching_dimensions() {
+        use crate::server::domain::configuration::events::{
+            AiProviderAdded, ConfigurationCreated, EmbeddingModelAdded, GenerationModelAdded,
+            VectorIndexAdded, VectorStoreProviderAdded,
+        };
+        let provider_id = Uuid::new_v4();
+        let vs_provider_id = Uuid::new_v4();
+        let embedding_model_id = Uuid::new_v4();
+        let generation_model_id = Uuid::new_v4();
+        let vector_index_id = Uuid::new_v4();
+
+        let configuration = Configuration::from_events(&[
+            ConfigurationEvent::ConfigurationCreated(ConfigurationCreated {
+                configuration_id: Configuration::singleton_id(),
+            }),
+            ConfigurationEvent::AiProviderAdded(AiProviderAdded {
+                provider_id,
+                name: "OpenAI".into(),
+            }),
+            ConfigurationEvent::EmbeddingModelAdded(EmbeddingModelAdded {
+                model_id: embedding_model_id,
+                provider_id,
+                model: "text-embedding-3-small".into(),
+                dimensions: 1536,
+            }),
+            ConfigurationEvent::GenerationModelAdded(GenerationModelAdded {
+                model_id: generation_model_id,
+                provider_id,
+                model: "gpt-4o".into(),
+            }),
+            ConfigurationEvent::VectorStoreProviderAdded(VectorStoreProviderAdded {
+                provider_id: vs_provider_id,
+                name: "Cloudflare".into(),
+            }),
+            ConfigurationEvent::VectorIndexAdded(VectorIndexAdded {
+                index_id: vector_index_id,
+                vector_store_provider_id: vs_provider_id,
+                name: "my-index".into(),
+                dimensions: 1536,
+            }),
+        ])
+        .unwrap();
+
+        let events = Configuration::handle_command(
+            Some(&configuration),
+            ConfigurationCommand::CreatePipelineConfiguration(CreatePipelineConfiguration {
+                name: "production".into(),
+                embedding_model_id,
+                generation_model_id,
+                vector_index_id,
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            &events[0],
+            ConfigurationEvent::PipelineConfigurationCreated(_)
+        ));
     }
 }

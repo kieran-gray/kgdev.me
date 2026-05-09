@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::server::domain::{
-    configuration::exceptions::ConfigurationError,
+    configuration::{exceptions::ConfigurationError, ConfigurationRepositoryError},
     pipeline_configuration::PipelineConfigurationRepositoryError,
 };
 
@@ -25,6 +25,12 @@ pub enum AppError {
 impl From<ConfigurationError> for AppError {
     fn from(value: ConfigurationError) -> Self {
         AppError::Domain(value.to_string())
+    }
+}
+
+impl From<ConfigurationRepositoryError> for AppError {
+    fn from(value: ConfigurationRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
     }
 }
 

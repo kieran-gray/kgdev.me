@@ -1,13 +1,13 @@
 use leptos::prelude::*;
 
-use crate::shared::{ConfigurationCommandDto, PipelineConfigurationDto};
+use crate::shared::{ConfigurationCommandDto, ConfigurationDto, PipelineConfigurationDto};
 
 #[server(
-    name = GetPipelineConfiguration,
+    name = GetConfiguration,
     prefix = "/api",
-    endpoint = "get_pipeline_configuration"
+    endpoint = "get_configuration"
 )]
-pub async fn get_pipeline_configuration() -> Result<PipelineConfigurationDto, ServerFnError> {
+pub async fn get_configuration() -> Result<ConfigurationDto, ServerFnError> {
     use crate::server::setup::AppState;
     use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
@@ -16,8 +16,28 @@ pub async fn get_pipeline_configuration() -> Result<PipelineConfigurationDto, Se
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
 
     state
-        .pipeline_configuration_service
+        .configuration_query_service
         .get()
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = GetPipelineConfigurations,
+    prefix = "/api",
+    endpoint = "get_pipeline_configurations"
+)]
+pub async fn get_pipeline_configurations() -> Result<Vec<PipelineConfigurationDto>, ServerFnError> {
+    use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .pipeline_configuration_query_service
+        .list()
         .await
         .map_err(map_app_error)
 }

@@ -1,6 +1,9 @@
 pub use crate::server::domain::ai_provider::events::*;
 pub use crate::server::domain::embedding_model::events::*;
 pub use crate::server::domain::generation_model::events::*;
+use crate::server::domain::pipeline_configuration::events::{
+    PipelineConfigurationCreated, PipelineConfigurationDeleted, PipelineConfigurationUpdated,
+};
 pub use crate::server::domain::vector_index::events::*;
 pub use crate::server::domain::vector_store_provider::events::*;
 
@@ -10,21 +13,6 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConfigurationCreated {
     pub configuration_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CurrentEmbeddingModelSet {
-    pub model_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CurrentGenerationModelSet {
-    pub model_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CurrentVectorIndexSet {
-    pub index_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -51,7 +39,7 @@ pub enum ConfigurationEvent {
     VectorIndexUpdated(VectorIndexUpdated),
     VectorIndexRemoved(VectorIndexRemoved),
 
-    CurrentEmbeddingModelSet(CurrentEmbeddingModelSet),
-    CurrentGenerationModelSet(CurrentGenerationModelSet),
-    CurrentVectorIndexSet(CurrentVectorIndexSet),
+    PipelineConfigurationCreated(PipelineConfigurationCreated),
+    PipelineConfigurationUpdated(PipelineConfigurationUpdated),
+    PipelineConfigurationDeleted(PipelineConfigurationDeleted),
 }

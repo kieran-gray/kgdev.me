@@ -4,25 +4,14 @@ pub use crate::server::domain::generation_model::commands::*;
 pub use crate::server::domain::vector_index::commands::*;
 pub use crate::server::domain::vector_store_provider::commands::*;
 
-use crate::shared::{ConfigurationCommandDto, ProviderType};
+use crate::{
+    server::domain::pipeline_configuration::commands::{
+        CreatePipelineConfiguration, DeletePipelineConfiguration, UpdatePipelineConfiguration,
+    },
+    shared::{ConfigurationCommandDto, ProviderType},
+};
 
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetCurrentEmbeddingModel {
-    pub model_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetCurrentGenerationModel {
-    pub model_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetCurrentVectorIndex {
-    pub index_id: Uuid,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -47,9 +36,9 @@ pub enum ConfigurationCommand {
     UpdateVectorIndex(UpdateVectorIndex),
     RemoveVectorIndex(RemoveVectorIndex),
 
-    SetCurrentEmbeddingModel(SetCurrentEmbeddingModel),
-    SetCurrentGenerationModel(SetCurrentGenerationModel),
-    SetCurrentVectorIndex(SetCurrentVectorIndex),
+    CreatePipelineConfiguration(CreatePipelineConfiguration),
+    UpdatePipelineConfiguration(UpdatePipelineConfiguration),
+    DeletePipelineConfiguration(DeletePipelineConfiguration),
 }
 
 impl From<ConfigurationCommandDto> for ConfigurationCommand {
@@ -145,19 +134,26 @@ impl From<ConfigurationCommandDto> for ConfigurationCommand {
                     index_id: dto.index_id,
                 })
             }
-            ConfigurationCommandDto::SetCurrentEmbeddingModel(dto) => {
-                ConfigurationCommand::SetCurrentEmbeddingModel(SetCurrentEmbeddingModel {
-                    model_id: dto.model_id,
+            ConfigurationCommandDto::CreatePipelineConfiguration(dto) => {
+                ConfigurationCommand::CreatePipelineConfiguration(CreatePipelineConfiguration {
+                    name: dto.name,
+                    embedding_model_id: dto.embedding_model_id,
+                    generation_model_id: dto.generation_model_id,
+                    vector_index_id: dto.vector_index_id,
                 })
             }
-            ConfigurationCommandDto::SetCurrentGenerationModel(dto) => {
-                ConfigurationCommand::SetCurrentGenerationModel(SetCurrentGenerationModel {
-                    model_id: dto.model_id,
+            ConfigurationCommandDto::UpdatePipelineConfiguration(dto) => {
+                ConfigurationCommand::UpdatePipelineConfiguration(UpdatePipelineConfiguration {
+                    pipeline_configuration_id: dto.pipeline_configuration_id,
+                    name: dto.name,
+                    embedding_model_id: dto.embedding_model_id,
+                    generation_model_id: dto.generation_model_id,
+                    vector_index_id: dto.vector_index_id,
                 })
             }
-            ConfigurationCommandDto::SetCurrentVectorIndex(dto) => {
-                ConfigurationCommand::SetCurrentVectorIndex(SetCurrentVectorIndex {
-                    index_id: dto.index_id,
+            ConfigurationCommandDto::DeletePipelineConfiguration(dto) => {
+                ConfigurationCommand::DeletePipelineConfiguration(DeletePipelineConfiguration {
+                    pipeline_configuration_id: dto.pipeline_configuration_id,
                 })
             }
         }

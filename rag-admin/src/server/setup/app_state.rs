@@ -9,7 +9,8 @@ use crate::server::application::chunking::chunkers::{
 };
 use crate::server::application::chunking::{ChunkerRegistry, PostChunkingService};
 use crate::server::application::configuration::{
-    ports::ConfigurationEventStore, ConfigurationCommandHandler, PipelineConfigurationService,
+    ports::ConfigurationEventStore, ConfigurationCommandHandler, ConfigurationQueryService,
+    PipelineConfigurationQueryService,
 };
 use crate::server::application::embedding::{ports::Embedder, EmbeddingService};
 use crate::server::application::evaluation::jobs::EvaluationJobService;
@@ -18,10 +19,14 @@ use crate::server::application::evaluation::{
 };
 use crate::server::application::ingest::{ports::VectorIndex, IngestService, IngestServiceDeps};
 use crate::server::application::{AppError, JobRegistry};
+use crate::server::domain::configuration::ConfigurationRepository;
+use crate::server::domain::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::infrastructure::blog::HttpBlogSource;
 use crate::server::infrastructure::chunking::FilePostChunkingConfigStore;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
-use crate::server::infrastructure::configuration::PostgresPipelineConfigurationRepository;
+use crate::server::infrastructure::configuration::{
+    PostgresConfigurationRepository, PostgresPipelineConfigurationRepository,
+};
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{
     FileEvaluationDatasetStore, FileEvaluationResultStore, OllamaEvaluationGenerator,
@@ -41,18 +46,13 @@ use crate::server::setup::settings::{
     settings_path, tokenizer_path,
 };
 use crate::server::setup::validation;
-use crate::server::{
-    domain::configuration::aggregate::Configuration,
-    domain::pipeline_configuration::{
-        PipelineConfigurationProjector, PipelineConfigurationRepository,
-    },
-};
 use crate::shared::{EmbedderBackend, SettingsDto};
 
 pub struct AppState {
     pub settings: Arc<RwLock<SettingsDto>>,
     pub configuration_command_handler: Arc<ConfigurationCommandHandler>,
-    pub pipeline_configuration_service: Arc<PipelineConfigurationService>,
+    pub configuration_query_service: Arc<ConfigurationQueryService>,
+    pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
     pub ingest_service: Arc<IngestService>,
     pub post_service: Arc<PostService>,
     pub chunking_evaluation_service: Arc<ChunkingEvaluationService>,
@@ -99,11 +99,16 @@ impl AppState {
 
         let configuration_event_store: Arc<dyn ConfigurationEventStore> =
             Arc::new(PostgresEventStore::new(pool.clone(), "configuration"));
+        let configuration_repository: Arc<dyn ConfigurationRepository> =
+            Arc::new(PostgresConfigurationRepository::new(pool.clone()));
         let pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository> =
             Arc::new(PostgresPipelineConfigurationRepository::new(pool.clone()));
 
-        let vector_store: Arc<dyn VectorIndex> =
-            VectorizeVectorIndex::new(cf_api.clone(), pipeline_configuration_repository.clone());
+        let vector_store: Arc<dyn VectorIndex> = VectorizeVectorIndex::new(
+            cf_api.clone(),
+            configuration_repository.clone(),
+            pipeline_configuration_repository.clone(),
+        );
         let vector_record_mapper = Arc::new(CloudflareVectorRecordMapper);
         let kv_store = CloudflareKvStore::new(cf_api.clone());
         let chat_client = OllamaChatClient::new(http.clone(), config.ollama.base_url.clone());
@@ -127,25 +132,17 @@ impl AppState {
         let chunking_engine = Arc::new(chunking_engine);
         let post_chunking_service = PostChunkingService::new(chunking_engine);
 
-        let pipeline_configuration = PipelineConfigurationProjector::project(
-            &configuration_event_store
-                .load(Configuration::singleton_id())
-                .await
-                .map_err(|e| SetupError::Internal(format!("load configuration events: {e}")))?,
-        )
-        .map_err(|e| SetupError::Internal(format!("project pipeline configuration: {e}")))?;
-        pipeline_configuration_repository
-            .save(pipeline_configuration)
-            .await
-            .map_err(|e| {
-                SetupError::Internal(format!("save pipeline configuration projection: {e}"))
-            })?;
         let configuration_command_handler = ConfigurationCommandHandler::new(
             configuration_event_store,
+            configuration_repository.clone(),
             pipeline_configuration_repository.clone(),
         );
-        let pipeline_configuration_service =
-            PipelineConfigurationService::new(pipeline_configuration_repository);
+        let configuration_query_service =
+            ConfigurationQueryService::new(configuration_repository.clone());
+        let pipeline_configuration_query_service = PipelineConfigurationQueryService::new(
+            pipeline_configuration_repository.clone(),
+            configuration_repository,
+        );
 
         let ingest_service = IngestService::new(IngestServiceDeps {
             blog_source: blog_source.clone(),
@@ -191,7 +188,8 @@ impl AppState {
         let state = Self {
             settings,
             configuration_command_handler,
-            pipeline_configuration_service,
+            configuration_query_service,
+            pipeline_configuration_query_service,
             ingest_service,
             post_service,
             chunking_evaluation_service,

@@ -2,16 +2,9 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::server::domain::{
-    ai_provider::entity::AiProvdier,
-    embedding_model::entity::EmbeddingModel,
-    generation_model::entity::GenerationModel,
-    pipeline_configuration::{
-        PipelineConfiguration, PipelineConfigurationRepository,
-        PipelineConfigurationRepositoryError,
-    },
-    vector_index::entity::VectorIndex,
-    vector_store_provider::entity::VectorStoreProvider,
+use crate::server::domain::pipeline_configuration::{
+    PipelineConfigurationReadModel, PipelineConfigurationRepository,
+    PipelineConfigurationRepositoryError,
 };
 
 pub struct PostgresPipelineConfigurationRepository {
@@ -26,98 +19,102 @@ impl PostgresPipelineConfigurationRepository {
 
 #[async_trait]
 impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository {
-    async fn load(&self) -> Result<PipelineConfiguration, PipelineConfigurationRepositoryError> {
-        let row: Option<PipelineConfigurationRow> = sqlx::query_as(
+    async fn load_all(
+        &self,
+    ) -> Result<Vec<PipelineConfigurationReadModel>, PipelineConfigurationRepositoryError> {
+        let rows: Vec<PipelineConfigurationRow> = sqlx::query_as(
             r#"
-            SELECT id,
-                   ai_providers,
-                   vector_store_providers,
-                   embedding_models,
-                   generation_models,
-                   vector_indexes,
-                   current_embedding_model_id,
-                   current_generation_model_id,
-                   current_vector_index_id
-            FROM pipeline_configuration
-            WHERE id = $1
+            SELECT id, name, embedding_model_id, generation_model_id, vector_index_id
+            FROM pipeline_configurations
+            ORDER BY created_at ASC
             "#,
         )
-        .bind(PipelineConfiguration::default().configuration_id)
-        .fetch_optional(&self.pool)
+        .fetch_all(&self.pool)
         .await
-        .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("load: {e}")))?;
+        .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("load_all: {e}")))?;
 
-        match row {
-            None => Ok(PipelineConfiguration::default()),
-            Some(row) => row.try_into(),
-        }
+        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     async fn save(
         &self,
-        config: PipelineConfiguration,
+        read_model: PipelineConfigurationReadModel,
     ) -> Result<(), PipelineConfigurationRepositoryError> {
-        let ai_providers = serde_json::to_value(&config.ai_providers).map_err(|e| {
-            PipelineConfigurationRepositoryError::Internal(format!("serialize ai_providers: {e}"))
-        })?;
-        let vector_store_providers =
-            serde_json::to_value(&config.vector_store_providers).map_err(|e| {
-                PipelineConfigurationRepositoryError::Internal(format!(
-                    "serialize vector_store_providers: {e}"
-                ))
-            })?;
-        let embedding_models = serde_json::to_value(&config.embedding_models).map_err(|e| {
-            PipelineConfigurationRepositoryError::Internal(format!(
-                "serialize embedding_models: {e}"
-            ))
-        })?;
-        let generation_models = serde_json::to_value(&config.generation_models).map_err(|e| {
-            PipelineConfigurationRepositoryError::Internal(format!(
-                "serialize generation_models: {e}"
-            ))
-        })?;
-        let vector_indexes = serde_json::to_value(&config.vector_indexes).map_err(|e| {
-            PipelineConfigurationRepositoryError::Internal(format!("serialize vector_indexes: {e}"))
-        })?;
-
         sqlx::query(
             r#"
-            INSERT INTO pipeline_configuration (
-                id,
-                ai_providers,
-                vector_store_providers,
-                embedding_models,
-                generation_models,
-                vector_indexes,
-                current_embedding_model_id,
-                current_generation_model_id,
-                current_vector_index_id
+            INSERT INTO pipeline_configurations (
+                id, name, embedding_model_id, generation_model_id, vector_index_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (id) DO UPDATE SET
-                ai_providers                = $2,
-                vector_store_providers      = $3,
-                embedding_models            = $4,
-                generation_models           = $5,
-                vector_indexes              = $6,
-                current_embedding_model_id  = $7,
-                current_generation_model_id = $8,
-                current_vector_index_id     = $9,
-                updated_at                  = NOW()
+                name                = $2,
+                embedding_model_id  = $3,
+                generation_model_id = $4,
+                vector_index_id     = $5,
+                updated_at          = NOW()
             "#,
         )
-        .bind(config.configuration_id)
-        .bind(&ai_providers)
-        .bind(&vector_store_providers)
-        .bind(&embedding_models)
-        .bind(&generation_models)
-        .bind(&vector_indexes)
-        .bind(config.current_embedding_model_id)
-        .bind(config.current_generation_model_id)
-        .bind(config.current_vector_index_id)
+        .bind(read_model.pipeline_configuration_id)
+        .bind(&read_model.name)
+        .bind(read_model.embedding_model_id)
+        .bind(read_model.generation_model_id)
+        .bind(read_model.vector_index_id)
         .execute(&self.pool)
         .await
         .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("save: {e}")))?;
+
+        Ok(())
+    }
+
+    async fn delete(&self, id: Uuid) -> Result<(), PipelineConfigurationRepositoryError> {
+        sqlx::query("DELETE FROM pipeline_configurations WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("delete: {e}")))?;
+
+        Ok(())
+    }
+
+    async fn rebuild(
+        &self,
+        configurations: &[PipelineConfigurationReadModel],
+    ) -> Result<(), PipelineConfigurationRepositoryError> {
+        let mut tx = self.pool.begin().await.map_err(|e| {
+            PipelineConfigurationRepositoryError::Internal(format!("begin transaction: {e}"))
+        })?;
+
+        sqlx::query("DELETE FROM pipeline_configurations")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                PipelineConfigurationRepositoryError::Internal(format!("rebuild delete: {e}"))
+            })?;
+
+        for config in configurations {
+            sqlx::query(
+                r#"
+                INSERT INTO pipeline_configurations (
+                    id, name, embedding_model_id, generation_model_id, vector_index_id
+                )
+                VALUES ($1, $2, $3, $4, $5)
+                "#,
+            )
+            .bind(config.pipeline_configuration_id)
+            .bind(&config.name)
+            .bind(config.embedding_model_id)
+            .bind(config.generation_model_id)
+            .bind(config.vector_index_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                PipelineConfigurationRepositoryError::Internal(format!("rebuild insert: {e}"))
+            })?;
+        }
+
+        tx.commit().await.map_err(|e| {
+            PipelineConfigurationRepositoryError::Internal(format!("commit transaction: {e}"))
+        })?;
 
         Ok(())
     }
@@ -125,14 +122,10 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
 
 struct PipelineConfigurationRow {
     id: Uuid,
-    ai_providers: serde_json::Value,
-    vector_store_providers: serde_json::Value,
-    embedding_models: serde_json::Value,
-    generation_models: serde_json::Value,
-    vector_indexes: serde_json::Value,
-    current_embedding_model_id: Option<Uuid>,
-    current_generation_model_id: Option<Uuid>,
-    current_vector_index_id: Option<Uuid>,
+    name: String,
+    embedding_model_id: Uuid,
+    generation_model_id: Uuid,
+    vector_index_id: Uuid,
 }
 
 impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for PipelineConfigurationRow {
@@ -140,63 +133,22 @@ impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for PipelineConfigurationRow {
         use sqlx::Row;
         Ok(Self {
             id: row.try_get("id")?,
-            ai_providers: row.try_get("ai_providers")?,
-            vector_store_providers: row.try_get("vector_store_providers")?,
-            embedding_models: row.try_get("embedding_models")?,
-            generation_models: row.try_get("generation_models")?,
-            vector_indexes: row.try_get("vector_indexes")?,
-            current_embedding_model_id: row.try_get("current_embedding_model_id")?,
-            current_generation_model_id: row.try_get("current_generation_model_id")?,
-            current_vector_index_id: row.try_get("current_vector_index_id")?,
+            name: row.try_get("name")?,
+            embedding_model_id: row.try_get("embedding_model_id")?,
+            generation_model_id: row.try_get("generation_model_id")?,
+            vector_index_id: row.try_get("vector_index_id")?,
         })
     }
 }
 
-impl TryFrom<PipelineConfigurationRow> for PipelineConfiguration {
-    type Error = PipelineConfigurationRepositoryError;
-
-    fn try_from(row: PipelineConfigurationRow) -> Result<Self, Self::Error> {
-        let ai_providers: Vec<AiProvdier> =
-            serde_json::from_value(row.ai_providers).map_err(|e| {
-                PipelineConfigurationRepositoryError::Internal(format!(
-                    "deserialize ai_providers: {e}"
-                ))
-            })?;
-        let vector_store_providers: Vec<VectorStoreProvider> =
-            serde_json::from_value(row.vector_store_providers).map_err(|e| {
-                PipelineConfigurationRepositoryError::Internal(format!(
-                    "deserialize vector_store_providers: {e}"
-                ))
-            })?;
-        let embedding_models: Vec<EmbeddingModel> = serde_json::from_value(row.embedding_models)
-            .map_err(|e| {
-                PipelineConfigurationRepositoryError::Internal(format!(
-                    "deserialize embedding_models: {e}"
-                ))
-            })?;
-        let generation_models: Vec<GenerationModel> = serde_json::from_value(row.generation_models)
-            .map_err(|e| {
-                PipelineConfigurationRepositoryError::Internal(format!(
-                    "deserialize generation_models: {e}"
-                ))
-            })?;
-        let vector_indexes: Vec<VectorIndex> =
-            serde_json::from_value(row.vector_indexes).map_err(|e| {
-                PipelineConfigurationRepositoryError::Internal(format!(
-                    "deserialize vector_indexes: {e}"
-                ))
-            })?;
-
-        Ok(PipelineConfiguration {
-            configuration_id: row.id,
-            ai_providers,
-            vector_store_providers,
-            embedding_models,
-            generation_models,
-            vector_indexes,
-            current_embedding_model_id: row.current_embedding_model_id,
-            current_generation_model_id: row.current_generation_model_id,
-            current_vector_index_id: row.current_vector_index_id,
-        })
+impl From<PipelineConfigurationRow> for PipelineConfigurationReadModel {
+    fn from(row: PipelineConfigurationRow) -> Self {
+        Self {
+            pipeline_configuration_id: row.id,
+            name: row.name,
+            embedding_model_id: row.embedding_model_id,
+            generation_model_id: row.generation_model_id,
+            vector_index_id: row.vector_index_id,
+        }
     }
 }

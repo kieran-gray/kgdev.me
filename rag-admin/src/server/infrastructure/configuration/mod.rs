@@ -1,3 +1,5 @@
+pub mod postgres_configuration_repository;
 pub mod postgres_pipeline_configuration_repository;
 
+pub use postgres_configuration_repository::PostgresConfigurationRepository;
 pub use postgres_pipeline_configuration_repository::PostgresPipelineConfigurationRepository;

@@ -37,17 +37,23 @@ pub struct VectorIndexDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PipelineConfigurationDto {
+pub struct ConfigurationDto {
     pub configuration_id: Uuid,
     pub ai_providers: Vec<AiProviderDto>,
     pub vector_store_providers: Vec<VectorStoreProviderDto>,
     pub embedding_models: Vec<EmbeddingModelDto>,
     pub generation_models: Vec<GenerationModelDto>,
     pub vector_indexes: Vec<VectorIndexDto>,
-    pub current_embedding_model_id: Option<Uuid>,
-    pub current_generation_model_id: Option<Uuid>,
-    pub current_vector_index_id: Option<Uuid>,
-    pub current_embedding_model: Option<EmbeddingModelDto>,
-    pub current_generation_model: Option<GenerationModelDto>,
-    pub current_vector_index: Option<VectorIndexDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PipelineConfigurationDto {
+    pub pipeline_configuration_id: Uuid,
+    pub name: String,
+    pub embedding_model_id: Uuid,
+    pub embedding_model_name: Option<String>,
+    pub generation_model_id: Uuid,
+    pub generation_model_name: Option<String>,
+    pub vector_index_id: Uuid,
+    pub vector_index_name: Option<String>,
 }

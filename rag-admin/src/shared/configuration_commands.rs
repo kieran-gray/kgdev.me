@@ -94,18 +94,25 @@ pub struct RemoveVectorIndexDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetCurrentEmbeddingModelDto {
-    pub model_id: Uuid,
+pub struct CreatePipelineConfigurationDto {
+    pub name: String,
+    pub embedding_model_id: Uuid,
+    pub generation_model_id: Uuid,
+    pub vector_index_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetCurrentGenerationModelDto {
-    pub model_id: Uuid,
+pub struct UpdatePipelineConfigurationDto {
+    pub pipeline_configuration_id: Uuid,
+    pub name: String,
+    pub embedding_model_id: Uuid,
+    pub generation_model_id: Uuid,
+    pub vector_index_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetCurrentVectorIndexDto {
-    pub index_id: Uuid,
+pub struct DeletePipelineConfigurationDto {
+    pub pipeline_configuration_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,7 +132,7 @@ pub enum ConfigurationCommandDto {
     AddVectorIndex(AddVectorIndexDto),
     UpdateVectorIndex(UpdateVectorIndexDto),
     RemoveVectorIndex(RemoveVectorIndexDto),
-    SetCurrentEmbeddingModel(SetCurrentEmbeddingModelDto),
-    SetCurrentGenerationModel(SetCurrentGenerationModelDto),
-    SetCurrentVectorIndex(SetCurrentVectorIndexDto),
+    CreatePipelineConfiguration(CreatePipelineConfigurationDto),
+    UpdatePipelineConfiguration(UpdatePipelineConfigurationDto),
+    DeletePipelineConfiguration(DeletePipelineConfigurationDto),
 }

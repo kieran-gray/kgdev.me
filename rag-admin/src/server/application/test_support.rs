@@ -5,9 +5,13 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::server::application::configuration::ports::ConfigurationEventStore;
-use crate::server::domain::configuration::events::ConfigurationEvent;
+use crate::server::domain::configuration::{
+    events::ConfigurationEvent, ConfigurationReadModel, ConfigurationRepository,
+    ConfigurationRepositoryError,
+};
 use crate::server::domain::pipeline_configuration::{
-    PipelineConfiguration, PipelineConfigurationRepository, PipelineConfigurationRepositoryError,
+    PipelineConfigurationReadModel, PipelineConfigurationRepository,
+    PipelineConfigurationRepositoryError,
 };
 
 use async_trait::async_trait;
@@ -417,22 +421,76 @@ impl ConfigurationEventStore for InMemoryConfigurationEventStore {
     }
 }
 
-#[derive(Default)]
-pub struct InMemoryPipelineConfigurationRepository {
-    pipeline_configuration: RwLock<PipelineConfiguration>,
+pub struct InMemoryConfigurationRepository {
+    read_model: RwLock<ConfigurationReadModel>,
+}
+
+impl Default for InMemoryConfigurationRepository {
+    fn default() -> Self {
+        Self {
+            read_model: RwLock::new(ConfigurationReadModel::default()),
+        }
+    }
 }
 
 #[async_trait]
-impl PipelineConfigurationRepository for InMemoryPipelineConfigurationRepository {
-    async fn load(&self) -> Result<PipelineConfiguration, PipelineConfigurationRepositoryError> {
-        Ok(self.pipeline_configuration.read().await.clone())
+impl ConfigurationRepository for InMemoryConfigurationRepository {
+    async fn load(&self) -> Result<ConfigurationReadModel, ConfigurationRepositoryError> {
+        Ok(self.read_model.read().await.clone())
     }
 
     async fn save(
         &self,
-        pipeline_configuration: PipelineConfiguration,
+        read_model: ConfigurationReadModel,
+    ) -> Result<(), ConfigurationRepositoryError> {
+        *self.read_model.write().await = read_model;
+        Ok(())
+    }
+}
+
+pub struct InMemoryPipelineConfigurationRepository {
+    configurations: RwLock<Vec<PipelineConfigurationReadModel>>,
+}
+
+impl Default for InMemoryPipelineConfigurationRepository {
+    fn default() -> Self {
+        Self {
+            configurations: RwLock::new(Vec::new()),
+        }
+    }
+}
+
+#[async_trait]
+impl PipelineConfigurationRepository for InMemoryPipelineConfigurationRepository {
+    async fn load_all(
+        &self,
+    ) -> Result<Vec<PipelineConfigurationReadModel>, PipelineConfigurationRepositoryError> {
+        Ok(self.configurations.read().await.clone())
+    }
+
+    async fn save(
+        &self,
+        read_model: PipelineConfigurationReadModel,
     ) -> Result<(), PipelineConfigurationRepositoryError> {
-        *self.pipeline_configuration.write().await = pipeline_configuration;
+        let mut guard = self.configurations.write().await;
+        guard.retain(|c| c.pipeline_configuration_id != read_model.pipeline_configuration_id);
+        guard.push(read_model);
+        Ok(())
+    }
+
+    async fn delete(&self, id: uuid::Uuid) -> Result<(), PipelineConfigurationRepositoryError> {
+        self.configurations
+            .write()
+            .await
+            .retain(|c| c.pipeline_configuration_id != id);
+        Ok(())
+    }
+
+    async fn rebuild(
+        &self,
+        configurations: &[PipelineConfigurationReadModel],
+    ) -> Result<(), PipelineConfigurationRepositoryError> {
+        *self.configurations.write().await = configurations.to_vec();
         Ok(())
     }
 }

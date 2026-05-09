@@ -1,3 +1,4 @@
+pub mod aggregate;
 pub mod ai_provider;
 pub mod blog_post;
 pub mod chunk;

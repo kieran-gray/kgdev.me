@@ -10,12 +10,14 @@ use crate::server::application::ingest::ports::vector_index::{
 };
 use crate::server::application::ingest::ports::VectorIndex;
 use crate::server::application::AppError;
+use crate::server::domain::configuration::ConfigurationRepository;
 use crate::server::domain::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::domain::VectorRecord;
 use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
 
 pub struct VectorizeVectorIndex {
     api: Arc<CloudflareApi>,
+    configuration: Arc<dyn ConfigurationRepository>,
     pipeline_configuration: Arc<dyn PipelineConfigurationRepository>,
 }
 
@@ -82,30 +84,48 @@ struct DescribeConfig {
 impl VectorizeVectorIndex {
     pub fn new(
         api: Arc<CloudflareApi>,
+        configuration: Arc<dyn ConfigurationRepository>,
         pipeline_configuration: Arc<dyn PipelineConfigurationRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             api,
+            configuration,
             pipeline_configuration,
         })
     }
 
     async fn url(&self, operation: &VectorizeOperation) -> Result<String, AppError> {
-        let config = self
+        let pipeline_configs = self
             .pipeline_configuration
+            .load_all()
+            .await
+            .map_err(|e| AppError::Internal(format!("load pipeline configurations: {e}")))?;
+        let vector_index_id = pipeline_configs
+            .first()
+            .map(|pc| pc.vector_index_id)
+            .ok_or_else(|| AppError::Validation("no pipeline configuration is set".into()))?;
+
+        let catalog = self
+            .configuration
             .load()
             .await
-            .map_err(|e| AppError::Internal(format!("load pipeline configuration: {e}")))?;
-        let index = config
-            .current_vector_index()
-            .map(|i| i.name.as_str())
-            .ok_or_else(|| AppError::Validation("no current vector index is set".into()))?
-            .to_string();
+            .map_err(|e| AppError::Internal(format!("load configuration: {e}")))?;
+        let index_name = catalog
+            .vector_indexes
+            .iter()
+            .find(|i| i.index_id == vector_index_id)
+            .map(|i| i.name.clone())
+            .ok_or_else(|| {
+                AppError::Internal(format!(
+                    "vector index {vector_index_id} not found in configuration"
+                ))
+            })?;
+
         Ok(format!(
             "{}/accounts/{}/vectorize/v2/indexes/{}/{}",
             CLOUDFLARE_API_BASE,
             self.api.account_id(),
-            index,
+            index_name,
             operation.as_api_path()
         ))
     }

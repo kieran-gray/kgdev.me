@@ -1,5 +1,6 @@
 use crate::shared::{
-    AiProviderDto, EmbeddingModelDto, GenerationModelDto, VectorIndexDto, VectorStoreProviderDto,
+    AiProviderDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto, VectorIndexDto,
+    VectorStoreProviderDto,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -8,6 +9,7 @@ pub enum AddDialog {
     EmbeddingModel,
     GenerationModel,
     VectorIndex,
+    PipelineConfiguration,
 }
 
 #[derive(Debug, Clone)]
@@ -17,6 +19,7 @@ pub enum EditDialog {
     EmbeddingModel(EmbeddingModelDto),
     GenerationModel(GenerationModelDto),
     VectorIndex(VectorIndexDto),
+    PipelineConfiguration(PipelineConfigurationDto),
 }
 
 #[derive(Debug, Clone)]

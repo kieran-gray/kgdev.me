@@ -1,31 +1,31 @@
 use leptos::prelude::*;
-use uuid::Uuid;
 
 use crate::shared::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddProviderDto, AddVectorIndexDto, AiProviderDto,
-    ConfigurationCommandDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto,
-    ProviderType, RemoveAiProviderDto, RemoveEmbeddingModelDto, RemoveGenerationModelDto,
-    RemoveVectorIndexDto, RemoveVectorStoreProviderDto, SetCurrentEmbeddingModelDto,
-    SetCurrentGenerationModelDto, SetCurrentVectorIndexDto, UpdateAiProviderDto,
-    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
-    UpdateVectorStoreProviderDto, VectorIndexDto, VectorStoreProviderDto,
+    ConfigurationCommandDto, ConfigurationDto, CreatePipelineConfigurationDto,
+    DeletePipelineConfigurationDto, EmbeddingModelDto, GenerationModelDto,
+    PipelineConfigurationDto, ProviderType, RemoveAiProviderDto, RemoveEmbeddingModelDto,
+    RemoveGenerationModelDto, RemoveVectorIndexDto, RemoveVectorStoreProviderDto,
+    UpdateAiProviderDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto,
+    UpdatePipelineConfigurationDto, UpdateVectorIndexDto, UpdateVectorStoreProviderDto,
+    VectorIndexDto, VectorStoreProviderDto,
 };
 
 use super::commands::{
-    default_provider_id, default_vector_store_provider_id, optional_name, parse_uuid_or_none,
-    provider_name_for, run_configuration_command, vector_store_provider_name_for, ConfigTab,
+    default_provider_id, default_vector_store_provider_id, parse_uuid_or_none, provider_name_for,
+    run_configuration_command, vector_store_provider_name_for, ConfigTab,
 };
-use super::components::{
-    CurrentStepCard, DialogActions, DialogShell, DialogStatus, Field, TabButton,
-};
+use super::components::{DialogActions, DialogShell, DialogStatus, Field, TabButton};
 use super::dialogs::{delete_dialog_label, AddDialog, DeleteDialog, EditDialog};
 use super::panels::{
-    EmbeddingModelsPanel, GenerationModelsPanel, ProvidersPanel, VectorIndexesPanel,
+    EmbeddingModelsPanel, GenerationModelsPanel, PipelineConfigurationsPanel, ProvidersPanel,
+    VectorIndexesPanel,
 };
 
 #[component]
 pub fn NewSettingsView(
-    config: PipelineConfigurationDto,
+    config: ConfigurationDto,
+    pipeline_configurations: Vec<PipelineConfigurationDto>,
     active_tab: ReadSignal<ConfigTab>,
     set_active_tab: WriteSignal<ConfigTab>,
     busy: ReadSignal<bool>,
@@ -34,24 +34,21 @@ pub fn NewSettingsView(
     set_refresh: WriteSignal<u32>,
 ) -> impl IntoView {
     let config = StoredValue::new(config);
+    let pipeline_configurations = StoredValue::new(pipeline_configurations);
+
     let (add_dialog, set_add_dialog) = signal::<Option<AddDialog>>(None);
     let (edit_dialog, set_edit_dialog) = signal::<Option<EditDialog>>(None);
     let (delete_dialog, set_delete_dialog) = signal::<Option<DeleteDialog>>(None);
+    let (delete_pipeline_dialog, set_delete_pipeline_dialog) =
+        signal::<Option<PipelineConfigurationDto>>(None);
     let (dialog_status, set_dialog_status) = signal::<Option<String>>(None);
 
     let (provider_name, set_provider_name) = signal(String::new());
     let (provider_type, set_provider_type) = signal(ProviderType::Ai);
-
     let (embedding_provider_id, set_embedding_provider_id) =
         signal(default_provider_id(&config.get_value().ai_providers));
     let (embedding_model, set_embedding_model) = signal(String::new());
-    let (embedding_dimensions, set_embedding_dimensions) = signal(
-        config
-            .get_value()
-            .current_vector_index
-            .map(|v| v.dimensions)
-            .unwrap_or(1024),
-    );
+    let (embedding_dimensions, set_embedding_dimensions) = signal(1024u32);
     let (generation_provider_id, set_generation_provider_id) =
         signal(default_provider_id(&config.get_value().ai_providers));
     let (generation_model, set_generation_model) = signal(String::new());
@@ -59,13 +56,16 @@ pub fn NewSettingsView(
         default_vector_store_provider_id(&config.get_value().vector_store_providers),
     );
     let (vector_index_name, set_vector_index_name) = signal(String::new());
-    let (vector_index_dimensions, set_vector_index_dimensions) = signal(
-        config
-            .get_value()
-            .current_embedding_model
-            .map(|m| m.dimensions)
-            .unwrap_or(1024),
+    let (vector_index_dimensions, set_vector_index_dimensions) = signal(1024u32);
+
+    let (pc_name, set_pc_name) = signal(String::new());
+    let (pc_embedding_model_id, set_pc_embedding_model_id) =
+        signal(config.with_value(|cfg| cfg.embedding_models.first().map(|m| m.embedding_model_id)));
+    let (pc_generation_model_id, set_pc_generation_model_id) = signal(
+        config.with_value(|cfg| cfg.generation_models.first().map(|m| m.generation_model_id)),
     );
+    let (pc_vector_index_id, set_pc_vector_index_id) =
+        signal(config.with_value(|cfg| cfg.vector_indexes.first().map(|i| i.index_id)));
 
     let open_add_provider = move |_| {
         set_dialog_status.set(None);
@@ -77,13 +77,7 @@ pub fn NewSettingsView(
         set_dialog_status.set(None);
         set_embedding_provider_id.set(default_provider_id(&config.get_value().ai_providers));
         set_embedding_model.set(String::new());
-        set_embedding_dimensions.set(
-            config
-                .get_value()
-                .current_vector_index
-                .map(|i| i.dimensions)
-                .unwrap_or(1024),
-        );
+        set_embedding_dimensions.set(1024);
         set_add_dialog.set(Some(AddDialog::EmbeddingModel));
     };
     let open_add_generation = move |_| {
@@ -98,15 +92,23 @@ pub fn NewSettingsView(
             &config.get_value().vector_store_providers,
         ));
         set_vector_index_name.set(String::new());
-        set_vector_index_dimensions.set(
-            config
-                .get_value()
-                .current_embedding_model
-                .map(|m| m.dimensions)
-                .unwrap_or(1024),
-        );
+        set_vector_index_dimensions.set(1024);
         set_add_dialog.set(Some(AddDialog::VectorIndex));
     };
+    let open_add_pipeline_config = move |_| {
+        set_dialog_status.set(None);
+        set_pc_name.set(String::new());
+        set_pc_embedding_model_id.set(
+            config.with_value(|cfg| cfg.embedding_models.first().map(|m| m.embedding_model_id)),
+        );
+        set_pc_generation_model_id.set(
+            config.with_value(|cfg| cfg.generation_models.first().map(|m| m.generation_model_id)),
+        );
+        set_pc_vector_index_id
+            .set(config.with_value(|cfg| cfg.vector_indexes.first().map(|i| i.index_id)));
+        set_add_dialog.set(Some(AddDialog::PipelineConfiguration));
+    };
+
     let open_edit_ai_provider = move |provider: AiProviderDto| {
         set_dialog_status.set(None);
         set_provider_name.set(provider.name.clone());
@@ -137,6 +139,16 @@ pub fn NewSettingsView(
         set_vector_index_dimensions.set(index.dimensions);
         set_edit_dialog.set(Some(EditDialog::VectorIndex(index)));
     };
+    let open_edit_pipeline_config = move |pc: PipelineConfigurationDto| {
+        set_dialog_status.set(None);
+        set_pc_name.set(pc.name.clone());
+        set_pc_embedding_model_id.set(Some(pc.embedding_model_id));
+        set_pc_generation_model_id.set(Some(pc.generation_model_id));
+        set_pc_vector_index_id.set(Some(pc.vector_index_id));
+        set_edit_dialog.set(Some(EditDialog::PipelineConfiguration(pc)));
+    };
+
+    // ── Submit handlers ────────────────────────────────────────────────────────
 
     let submit_add_provider = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -238,6 +250,38 @@ pub fn NewSettingsView(
             },
         );
     };
+    let submit_add_pipeline_config = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let (Some(emb), Some(gen), Some(idx)) = (
+            pc_embedding_model_id.get_untracked(),
+            pc_generation_model_id.get_untracked(),
+            pc_vector_index_id.get_untracked(),
+        ) else {
+            set_dialog_status.set(Some("SELECT_ALL_PIPELINE_CONFIGURATION_FIELDS".into()));
+            return;
+        };
+        if busy.get_untracked() {
+            return;
+        }
+        run_configuration_command(
+            ConfigurationCommandDto::CreatePipelineConfiguration(CreatePipelineConfigurationDto {
+                name: pc_name.get_untracked(),
+                embedding_model_id: emb,
+                generation_model_id: gen,
+                vector_index_id: idx,
+            }),
+            "PIPELINE_CONFIGURATION_CREATED",
+            set_busy,
+            set_status,
+            Some(set_dialog_status),
+            set_refresh,
+            move || {
+                set_dialog_status.set(None);
+                set_add_dialog.set(None);
+            },
+        );
+    };
+
     let submit_edit_ai_provider = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let Some(EditDialog::AiProvider(provider)) = edit_dialog.get_untracked() else {
@@ -377,6 +421,41 @@ pub fn NewSettingsView(
             },
         );
     };
+    let submit_edit_pipeline_config = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let Some(EditDialog::PipelineConfiguration(pc)) = edit_dialog.get_untracked() else {
+            return;
+        };
+        let (Some(emb), Some(gen), Some(idx)) = (
+            pc_embedding_model_id.get_untracked(),
+            pc_generation_model_id.get_untracked(),
+            pc_vector_index_id.get_untracked(),
+        ) else {
+            set_dialog_status.set(Some("SELECT_ALL_PIPELINE_CONFIGURATION_FIELDS".into()));
+            return;
+        };
+        if busy.get_untracked() {
+            return;
+        }
+        run_configuration_command(
+            ConfigurationCommandDto::UpdatePipelineConfiguration(UpdatePipelineConfigurationDto {
+                pipeline_configuration_id: pc.pipeline_configuration_id,
+                name: pc_name.get_untracked(),
+                embedding_model_id: emb,
+                generation_model_id: gen,
+                vector_index_id: idx,
+            }),
+            "PIPELINE_CONFIGURATION_UPDATED",
+            set_busy,
+            set_status,
+            Some(set_dialog_status),
+            set_refresh,
+            move || {
+                set_dialog_status.set(None);
+                set_edit_dialog.set(None);
+            },
+        );
+    };
 
     let confirm_delete = move |_| {
         if busy.get_untracked() {
@@ -459,51 +538,68 @@ pub fn NewSettingsView(
         }
     };
 
-    let set_current_embedding = move |model_id: Uuid| {
+    let confirm_delete_pipeline = move |_| {
         if busy.get_untracked() {
             return;
         }
+        let Some(pc) = delete_pipeline_dialog.get_untracked() else {
+            return;
+        };
         run_configuration_command(
-            ConfigurationCommandDto::SetCurrentEmbeddingModel(SetCurrentEmbeddingModelDto {
-                model_id,
+            ConfigurationCommandDto::DeletePipelineConfiguration(DeletePipelineConfigurationDto {
+                pipeline_configuration_id: pc.pipeline_configuration_id,
             }),
-            "CURRENT_EMBEDDING_MODEL_UPDATED",
+            "PIPELINE_CONFIGURATION_DELETED",
             set_busy,
             set_status,
             None,
             set_refresh,
-            || {},
+            move || {
+                set_delete_pipeline_dialog.set(None);
+            },
         );
     };
-    let set_current_generation = move |model_id: Uuid| {
-        if busy.get_untracked() {
-            return;
+
+    let pc_fields = move || {
+        view! {
+            <Field label="NAME" hint="short identifier for this environment, e.g. production, staging">
+                <input class="input font-mono text-sm" prop:value=pc_name
+                    on:input=move |e| set_pc_name.set(event_target_value(&e)) />
+            </Field>
+            <Field label="EMBEDDING_MODEL" hint="dimensions must match the vector index">
+                <select class="input font-mono text-sm"
+                    prop:value=move || pc_embedding_model_id.get().map(|id| id.to_string()).unwrap_or_default()
+                    on:change=move |e| set_pc_embedding_model_id.set(parse_uuid_or_none(&event_target_value(&e)))>
+                    <option value="">"-- select embedding model --"</option>
+                    {config.with_value(|cfg| cfg.embedding_models.iter().map(|m| {
+                        let label = format!("{} ({}d, {})", m.model, m.dimensions, provider_name_for(&cfg.ai_providers, m.provider_id));
+                        view! { <option value=m.embedding_model_id.to_string()>{label}</option> }
+                    }).collect_view())}
+                </select>
+            </Field>
+            <Field label="GENERATION_MODEL" hint="chat/completion model for synthesis">
+                <select class="input font-mono text-sm"
+                    prop:value=move || pc_generation_model_id.get().map(|id| id.to_string()).unwrap_or_default()
+                    on:change=move |e| set_pc_generation_model_id.set(parse_uuid_or_none(&event_target_value(&e)))>
+                    <option value="">"-- select generation model --"</option>
+                    {config.with_value(|cfg| cfg.generation_models.iter().map(|m| {
+                        let label = format!("{} ({})", m.model, provider_name_for(&cfg.ai_providers, m.provider_id));
+                        view! { <option value=m.generation_model_id.to_string()>{label}</option> }
+                    }).collect_view())}
+                </select>
+            </Field>
+            <Field label="VECTOR_INDEX" hint="dimensions must match the embedding model">
+                <select class="input font-mono text-sm"
+                    prop:value=move || pc_vector_index_id.get().map(|id| id.to_string()).unwrap_or_default()
+                    on:change=move |e| set_pc_vector_index_id.set(parse_uuid_or_none(&event_target_value(&e)))>
+                    <option value="">"-- select vector index --"</option>
+                    {config.with_value(|cfg| cfg.vector_indexes.iter().map(|i| {
+                        let label = format!("{} ({}d, {})", i.name, i.dimensions, vector_store_provider_name_for(&cfg.vector_store_providers, i.vector_store_provider_id));
+                        view! { <option value=i.index_id.to_string()>{label}</option> }
+                    }).collect_view())}
+                </select>
+            </Field>
         }
-        run_configuration_command(
-            ConfigurationCommandDto::SetCurrentGenerationModel(SetCurrentGenerationModelDto {
-                model_id,
-            }),
-            "CURRENT_GENERATION_MODEL_UPDATED",
-            set_busy,
-            set_status,
-            None,
-            set_refresh,
-            || {},
-        );
-    };
-    let set_current_vector_index = move |index_id: Uuid| {
-        if busy.get_untracked() {
-            return;
-        }
-        run_configuration_command(
-            ConfigurationCommandDto::SetCurrentVectorIndex(SetCurrentVectorIndexDto { index_id }),
-            "CURRENT_VECTOR_INDEX_UPDATED",
-            set_busy,
-            set_status,
-            None,
-            set_refresh,
-            || {},
-        );
     };
 
     view! {
@@ -514,13 +610,15 @@ pub fn NewSettingsView(
                     Some(AddDialog::EmbeddingModel) => "ADD_EMBEDDING_MODEL",
                     Some(AddDialog::GenerationModel) => "ADD_GENERATION_MODEL",
                     Some(AddDialog::VectorIndex) => "ADD_VECTOR_INDEX",
+                    Some(AddDialog::PipelineConfiguration) => "ADD_PIPELINE_CONFIGURATION",
                     None => "",
                 }
                 subtitle=move || match add_dialog.get() {
                     Some(AddDialog::Provider) => "Select the type then give the provider a short, stable name.",
-                    Some(AddDialog::EmbeddingModel) => "Attach the embedding model to a provider and keep dimensions aligned with the index you intend to use.",
+                    Some(AddDialog::EmbeddingModel) => "Attach the embedding model to a provider and keep dimensions aligned with the index.",
                     Some(AddDialog::GenerationModel) => "Generation models stay lean: provider plus model id.",
                     Some(AddDialog::VectorIndex) => "Index dimensions should match the embedding model that writes into it.",
+                    Some(AddDialog::PipelineConfiguration) => "Tie together an embedding model, generation model, and vector index for a named environment.",
                     None => "",
                 }
                 busy=busy
@@ -532,23 +630,15 @@ pub fn NewSettingsView(
                             <DialogStatus message=dialog_status />
                             <Field label="PROVIDER_TYPE" hint="AI for models, VECTOR_STORE for indexes">
                                 <div class="flex gap-1">
-                                    <button
-                                        type="button"
+                                    <button type="button"
                                         class=move || if provider_type.get() == ProviderType::Ai { "btn btn-primary" } else { "btn" }
-                                        on:click=move |_| set_provider_type.set(ProviderType::Ai)
-                                    >
-                                        "AI"
-                                    </button>
-                                    <button
-                                        type="button"
+                                        on:click=move |_| set_provider_type.set(ProviderType::Ai)>"AI"</button>
+                                    <button type="button"
                                         class=move || if provider_type.get() == ProviderType::VectorStore { "btn btn-primary" } else { "btn" }
-                                        on:click=move |_| set_provider_type.set(ProviderType::VectorStore)
-                                    >
-                                        "VECTOR_STORE"
-                                    </button>
+                                        on:click=move |_| set_provider_type.set(ProviderType::VectorStore)>"VECTOR_STORE"</button>
                                 </div>
                             </Field>
-                            <Field label="PROVIDER_NAME" hint="e.g. OpenAI, Voyage, Qdrant, Pinecone">
+                            <Field label="PROVIDER_NAME" hint="e.g. OpenAI, Voyage, Qdrant">
                                 <input class="input font-mono text-sm" prop:value=provider_name on:input=move |e| set_provider_name.set(event_target_value(&e)) />
                             </Field>
                             <DialogActions busy=busy submit_label="CREATE_PROVIDER" cancel=Box::new(move || { set_dialog_status.set(None); set_add_dialog.set(None); }) />
@@ -560,8 +650,7 @@ pub fn NewSettingsView(
                             <Field label="PROVIDER" hint="who owns this model">
                                 <select class="input font-mono text-sm"
                                     prop:value=move || embedding_provider_id.get().map(|id| id.to_string()).unwrap_or_default()
-                                    on:change=move |e| set_embedding_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))
-                                >
+                                    on:change=move |e| set_embedding_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))>
                                     <option value="">"-- select provider --"</option>
                                     {config.with_value(|cfg| cfg.ai_providers.iter().map(|p| view! { <option value=p.provider_id.to_string()>{p.name.clone()}</option> }).collect_view())}
                                 </select>
@@ -572,8 +661,7 @@ pub fn NewSettingsView(
                             <Field label="DIMENSIONS" hint="must match the target vector index">
                                 <input class="input font-mono text-sm" type="number" min="1"
                                     prop:value=move || embedding_dimensions.get().to_string()
-                                    on:input=move |e| set_embedding_dimensions.set(event_target_value(&e).parse().unwrap_or(0))
-                                />
+                                    on:input=move |e| set_embedding_dimensions.set(event_target_value(&e).parse().unwrap_or(0)) />
                             </Field>
                             <DialogActions busy=busy submit_label="CREATE_EMBEDDING_MODEL" cancel=Box::new(move || { set_dialog_status.set(None); set_add_dialog.set(None); }) />
                         </form>
@@ -584,8 +672,7 @@ pub fn NewSettingsView(
                             <Field label="PROVIDER" hint="who owns this model">
                                 <select class="input font-mono text-sm"
                                     prop:value=move || generation_provider_id.get().map(|id| id.to_string()).unwrap_or_default()
-                                    on:change=move |e| set_generation_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))
-                                >
+                                    on:change=move |e| set_generation_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))>
                                     <option value="">"-- select provider --"</option>
                                     {config.with_value(|cfg| cfg.ai_providers.iter().map(|p| view! { <option value=p.provider_id.to_string()>{p.name.clone()}</option> }).collect_view())}
                                 </select>
@@ -602,8 +689,7 @@ pub fn NewSettingsView(
                             <Field label="VECTOR_STORE_PROVIDER" hint="backend that hosts this index">
                                 <select class="input font-mono text-sm"
                                     prop:value=move || vector_store_provider_id.get().map(|id| id.to_string()).unwrap_or_default()
-                                    on:change=move |e| set_vector_store_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))
-                                >
+                                    on:change=move |e| set_vector_store_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))>
                                     <option value="">"-- select vector store provider --"</option>
                                     {config.with_value(|cfg| cfg.vector_store_providers.iter().map(|p| view! { <option value=p.provider_id.to_string()>{p.name.clone()}</option> }).collect_view())}
                                 </select>
@@ -614,10 +700,17 @@ pub fn NewSettingsView(
                             <Field label="DIMENSIONS" hint="must match the embedding model output">
                                 <input class="input font-mono text-sm" type="number" min="1"
                                     prop:value=move || vector_index_dimensions.get().to_string()
-                                    on:input=move |e| set_vector_index_dimensions.set(event_target_value(&e).parse().unwrap_or(0))
-                                />
+                                    on:input=move |e| set_vector_index_dimensions.set(event_target_value(&e).parse().unwrap_or(0)) />
                             </Field>
                             <DialogActions busy=busy submit_label="CREATE_VECTOR_INDEX" cancel=Box::new(move || { set_dialog_status.set(None); set_add_dialog.set(None); }) />
+                        </form>
+                    }.into_any(),
+                    Some(AddDialog::PipelineConfiguration) => view! {
+                        <form class="space-y-4" on:submit=submit_add_pipeline_config>
+                            <DialogStatus message=dialog_status />
+                            {pc_fields()}
+                            <DialogActions busy=busy submit_label="CREATE_PIPELINE_CONFIGURATION"
+                                cancel=Box::new(move || { set_dialog_status.set(None); set_add_dialog.set(None); }) />
                         </form>
                     }.into_any(),
                     None => ().into_any(),
@@ -633,14 +726,16 @@ pub fn NewSettingsView(
                     Some(EditDialog::EmbeddingModel(_)) => "EDIT_EMBEDDING_MODEL",
                     Some(EditDialog::GenerationModel(_)) => "EDIT_GENERATION_MODEL",
                     Some(EditDialog::VectorIndex(_)) => "EDIT_VECTOR_INDEX",
+                    Some(EditDialog::PipelineConfiguration(_)) => "EDIT_PIPELINE_CONFIGURATION",
                     None => "",
                 }
                 subtitle=move || match edit_dialog.get() {
-                    Some(EditDialog::AiProvider(_)) => "Provider names should stay short, stable, and recognizable across related models.",
-                    Some(EditDialog::VectorStoreProvider(_)) => "Rename the backend system. The name is a label only; no connection details are stored here.",
+                    Some(EditDialog::AiProvider(_)) => "Provider names should stay short, stable, and recognizable.",
+                    Some(EditDialog::VectorStoreProvider(_)) => "Rename the backend system. The name is a label only.",
                     Some(EditDialog::EmbeddingModel(_)) => "You can move the model to another provider here if ownership has changed.",
-                    Some(EditDialog::GenerationModel(_)) => "Generation models can be reassigned to a different provider without recreating the record.",
-                    Some(EditDialog::VectorIndex(_)) => "Use edits for renames, corrected dimensions, or moving the index to a different backend.",
+                    Some(EditDialog::GenerationModel(_)) => "Generation models can be reassigned to a different provider.",
+                    Some(EditDialog::VectorIndex(_)) => "Use edits for renames, corrected dimensions, or moving to a different backend.",
+                    Some(EditDialog::PipelineConfiguration(_)) => "Update the model and index selections for this environment. Dimensions will be re-validated.",
                     None => "",
                 }
                 busy=busy
@@ -671,8 +766,7 @@ pub fn NewSettingsView(
                             <Field label="PROVIDER" hint="who owns this model">
                                 <select class="input font-mono text-sm"
                                     prop:value=move || embedding_provider_id.get().map(|id| id.to_string()).unwrap_or_default()
-                                    on:change=move |e| set_embedding_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))
-                                >
+                                    on:change=move |e| set_embedding_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))>
                                     <option value="">"-- select provider --"</option>
                                     {config.with_value(|cfg| cfg.ai_providers.iter().map(|p| view! { <option value=p.provider_id.to_string()>{p.name.clone()}</option> }).collect_view())}
                                 </select>
@@ -683,8 +777,7 @@ pub fn NewSettingsView(
                             <Field label="DIMENSIONS" hint="must match the target vector index">
                                 <input class="input font-mono text-sm" type="number" min="1"
                                     prop:value=move || embedding_dimensions.get().to_string()
-                                    on:input=move |e| set_embedding_dimensions.set(event_target_value(&e).parse().unwrap_or(0))
-                                />
+                                    on:input=move |e| set_embedding_dimensions.set(event_target_value(&e).parse().unwrap_or(0)) />
                             </Field>
                             <DialogActions busy=busy submit_label="SAVE_EMBEDDING_MODEL" cancel=Box::new(move || { set_dialog_status.set(None); set_edit_dialog.set(None); }) />
                         </form>
@@ -695,8 +788,7 @@ pub fn NewSettingsView(
                             <Field label="PROVIDER" hint="who owns this model">
                                 <select class="input font-mono text-sm"
                                     prop:value=move || generation_provider_id.get().map(|id| id.to_string()).unwrap_or_default()
-                                    on:change=move |e| set_generation_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))
-                                >
+                                    on:change=move |e| set_generation_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))>
                                     <option value="">"-- select provider --"</option>
                                     {config.with_value(|cfg| cfg.ai_providers.iter().map(|p| view! { <option value=p.provider_id.to_string()>{p.name.clone()}</option> }).collect_view())}
                                 </select>
@@ -713,8 +805,7 @@ pub fn NewSettingsView(
                             <Field label="VECTOR_STORE_PROVIDER" hint="backend that hosts this index">
                                 <select class="input font-mono text-sm"
                                     prop:value=move || vector_store_provider_id.get().map(|id| id.to_string()).unwrap_or_default()
-                                    on:change=move |e| set_vector_store_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))
-                                >
+                                    on:change=move |e| set_vector_store_provider_id.set(parse_uuid_or_none(&event_target_value(&e)))>
                                     <option value="">"-- select vector store provider --"</option>
                                     {config.with_value(|cfg| cfg.vector_store_providers.iter().map(|p| view! { <option value=p.provider_id.to_string()>{p.name.clone()}</option> }).collect_view())}
                                 </select>
@@ -725,10 +816,17 @@ pub fn NewSettingsView(
                             <Field label="DIMENSIONS" hint="must match the embedding model output">
                                 <input class="input font-mono text-sm" type="number" min="1"
                                     prop:value=move || vector_index_dimensions.get().to_string()
-                                    on:input=move |e| set_vector_index_dimensions.set(event_target_value(&e).parse().unwrap_or(0))
-                                />
+                                    on:input=move |e| set_vector_index_dimensions.set(event_target_value(&e).parse().unwrap_or(0)) />
                             </Field>
                             <DialogActions busy=busy submit_label="SAVE_VECTOR_INDEX" cancel=Box::new(move || { set_dialog_status.set(None); set_edit_dialog.set(None); }) />
+                        </form>
+                    }.into_any(),
+                    Some(EditDialog::PipelineConfiguration(_)) => view! {
+                        <form class="space-y-4" on:submit=submit_edit_pipeline_config>
+                            <DialogStatus message=dialog_status />
+                            {pc_fields()}
+                            <DialogActions busy=busy submit_label="SAVE_PIPELINE_CONFIGURATION"
+                                cancel=Box::new(move || { set_dialog_status.set(None); set_edit_dialog.set(None); }) />
                         </form>
                     }.into_any(),
                     None => ().into_any(),
@@ -739,22 +837,41 @@ pub fn NewSettingsView(
         <Show when=move || delete_dialog.get().is_some()>
             <DialogShell
                 title=move || "CONFIRM_DELETE"
-                subtitle=move || "Deletes are explicit because downstream models and active selections may still depend on the record."
+                subtitle=move || "Deletes are explicit because downstream models may still reference this record."
                 busy=busy
                 on_close=Box::new(move || { set_dialog_status.set(None); set_delete_dialog.set(None); })
             >
                 <div class="space-y-4">
                     <DialogStatus message=dialog_status />
                     <div class="card-outer p-4 bg-black/20">
+                        <span class="tech-label opacity-70">{move || delete_dialog_label(delete_dialog.get())}</span>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button class="btn" disabled=busy on:click=move |_| { set_dialog_status.set(None); set_delete_dialog.set(None); }>"CANCEL"</button>
+                        <button class="btn btn-primary" disabled=busy on:click=confirm_delete>
+                            {move || if busy.get() { "DELETING..." } else { "CONFIRM_DELETE" }}
+                        </button>
+                    </div>
+                </div>
+            </DialogShell>
+        </Show>
+
+        <Show when=move || delete_pipeline_dialog.get().is_some()>
+            <DialogShell
+                title=move || "CONFIRM_DELETE_PIPELINE_CONFIGURATION"
+                subtitle=move || "This will remove the pipeline configuration. The catalog entries it references are not affected."
+                busy=busy
+                on_close=Box::new(move || { set_delete_pipeline_dialog.set(None); })
+            >
+                <div class="space-y-4">
+                    <div class="card-outer p-4 bg-black/20">
                         <span class="tech-label opacity-70">
-                            {move || delete_dialog_label(delete_dialog.get())}
+                            {move || delete_pipeline_dialog.get().map(|pc| pc.name).unwrap_or_default()}
                         </span>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button class="btn" disabled=busy on:click=move |_| { set_dialog_status.set(None); set_delete_dialog.set(None); }>
-                            "CANCEL"
-                        </button>
-                        <button class="btn btn-primary" disabled=busy on:click=confirm_delete>
+                        <button class="btn" disabled=busy on:click=move |_| set_delete_pipeline_dialog.set(None)>"CANCEL"</button>
+                        <button class="btn btn-primary" disabled=busy on:click=confirm_delete_pipeline>
                             {move || if busy.get() { "DELETING..." } else { "CONFIRM_DELETE" }}
                         </button>
                     </div>
@@ -785,50 +902,9 @@ pub fn NewSettingsView(
             </div>
         </div>
 
-        <div class="border-y border-[var(--color-border)] py-8 bg-black/5">
-            <div class="px-6 space-y-4">
-                <div class="space-y-1">
-                    <div class="tech-label opacity-60">"ACTIVE_PIPELINE"</div>
-                    <p class="tech-label opacity-50 max-w-3xl">
-                        "Selections are model-first. Provider usage is shown on the embedding and generation steps so cross-provider setups stay obvious."
-                    </p>
-                </div>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <CurrentStepCard
-                        label="EMBEDDING_STEP"
-                        value=config.with_value(|cfg| optional_name(cfg.current_embedding_model.as_ref().map(|m| m.model.as_str())))
-                        detail=config.with_value(|cfg| {
-                            cfg.current_embedding_model.as_ref()
-                                .map(|m| format!("provider: {} | {} dims", provider_name_for(&cfg.ai_providers, m.provider_id), m.dimensions))
-                                .unwrap_or_else(|| "provider: UNSET".into())
-                        })
-                    />
-                    <CurrentStepCard
-                        label="GENERATION_STEP"
-                        value=config.with_value(|cfg| optional_name(cfg.current_generation_model.as_ref().map(|m| m.model.as_str())))
-                        detail=config.with_value(|cfg| {
-                            cfg.current_generation_model.as_ref()
-                                .map(|m| format!("provider: {}", provider_name_for(&cfg.ai_providers, m.provider_id)))
-                                .unwrap_or_else(|| "provider: UNSET".into())
-                        })
-                    />
-                    <CurrentStepCard
-                        label="VECTOR_INDEX_STEP"
-                        value=config.with_value(|cfg| optional_name(cfg.current_vector_index.as_ref().map(|i| i.name.as_str())))
-                        detail=config.with_value(|cfg| {
-                            cfg.current_vector_index.as_ref()
-                                .map(|i| format!("backend: {} | {} dims",
-                                    vector_store_provider_name_for(&cfg.vector_store_providers, i.vector_store_provider_id),
-                                    i.dimensions))
-                                .unwrap_or_else(|| "backend: UNSET".into())
-                        })
-                    />
-                </div>
-            </div>
-        </div>
-
         <div class="border-b border-[var(--color-border)] mt-8">
             <div class="px-6 flex gap-1 overflow-x-auto">
+                <TabButton label="PIPELINE_CONFIGURATIONS" active=move || active_tab.get() == ConfigTab::PipelineConfigurations on_click=Box::new(move || set_active_tab.set(ConfigTab::PipelineConfigurations)) />
                 <TabButton label="PROVIDERS" active=move || active_tab.get() == ConfigTab::Providers on_click=Box::new(move || set_active_tab.set(ConfigTab::Providers)) />
                 <TabButton label="EMBEDDING_MODELS" active=move || active_tab.get() == ConfigTab::EmbeddingModels on_click=Box::new(move || set_active_tab.set(ConfigTab::EmbeddingModels)) />
                 <TabButton label="GENERATION_MODELS" active=move || active_tab.get() == ConfigTab::GenerationModels on_click=Box::new(move || set_active_tab.set(ConfigTab::GenerationModels)) />
@@ -840,50 +916,42 @@ pub fn NewSettingsView(
             {move || match active_tab.get() {
                 ConfigTab::Providers => view! {
                     <div class="px-6">
-                        <ProvidersPanel
-                            config=config
-                            busy=busy
-                            on_add=Box::new(open_add_provider)
+                        <ProvidersPanel config=config busy=busy on_add=Box::new(open_add_provider)
                             on_edit_ai=Box::new(open_edit_ai_provider)
                             on_edit_vs=Box::new(open_edit_vs_provider)
-                            set_delete_dialog=set_delete_dialog
-                        />
+                            set_delete_dialog=set_delete_dialog />
                     </div>
                 }.into_any(),
                 ConfigTab::EmbeddingModels => view! {
                     <div class="px-6">
-                        <EmbeddingModelsPanel
-                            config=config
-                            busy=busy
-                            on_add=Box::new(open_add_embedding)
+                        <EmbeddingModelsPanel config=config busy=busy on_add=Box::new(open_add_embedding)
                             on_edit=Box::new(open_edit_embedding)
-                            set_delete_dialog=set_delete_dialog
-                            on_set_current=Box::new(set_current_embedding)
-                        />
+                            set_delete_dialog=set_delete_dialog />
                     </div>
                 }.into_any(),
                 ConfigTab::GenerationModels => view! {
                     <div class="px-6">
-                        <GenerationModelsPanel
-                            config=config
-                            busy=busy
-                            on_add=Box::new(open_add_generation)
+                        <GenerationModelsPanel config=config busy=busy on_add=Box::new(open_add_generation)
                             on_edit=Box::new(open_edit_generation)
-                            set_delete_dialog=set_delete_dialog
-                            on_set_current=Box::new(set_current_generation)
-                        />
+                            set_delete_dialog=set_delete_dialog />
                     </div>
                 }.into_any(),
                 ConfigTab::VectorIndexes => view! {
                     <div class="px-6">
-                        <VectorIndexesPanel
-                            config=config
-                            busy=busy
-                            on_add=Box::new(open_add_vector_index)
+                        <VectorIndexesPanel config=config busy=busy on_add=Box::new(open_add_vector_index)
                             on_edit=Box::new(open_edit_vector_index)
-                            set_delete_dialog=set_delete_dialog
-                            on_set_current=Box::new(set_current_vector_index)
-                        />
+                            set_delete_dialog=set_delete_dialog />
+                    </div>
+                }.into_any(),
+                ConfigTab::PipelineConfigurations => view! {
+                    <div class="px-6">
+                        <PipelineConfigurationsPanel
+                            config=config
+                            pipeline_configurations=pipeline_configurations
+                            busy=busy
+                            on_add=Box::new(open_add_pipeline_config)
+                            on_edit=Box::new(open_edit_pipeline_config)
+                            set_delete_pipeline_dialog=set_delete_pipeline_dialog />
                     </div>
                 }.into_any(),
             }}

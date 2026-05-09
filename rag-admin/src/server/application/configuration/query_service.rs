@@ -1,125 +1,158 @@
 use std::sync::Arc;
 
 use crate::server::application::AppError;
+use crate::server::domain::configuration::{
+    ConfigurationReadModel, ConfigurationRepository, ConfigurationRepositoryError,
+};
 use crate::server::domain::pipeline_configuration::{
-    PipelineConfiguration, PipelineConfigurationRepository, PipelineConfigurationRepositoryError,
+    PipelineConfigurationRepository, PipelineConfigurationRepositoryError,
 };
 use crate::shared::{
-    AiProviderDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto, VectorIndexDto,
-    VectorStoreProviderDto,
+    AiProviderDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
+    PipelineConfigurationDto, VectorIndexDto, VectorStoreProviderDto,
 };
 
-pub struct PipelineConfigurationService {
-    repository: Arc<dyn PipelineConfigurationRepository>,
+pub struct ConfigurationQueryService {
+    repository: Arc<dyn ConfigurationRepository>,
 }
 
-impl PipelineConfigurationService {
-    pub fn new(repository: Arc<dyn PipelineConfigurationRepository>) -> Arc<Self> {
+impl ConfigurationQueryService {
+    pub fn new(repository: Arc<dyn ConfigurationRepository>) -> Arc<Self> {
         Arc::new(Self { repository })
     }
 
-    pub async fn get(&self) -> Result<PipelineConfigurationDto, AppError> {
+    pub async fn get(&self) -> Result<ConfigurationDto, AppError> {
         self.repository
             .load()
             .await
-            .map(map_pipeline_configuration)
-            .map_err(map_repository_error)
+            .map(map_configuration)
+            .map_err(|e| match e {
+                ConfigurationRepositoryError::Internal(m) => AppError::Internal(m),
+            })
     }
 }
 
-fn map_repository_error(error: PipelineConfigurationRepositoryError) -> AppError {
-    match error {
-        PipelineConfigurationRepositoryError::Internal(message) => AppError::Internal(message),
+pub struct PipelineConfigurationQueryService {
+    pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
+    configuration_repository: Arc<dyn ConfigurationRepository>,
+}
+
+impl PipelineConfigurationQueryService {
+    pub fn new(
+        pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
+        configuration_repository: Arc<dyn ConfigurationRepository>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            pipeline_repository,
+            configuration_repository,
+        })
+    }
+
+    pub async fn list(&self) -> Result<Vec<PipelineConfigurationDto>, AppError> {
+        let pipeline_configs = self
+            .pipeline_repository
+            .load_all()
+            .await
+            .map_err(|e| match e {
+                PipelineConfigurationRepositoryError::Internal(m) => AppError::Internal(m),
+            })?;
+
+        let catalog = self
+            .configuration_repository
+            .load()
+            .await
+            .map_err(|e| match e {
+                ConfigurationRepositoryError::Internal(m) => AppError::Internal(m),
+            })?;
+
+        Ok(pipeline_configs
+            .iter()
+            .map(|pc| map_pipeline_configuration(pc, &catalog))
+            .collect())
     }
 }
 
-fn map_pipeline_configuration(configuration: PipelineConfiguration) -> PipelineConfigurationDto {
-    PipelineConfigurationDto {
-        configuration_id: configuration.configuration_id,
-        ai_providers: configuration
+fn map_configuration(read_model: ConfigurationReadModel) -> ConfigurationDto {
+    ConfigurationDto {
+        configuration_id: read_model.configuration_id,
+        ai_providers: read_model
             .ai_providers
             .iter()
-            .map(map_ai_provider)
+            .map(|p| AiProviderDto {
+                provider_id: p.provider_id,
+                name: p.name.clone(),
+            })
             .collect(),
-        vector_store_providers: configuration
+        vector_store_providers: read_model
             .vector_store_providers
             .iter()
-            .map(map_vector_store_provider)
+            .map(|p| VectorStoreProviderDto {
+                provider_id: p.provider_id,
+                name: p.name.clone(),
+            })
             .collect(),
-        embedding_models: configuration
+        embedding_models: read_model
             .embedding_models
             .iter()
-            .map(map_embedding_model)
+            .map(|m| EmbeddingModelDto {
+                embedding_model_id: m.embedding_model_id,
+                provider_id: m.provider_id,
+                model: m.model.clone(),
+                dimensions: m.dimensions,
+            })
             .collect(),
-        generation_models: configuration
+        generation_models: read_model
             .generation_models
             .iter()
-            .map(map_generation_model)
+            .map(|m| GenerationModelDto {
+                generation_model_id: m.generation_model_id,
+                provider_id: m.provider_id,
+                model: m.model.clone(),
+            })
             .collect(),
-        vector_indexes: configuration
+        vector_indexes: read_model
             .vector_indexes
             .iter()
-            .map(map_vector_index)
+            .map(|i| VectorIndexDto {
+                index_id: i.index_id,
+                vector_store_provider_id: i.vector_store_provider_id,
+                name: i.name.clone(),
+                dimensions: i.dimensions,
+            })
             .collect(),
-        current_embedding_model_id: configuration.current_embedding_model_id,
-        current_generation_model_id: configuration.current_generation_model_id,
-        current_vector_index_id: configuration.current_vector_index_id,
-        current_embedding_model: configuration
-            .current_embedding_model()
-            .map(map_embedding_model),
-        current_generation_model: configuration
-            .current_generation_model()
-            .map(map_generation_model),
-        current_vector_index: configuration.current_vector_index().map(map_vector_index),
     }
 }
 
-fn map_ai_provider(
-    provider: &crate::server::domain::ai_provider::entity::AiProvdier,
-) -> AiProviderDto {
-    AiProviderDto {
-        provider_id: provider.provider_id,
-        name: provider.name.clone(),
-    }
-}
+fn map_pipeline_configuration(
+    pc: &crate::server::domain::pipeline_configuration::PipelineConfigurationReadModel,
+    catalog: &ConfigurationReadModel,
+) -> PipelineConfigurationDto {
+    let embedding_model_name = catalog
+        .embedding_models
+        .iter()
+        .find(|m| m.embedding_model_id == pc.embedding_model_id)
+        .map(|m| m.model.clone());
 
-fn map_embedding_model(
-    model: &crate::server::domain::embedding_model::entity::EmbeddingModel,
-) -> EmbeddingModelDto {
-    EmbeddingModelDto {
-        embedding_model_id: model.embedding_model_id,
-        provider_id: model.provider_id,
-        model: model.model.clone(),
-        dimensions: model.dimensions,
-    }
-}
+    let generation_model_name = catalog
+        .generation_models
+        .iter()
+        .find(|m| m.generation_model_id == pc.generation_model_id)
+        .map(|m| m.model.clone());
 
-fn map_generation_model(
-    model: &crate::server::domain::generation_model::entity::GenerationModel,
-) -> GenerationModelDto {
-    GenerationModelDto {
-        generation_model_id: model.generation_model_id,
-        provider_id: model.provider_id,
-        model: model.model.clone(),
-    }
-}
+    let vector_index_name = catalog
+        .vector_indexes
+        .iter()
+        .find(|i| i.index_id == pc.vector_index_id)
+        .map(|i| i.name.clone());
 
-fn map_vector_store_provider(
-    provider: &crate::server::domain::vector_store_provider::entity::VectorStoreProvider,
-) -> VectorStoreProviderDto {
-    VectorStoreProviderDto {
-        provider_id: provider.provider_id,
-        name: provider.name.clone(),
-    }
-}
-
-fn map_vector_index(
-    index: &crate::server::domain::vector_index::entity::VectorIndex,
-) -> VectorIndexDto {
-    VectorIndexDto {
-        index_id: index.index_id,
-        vector_store_provider_id: index.vector_store_provider_id,
-        name: index.name.clone(),
-        dimensions: index.dimensions,
+    PipelineConfigurationDto {
+        pipeline_configuration_id: pc.pipeline_configuration_id,
+        name: pc.name.clone(),
+        embedding_model_id: pc.embedding_model_id,
+        embedding_model_name,
+        generation_model_id: pc.generation_model_id,
+        generation_model_name,
+        vector_index_id: pc.vector_index_id,
+        vector_index_name,
     }
 }

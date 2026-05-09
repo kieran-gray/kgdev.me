@@ -3,7 +3,7 @@ mod configuration_commands;
 mod embedding;
 mod evaluation;
 mod ingest;
-mod pipeline_configuration;
+mod configuration;
 mod post;
 pub(crate) mod serde_compat;
 mod settings;
@@ -15,11 +15,11 @@ pub use chunking::{
 };
 pub use configuration_commands::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddProviderDto, AddVectorIndexDto,
-    ConfigurationCommandDto, ProviderType, RemoveAiProviderDto, RemoveEmbeddingModelDto,
-    RemoveGenerationModelDto, RemoveVectorIndexDto, RemoveVectorStoreProviderDto,
-    SetCurrentEmbeddingModelDto, SetCurrentGenerationModelDto, SetCurrentVectorIndexDto,
-    UpdateAiProviderDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
-    UpdateVectorStoreProviderDto,
+    ConfigurationCommandDto, CreatePipelineConfigurationDto, DeletePipelineConfigurationDto,
+    ProviderType, RemoveAiProviderDto, RemoveEmbeddingModelDto, RemoveGenerationModelDto,
+    RemoveVectorIndexDto, RemoveVectorStoreProviderDto, UpdateAiProviderDto,
+    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdatePipelineConfigurationDto,
+    UpdateVectorIndexDto, UpdateVectorStoreProviderDto,
 };
 pub use embedding::{
     catalog_for_backend, CatalogEntry, EmbedResult, EmbedderBackend, EmbeddingModel,
@@ -34,9 +34,9 @@ pub use evaluation::{
     EvaluationScorePolicy, EvaluationScoreWeights, EvaluationSettings, EvaluationVariantResult,
 };
 pub use ingest::{IngestJobInfo, IngestOptions, LogEvent, LogLevel};
-pub use pipeline_configuration::{
-    AiProviderDto, EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto, VectorIndexDto,
-    VectorStoreProviderDto,
+pub use configuration::{
+    AiProviderDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
+    PipelineConfigurationDto, VectorIndexDto, VectorStoreProviderDto,
 };
 pub use post::{ChunkPreview, GlossaryTermDto, PostDetailDto, PostSummary};
 pub use settings::SettingsDto;

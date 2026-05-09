@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use thiserror::Error;
+use uuid::Uuid;
 
-use crate::server::domain::pipeline_configuration::PipelineConfiguration;
+use super::read_model::PipelineConfigurationReadModel;
 
 #[derive(Debug, Error)]
 pub enum PipelineConfigurationRepositoryError {
@@ -11,10 +12,19 @@ pub enum PipelineConfigurationRepositoryError {
 
 #[async_trait]
 pub trait PipelineConfigurationRepository: Send + Sync {
-    async fn load(&self) -> Result<PipelineConfiguration, PipelineConfigurationRepositoryError>;
+    async fn load_all(
+        &self,
+    ) -> Result<Vec<PipelineConfigurationReadModel>, PipelineConfigurationRepositoryError>;
 
     async fn save(
         &self,
-        pipeline_configuration: PipelineConfiguration,
+        read_model: PipelineConfigurationReadModel,
+    ) -> Result<(), PipelineConfigurationRepositoryError>;
+
+    async fn delete(&self, id: Uuid) -> Result<(), PipelineConfigurationRepositoryError>;
+
+    async fn rebuild(
+        &self,
+        configurations: &[PipelineConfigurationReadModel],
     ) -> Result<(), PipelineConfigurationRepositoryError>;
 }

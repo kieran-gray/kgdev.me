@@ -11,6 +11,7 @@ pub enum ConfigTab {
     EmbeddingModels,
     GenerationModels,
     VectorIndexes,
+    PipelineConfigurations,
 }
 
 pub fn default_provider_id(items: &[AiProviderDto]) -> Option<Uuid> {
@@ -46,10 +47,6 @@ pub fn vector_store_provider_name_for(
 
 pub fn short_uuid(id: Uuid) -> String {
     id.to_string().chars().take(8).collect()
-}
-
-pub fn optional_name(value: Option<&str>) -> String {
-    value.unwrap_or("UNSET").to_string()
 }
 
 pub fn run_configuration_command<F>(

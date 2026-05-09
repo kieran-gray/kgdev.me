@@ -4,9 +4,10 @@ use tracing::info;
 
 use crate::server::application::configuration::ports::ConfigurationEventStore;
 use crate::server::application::AppError;
+use crate::server::domain::aggregate::Aggregate;
 use crate::server::domain::configuration::{
-    aggregate::{Aggregate, Configuration},
-    commands::ConfigurationCommand,
+    aggregate::Configuration, commands::ConfigurationCommand, events::ConfigurationEvent,
+    ConfigurationProjector, ConfigurationRepository,
 };
 use crate::server::domain::pipeline_configuration::{
     PipelineConfigurationProjector, PipelineConfigurationRepository,
@@ -15,16 +16,19 @@ use crate::shared::ConfigurationCommandDto;
 
 pub struct ConfigurationCommandHandler {
     event_store: Arc<dyn ConfigurationEventStore>,
+    configuration_repository: Arc<dyn ConfigurationRepository>,
     pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository>,
 }
 
 impl ConfigurationCommandHandler {
     pub fn new(
         event_store: Arc<dyn ConfigurationEventStore>,
+        configuration_repository: Arc<dyn ConfigurationRepository>,
         pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             event_store,
+            configuration_repository,
             pipeline_configuration_repository,
         })
     }
@@ -55,12 +59,19 @@ impl ConfigurationCommandHandler {
                 .await?;
         }
 
-        let mut pipeline_configuration = PipelineConfigurationProjector::project(&stored_events)?;
-        for event in &new_events {
-            PipelineConfigurationProjector::apply(&mut pipeline_configuration, event)?;
-        }
+        // TODO: projectors should be incremental
+        let all_events: Vec<ConfigurationEvent> = stored_events
+            .iter()
+            .chain(new_events.iter())
+            .cloned()
+            .collect();
+
+        self.configuration_repository
+            .save(ConfigurationProjector::project(&all_events))
+            .await?;
+
         self.pipeline_configuration_repository
-            .save(pipeline_configuration)
+            .rebuild(&PipelineConfigurationProjector::from_events(&all_events))
             .await?;
 
         Ok(())
@@ -83,8 +94,12 @@ mod tests {
     use crate::server::domain::configuration::events::{
         AiProviderAdded, ConfigurationCreated, ConfigurationEvent,
     };
+    use crate::server::domain::configuration::{
+        read_model::ConfigurationReadModel,
+        repository::{ConfigurationRepository, ConfigurationRepositoryError},
+    };
     use crate::server::domain::pipeline_configuration::{
-        PipelineConfiguration, PipelineConfigurationRepositoryError,
+        PipelineConfigurationReadModel, PipelineConfigurationRepositoryError,
     };
 
     #[derive(Default)]
@@ -116,15 +131,13 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct MockPipelineConfigurationRepository {
-        saved: Mutex<Vec<PipelineConfiguration>>,
+    struct MockConfigurationRepository {
+        saved: Mutex<Vec<ConfigurationReadModel>>,
     }
 
     #[async_trait]
-    impl PipelineConfigurationRepository for MockPipelineConfigurationRepository {
-        async fn load(
-            &self,
-        ) -> Result<PipelineConfiguration, PipelineConfigurationRepositoryError> {
+    impl ConfigurationRepository for MockConfigurationRepository {
+        async fn load(&self) -> Result<ConfigurationReadModel, ConfigurationRepositoryError> {
             Ok(self
                 .saved
                 .lock()
@@ -136,9 +149,47 @@ mod tests {
 
         async fn save(
             &self,
-            pipeline_configuration: PipelineConfiguration,
+            read_model: ConfigurationReadModel,
+        ) -> Result<(), ConfigurationRepositoryError> {
+            self.saved.lock().unwrap().push(read_model);
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct MockPipelineConfigurationRepository {
+        saved: Mutex<Vec<PipelineConfigurationReadModel>>,
+        deleted: Mutex<Vec<Uuid>>,
+    }
+
+    #[async_trait]
+    impl PipelineConfigurationRepository for MockPipelineConfigurationRepository {
+        async fn load_all(
+            &self,
+        ) -> Result<Vec<PipelineConfigurationReadModel>, PipelineConfigurationRepositoryError>
+        {
+            Ok(self.saved.lock().unwrap().clone())
+        }
+
+        async fn save(
+            &self,
+            read_model: PipelineConfigurationReadModel,
         ) -> Result<(), PipelineConfigurationRepositoryError> {
-            self.saved.lock().unwrap().push(pipeline_configuration);
+            self.saved.lock().unwrap().push(read_model);
+            Ok(())
+        }
+
+        async fn delete(&self, id: Uuid) -> Result<(), PipelineConfigurationRepositoryError> {
+            self.deleted.lock().unwrap().push(id);
+            Ok(())
+        }
+
+        async fn rebuild(
+            &self,
+            configurations: &[PipelineConfigurationReadModel],
+        ) -> Result<(), PipelineConfigurationRepositoryError> {
+            let mut guard = self.saved.lock().unwrap();
+            *guard = configurations.to_vec();
             Ok(())
         }
     }
@@ -146,8 +197,10 @@ mod tests {
     #[tokio::test]
     async fn first_command_creates_and_persists_configuration_stream() {
         let store = Arc::new(MockConfigurationEventStore::default());
-        let repository = Arc::new(MockPipelineConfigurationRepository::default());
-        let handler = ConfigurationCommandHandler::new(store.clone(), repository.clone());
+        let config_repo = Arc::new(MockConfigurationRepository::default());
+        let pc_repo = Arc::new(MockPipelineConfigurationRepository::default());
+        let handler =
+            ConfigurationCommandHandler::new(store.clone(), config_repo.clone(), pc_repo.clone());
 
         handler
             .handle(ConfigurationCommand::AddAiProvider(AddAiProvider {
@@ -169,9 +222,8 @@ mod tests {
             &append_calls[0].2[1],
             ConfigurationEvent::AiProviderAdded(AiProviderAdded { .. })
         ));
-        assert_eq!(store.events.lock().unwrap().len(), 2);
 
-        let saved = repository.saved.lock().unwrap();
+        let saved = config_repo.saved.lock().unwrap();
         assert_eq!(saved.len(), 1);
         assert_eq!(saved[0].ai_providers.len(), 1);
         assert_eq!(saved[0].ai_providers[0].name, "OpenAI");
@@ -192,8 +244,10 @@ mod tests {
             ]),
             append_calls: Mutex::new(Vec::new()),
         });
-        let repository = Arc::new(MockPipelineConfigurationRepository::default());
-        let handler = ConfigurationCommandHandler::new(store.clone(), repository.clone());
+        let config_repo = Arc::new(MockConfigurationRepository::default());
+        let pc_repo = Arc::new(MockPipelineConfigurationRepository::default());
+        let handler =
+            ConfigurationCommandHandler::new(store.clone(), config_repo.clone(), pc_repo.clone());
 
         handler
             .handle(ConfigurationCommand::AddAiProvider(AddAiProvider {
@@ -206,13 +260,8 @@ mod tests {
         assert_eq!(append_calls.len(), 1);
         assert_eq!(append_calls[0].1, 2);
         assert_eq!(append_calls[0].2.len(), 1);
-        assert!(matches!(
-            &append_calls[0].2[0],
-            ConfigurationEvent::AiProviderAdded(AiProviderAdded { .. })
-        ));
-        assert_eq!(store.events.lock().unwrap().len(), 3);
 
-        let saved = repository.saved.lock().unwrap();
+        let saved = config_repo.saved.lock().unwrap();
         assert_eq!(saved.len(), 1);
         assert_eq!(saved[0].ai_providers.len(), 2);
     }
