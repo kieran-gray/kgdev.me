@@ -7,10 +7,10 @@ pub fn open_event_stream(
     set_events: WriteSignal<Vec<LogEvent>>,
     set_running: WriteSignal<bool>,
 ) {
+    use crate::shared::LogLevel;
     use wasm_bindgen::prelude::Closure;
     use wasm_bindgen::JsCast;
     use web_sys::{EventSource, MessageEvent};
-    use crate::shared::LogLevel;
 
     let source = match EventSource::new(&url) {
         Ok(s) => s,

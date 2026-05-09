@@ -26,9 +26,8 @@ use crate::shared::{
 #[component]
 pub fn DocumentDetailPage() -> impl IntoView {
     let params = use_params_map();
-    let source_ref = Memo::new(move |_| {
-        params.with(|p| p.get("source_ref").unwrap_or_default().to_string())
-    });
+    let source_ref =
+        Memo::new(move |_| params.with(|p| p.get("source_ref").unwrap_or_default().to_string()));
 
     // Existing ingest record — None if document was never ingested.
     let detail = Resource::new(
@@ -94,9 +93,10 @@ fn DocumentView(
     let (log_events, set_log_events) = signal::<Vec<LogEvent>>(Vec::new());
     let (ingest_running, set_ingest_running) = signal(false);
     let (active_pipeline, set_active_pipeline) = signal::<Option<uuid::Uuid>>(None);
-    let (chunking_config, set_chunking_config) = signal(ChunkingConfig::Section(
-        SectionChunkingConfig { max_section_tokens: 512 },
-    ));
+    let (chunking_config, set_chunking_config) =
+        signal(ChunkingConfig::Section(SectionChunkingConfig {
+            max_section_tokens: 512,
+        }));
 
     // Refresh detail after a successful ingest by invalidating the resource.
     let detail_stored = StoredValue::new(detail.clone());
@@ -206,12 +206,11 @@ fn DocumentView(
                             class="w-full py-2 text-xs font-bold tracking-widest border border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             disabled=move || active_pipeline.get().is_none() || ingest_running.get()
                             on:click={
-                                let source_ref = source_ref_stored.clone();
                                 move |_| {
                                     let Some(pipeline_id) = active_pipeline.get() else {
                                         return;
                                     };
-                                    let slug = source_ref.get_value();
+                                    let slug = source_ref_stored.get_value();
                                     let config = chunking_config.get();
                                     set_log_events.set(vec![]);
                                     set_ingest_running.set(true);

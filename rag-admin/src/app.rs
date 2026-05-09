@@ -7,11 +7,8 @@ use leptos_router::{
 
 use crate::components::layout::Layout;
 use crate::pages::{
-    document_detail::DocumentDetailPage,
-    embed_test::EmbedTestPage,
-    pipeline_config::NewSettingsPage,
-    posts_list::PostsListPage,
-    settings::SettingsPage,
+    document_detail::DocumentDetailPage, embed_test::EmbedTestPage,
+    pipeline_config::NewSettingsPage, posts_list::PostsListPage, settings::SettingsPage,
 };
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {

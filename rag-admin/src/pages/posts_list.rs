@@ -53,7 +53,7 @@ fn DocumentsTable(docs: Vec<DocumentListItemDto>) -> impl IntoView {
                 </div>
             </div>
         }
-            .into_any();
+        .into_any();
     }
 
     let total = docs.len();
