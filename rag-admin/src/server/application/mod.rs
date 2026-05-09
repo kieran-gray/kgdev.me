@@ -8,6 +8,7 @@ pub mod ingest;
 pub mod job;
 pub mod markdown;
 pub mod ports;
+pub mod source_document;
 
 #[cfg(test)]
 pub mod test_support;

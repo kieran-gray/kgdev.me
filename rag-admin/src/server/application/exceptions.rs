@@ -5,6 +5,9 @@ use crate::server::domain::configuration::{
     exceptions::ConfigurationError, pipeline_configuration::PipelineConfigurationRepositoryError,
     ConfigurationRepositoryError,
 };
+use crate::server::domain::source_document::{
+    exceptions::SourceDocumentError, repository::SourceDocumentRepositoryError,
+};
 
 #[derive(Debug, Error, Serialize, Deserialize)]
 pub enum AppError {
@@ -36,6 +39,24 @@ impl From<ConfigurationRepositoryError> for AppError {
 
 impl From<PipelineConfigurationRepositoryError> for AppError {
     fn from(value: PipelineConfigurationRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<SourceDocumentError> for AppError {
+    fn from(value: SourceDocumentError) -> Self {
+        match value {
+            SourceDocumentError::NotFound => AppError::NotFound(value.to_string()),
+            SourceDocumentError::AlreadyExists => AppError::Validation(value.to_string()),
+            SourceDocumentError::AlreadyDeleted => AppError::Validation(value.to_string()),
+            SourceDocumentError::ValidationError(_) => AppError::Validation(value.to_string()),
+            SourceDocumentError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+        }
+    }
+}
+
+impl From<SourceDocumentRepositoryError> for AppError {
+    fn from(value: SourceDocumentRepositoryError) -> Self {
         AppError::Internal(value.to_string())
     }
 }

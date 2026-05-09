@@ -1,7 +1,7 @@
 use super::{
     aggregate::Configuration, events::ConfigurationEvent, read_model::ConfigurationReadModel,
 };
-use crate::server::domain::aggregate::Aggregate;
+use crate::server::domain::Aggregate;
 
 pub struct ConfigurationProjector;
 

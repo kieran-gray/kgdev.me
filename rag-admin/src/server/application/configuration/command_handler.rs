@@ -4,7 +4,6 @@ use tracing::info;
 
 use crate::server::application::configuration::ports::ConfigurationEventStore;
 use crate::server::application::AppError;
-use crate::server::domain::aggregate::Aggregate;
 use crate::server::domain::configuration::pipeline_configuration::{
     PipelineConfigurationProjector, PipelineConfigurationRepository,
 };
@@ -12,6 +11,7 @@ use crate::server::domain::configuration::{
     aggregate::Configuration, commands::ConfigurationCommand, events::ConfigurationEvent,
     ConfigurationProjector, ConfigurationRepository,
 };
+use crate::server::domain::Aggregate;
 use crate::shared::ConfigurationCommandDto;
 
 pub struct ConfigurationCommandHandler {
@@ -94,12 +94,12 @@ mod tests {
     use crate::server::domain::configuration::events::{
         AiProviderAdded, ConfigurationCreated, ConfigurationEvent,
     };
+    use crate::server::domain::configuration::pipeline_configuration::{
+        PipelineConfigurationReadModel, PipelineConfigurationRepositoryError,
+    };
     use crate::server::domain::configuration::{
         read_model::ConfigurationReadModel,
         repository::{ConfigurationRepository, ConfigurationRepositoryError},
-    };
-    use crate::server::domain::configuration::pipeline_configuration::{
-        PipelineConfigurationReadModel, PipelineConfigurationRepositoryError,
     };
 
     #[derive(Default)]

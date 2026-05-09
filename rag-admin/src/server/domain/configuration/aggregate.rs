@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::domain::{
-    aggregate::Aggregate,
     configuration::{
         ai_provider::{AiProvdier, AiProviderAdded, AiProviderRemoved, AiProviderUpdated},
         commands::ConfigurationCommand,
@@ -27,6 +26,7 @@ use crate::server::domain::{
             VectorStoreProviderUpdated,
         },
     },
+    Aggregate,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
