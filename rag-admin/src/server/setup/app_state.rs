@@ -204,7 +204,7 @@ impl AppState {
                 indexing_command_handler,
                 source_document_repository: source_document_repository.clone(),
                 blob_store,
-                chunk_set_repository,
+                chunk_set_repository: chunk_set_repository.clone(),
                 embedding_set_repository,
                 source_adapter_registry: source_adapter_registry.clone(),
                 chunker_registry: chunking_engine,
@@ -215,8 +215,11 @@ impl AppState {
                 job_registry: job_registry.clone(),
             });
 
-        let source_document_query_service =
-            SourceDocumentQueryService::new(source_document_repository, indexing_repository);
+        let source_document_query_service = SourceDocumentQueryService::new(
+            source_document_repository,
+            indexing_repository,
+            chunk_set_repository,
+        );
 
         let state = Self {
             settings,

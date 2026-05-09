@@ -40,3 +40,13 @@ pub struct SourceDocumentDetailDto {
     pub document: SourceDocumentDto,
     pub indexings: Vec<IndexingDto>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkDto {
+    pub chunk_id: Uuid,
+    pub sequence: u32,
+    pub heading: String,
+    pub text: String,
+    pub char_start: u32,
+    pub char_end: u32,
+}

@@ -2,24 +2,28 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::server::application::source_document::ports::ChunkSetRepository;
 use crate::server::application::AppError;
 use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
-use crate::shared::{IndexingDto, SourceDocumentDetailDto, SourceDocumentDto};
+use crate::shared::{ChunkDto, IndexingDto, SourceDocumentDetailDto, SourceDocumentDto};
 
 pub struct SourceDocumentQueryService {
     source_document_repository: Arc<dyn SourceDocumentRepository>,
     indexing_repository: Arc<dyn IndexingRepository>,
+    chunk_set_repository: Arc<dyn ChunkSetRepository>,
 }
 
 impl SourceDocumentQueryService {
     pub fn new(
         source_document_repository: Arc<dyn SourceDocumentRepository>,
         indexing_repository: Arc<dyn IndexingRepository>,
+        chunk_set_repository: Arc<dyn ChunkSetRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             source_document_repository,
             indexing_repository,
+            chunk_set_repository,
         })
     }
 
@@ -74,6 +78,21 @@ impl SourceDocumentQueryService {
                 }))
             }
         }
+    }
+
+    pub async fn get_chunks(&self, chunk_set_id: Uuid) -> Result<Vec<ChunkDto>, AppError> {
+        let chunks = self.chunk_set_repository.load_chunks(chunk_set_id).await?;
+        Ok(chunks
+            .into_iter()
+            .map(|c| ChunkDto {
+                chunk_id: c.chunk_id,
+                sequence: c.sequence,
+                heading: c.heading,
+                text: c.text,
+                char_start: c.char_start,
+                char_end: c.char_end,
+            })
+            .collect())
     }
 }
 

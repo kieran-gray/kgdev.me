@@ -1,8 +1,25 @@
 use leptos::prelude::*;
 
 use crate::shared::{
-    ChunkingConfig, DocumentListItemDto, IngestJobInfo, SourceDocumentDetailDto, SourceDocumentDto,
+    ChunkDto, ChunkingConfig, DocumentListItemDto, IngestJobInfo, SourceDocumentDetailDto,
+    SourceDocumentDto,
 };
+
+#[server(name = GetChunks, prefix = "/api", endpoint = "get_chunks")]
+pub async fn get_chunks(chunk_set_id: uuid::Uuid) -> Result<Vec<ChunkDto>, ServerFnError> {
+    use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .source_document_query_service
+        .get_chunks(chunk_set_id)
+        .await
+        .map_err(map_app_error)
+}
 
 #[server(
     name = StartSourceDocumentIngest,
