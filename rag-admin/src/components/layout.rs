@@ -28,7 +28,7 @@ pub fn Layout(children: Children) -> impl IntoView {
                         </div>
                         <nav class="flex gap-6 text-sm font-medium pt-3 flex-1">
                             <A href="/" attr:class="hover:text-[var(--color-accent)] transition-colors">
-                                <span class="opacity-50 mr-1">"01"</span>"POSTS"
+                                <span class="opacity-50 mr-1">"01"</span>"DOCUMENTS"
                             </A>
                             <A href="/embed" attr:class="hover:text-[var(--color-accent)] transition-colors">
                                 <span class="opacity-50 mr-1">"02"</span>"EMBED_TEST"

@@ -2,6 +2,17 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentListItemDto {
+    pub source_ref_key: String,
+    pub document_type: String,
+    pub title: String,
+    pub document_id: Option<Uuid>,
+    pub latest_version: Option<u32>,
+    pub latest_content_hash: Option<String>,
+    pub indexings: Vec<IndexingDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceDocumentDto {
     pub document_id: Uuid,
     pub document_type: String,

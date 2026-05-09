@@ -15,10 +15,6 @@ pub fn settings_path() -> PathBuf {
     data_dir().join("settings.toml")
 }
 
-pub fn manifest_path() -> PathBuf {
-    data_dir().join("manifest.json")
-}
-
 pub fn post_chunking_config_path() -> PathBuf {
     data_dir().join("post-chunking.json")
 }

@@ -41,5 +41,7 @@ pub use evaluation::{
 pub use ingest::{IngestJobInfo, IngestOptions, LogEvent, LogLevel};
 pub use post::{ChunkPreview, GlossaryTermDto, PostDetailDto, PostSummary};
 pub use settings::SettingsDto;
-pub use source_document::{IndexingDto, SourceDocumentDetailDto, SourceDocumentDto};
+pub use source_document::{
+    DocumentListItemDto, IndexingDto, SourceDocumentDetailDto, SourceDocumentDto,
+};
 pub use vector::{VectorIndexConfig, VectorProvider};

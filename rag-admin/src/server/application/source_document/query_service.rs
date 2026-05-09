@@ -28,6 +28,20 @@ impl SourceDocumentQueryService {
         Ok(docs.into_iter().map(map_doc_to_dto).collect())
     }
 
+    pub async fn get_detail_by_source_ref(
+        &self,
+        source_ref: &crate::server::domain::source_document::source_ref::SourceRef,
+    ) -> Result<Option<SourceDocumentDetailDto>, AppError> {
+        let doc = self
+            .source_document_repository
+            .find_by_source_ref(source_ref)
+            .await?;
+        match doc {
+            None => Ok(None),
+            Some(doc) => self.get_detail(doc.document_id).await,
+        }
+    }
+
     pub async fn get_detail(
         &self,
         document_id: Uuid,

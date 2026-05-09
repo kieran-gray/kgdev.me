@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::server::application::blog::{ports::PostChunkingConfigStore, PostService};
+use crate::server::application::blog::ports::PostChunkingConfigStore;
 use crate::server::application::chunking::chunkers::{
     register_builtin_chunkers, BuiltinChunkerDeps,
 };
@@ -19,7 +19,7 @@ use crate::server::application::evaluation::{
 };
 use crate::server::application::indexing::ports::IndexingEventStore;
 use crate::server::application::indexing::IndexingCommandHandler;
-use crate::server::application::ingest::{ports::VectorIndex, IngestService, IngestServiceDeps};
+use crate::server::application::ingest::ports::VectorIndex;
 use crate::server::application::source_document::ports::{
     SourceAdapterRegistry, SourceDocumentEventStore,
 };
@@ -44,8 +44,6 @@ use crate::server::infrastructure::evaluation::{
 };
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
 use crate::server::infrastructure::indexing::PostgresIndexingRepository;
-use crate::server::infrastructure::ingest::FileManifestStore;
-use crate::server::infrastructure::kv::CloudflareKvStore;
 use crate::server::infrastructure::llm::OllamaChatClient;
 use crate::server::infrastructure::markdown::MarkdownRsParser;
 use crate::server::infrastructure::postgres::PostgresEventStore;
@@ -53,15 +51,13 @@ use crate::server::infrastructure::source_document::{
     HttpBlogAdapter, PostgresBlobStore, PostgresChunkSetRepository, PostgresEmbeddingSetRepository,
     PostgresSourceDocumentRepository,
 };
-use crate::server::infrastructure::tokenizer::{HuggingFaceTokenizer, EMBEDDING_TOKEN_LIMIT};
-use crate::server::infrastructure::vector::{
-    CloudflareVectorIndexFactory, CloudflareVectorRecordMapper, VectorizeVectorIndex,
-};
+use crate::server::infrastructure::tokenizer::HuggingFaceTokenizer;
+use crate::server::infrastructure::vector::{CloudflareVectorIndexFactory, VectorizeVectorIndex};
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
 use crate::server::setup::settings::{
-    evaluations_dir, load_settings, manifest_path, post_chunking_config_path, save_settings,
-    settings_path, tokenizer_path,
+    evaluations_dir, load_settings, post_chunking_config_path, save_settings, settings_path,
+    tokenizer_path,
 };
 use crate::server::setup::validation;
 use crate::shared::{EmbedderBackend, SettingsDto};
@@ -71,8 +67,6 @@ pub struct AppState {
     pub configuration_command_handler: Arc<ConfigurationCommandHandler>,
     pub configuration_query_service: Arc<ConfigurationQueryService>,
     pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
-    pub ingest_service: Arc<IngestService>,
-    pub post_service: Arc<PostService>,
     pub chunking_evaluation_service: Arc<ChunkingEvaluationService>,
     pub evaluation_job_service: Arc<EvaluationJobService>,
     pub embedding_service: Arc<EmbeddingService>,
@@ -82,6 +76,7 @@ pub struct AppState {
     pub post_chunking_config_store: Arc<dyn PostChunkingConfigStore>,
     pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
+    pub source_adapter_registry: Arc<SourceAdapterRegistry>,
 }
 
 impl AppState {
@@ -142,14 +137,11 @@ impl AppState {
             configuration_repository.clone(),
             pipeline_configuration_repository.clone(),
         );
-        let vector_record_mapper = Arc::new(CloudflareVectorRecordMapper);
-        let kv_store = CloudflareKvStore::new(cf_api.clone());
         let chat_client = OllamaChatClient::new(http.clone(), config.ollama.base_url.clone());
         let evaluation_generator: Arc<dyn EvaluationGenerator> =
             OllamaEvaluationGenerator::new(chat_client.clone());
         let markdown_parser = Arc::new(MarkdownRsParser);
 
-        let manifest_store = FileManifestStore::new(manifest_path());
         let post_chunking_config_store: Arc<dyn PostChunkingConfigStore> =
             FilePostChunkingConfigStore::new(post_chunking_config_path());
 
@@ -184,29 +176,6 @@ impl AppState {
         let indexing_command_handler =
             IndexingCommandHandler::new(indexing_event_store, indexing_repository.clone());
 
-        let ingest_service = IngestService::new(IngestServiceDeps {
-            blog_source: blog_source.clone(),
-            embedding_service: embedding_service.clone(),
-            vector_store: vector_store.clone(),
-            vector_record_mapper,
-            kv_store,
-            manifest_store: manifest_store.clone(),
-            post_chunking_config_store: post_chunking_config_store.clone(),
-            settings: settings.clone(),
-            job_registry: job_registry.clone(),
-            post_chunking_service: post_chunking_service.clone(),
-        });
-
-        let post_service = PostService::new(
-            blog_source.clone(),
-            manifest_store,
-            post_chunking_config_store.clone(),
-            tokenizer.clone(),
-            EMBEDDING_TOKEN_LIMIT,
-            settings.clone(),
-            post_chunking_service.clone(),
-        );
-
         let evaluation_dataset_store = FileEvaluationDatasetStore::new(evaluations_dir());
         let evaluation_result_store = FileEvaluationResultStore::new(evaluations_dir());
 
@@ -237,7 +206,7 @@ impl AppState {
                 blob_store,
                 chunk_set_repository,
                 embedding_set_repository,
-                source_adapter_registry,
+                source_adapter_registry: source_adapter_registry.clone(),
                 chunker_registry: chunking_engine,
                 embedding_service: embedding_service.clone(),
                 vector_index_factory,
@@ -254,8 +223,6 @@ impl AppState {
             configuration_command_handler,
             configuration_query_service,
             pipeline_configuration_query_service,
-            ingest_service,
-            post_service,
             chunking_evaluation_service,
             evaluation_job_service,
             embedding_service,
@@ -265,6 +232,7 @@ impl AppState {
             post_chunking_config_store,
             source_document_ingest_service,
             source_document_query_service,
+            source_adapter_registry,
         };
 
         if let Err(e) = state.validate_active_settings().await {

@@ -73,6 +73,8 @@ pub struct SourceDocumentIngestService {
     running: Mutex<HashSet<String>>,
 }
 
+// TODO: critical must store ingest status in KV so it can be checked in backend
+
 impl SourceDocumentIngestService {
     pub fn new(deps: SourceDocumentIngestServiceDeps) -> Arc<Self> {
         Arc::new(Self {

@@ -7,8 +7,11 @@ use leptos_router::{
 
 use crate::components::layout::Layout;
 use crate::pages::{
-    embed_test::EmbedTestPage, pipeline_config::NewSettingsPage, post_detail::PostDetailPage,
-    posts_list::PostsListPage, settings::SettingsPage,
+    document_detail::DocumentDetailPage,
+    embed_test::EmbedTestPage,
+    pipeline_config::NewSettingsPage,
+    posts_list::PostsListPage,
+    settings::SettingsPage,
 };
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -41,7 +44,14 @@ pub fn App() -> impl IntoView {
             <Layout>
                 <Routes fallback=|| view! { <p class="p-8">"Page not found."</p> }>
                     <Route path=StaticSegment("") view=PostsListPage />
-                    <Route path=(StaticSegment("posts"), ParamSegment("slug")) view=PostDetailPage />
+                    <Route
+                        path=(
+                            StaticSegment("documents"),
+                            ParamSegment("doc_type"),
+                            ParamSegment("source_ref"),
+                        )
+                        view=DocumentDetailPage
+                    />
                     <Route path=StaticSegment("new-settings") view=NewSettingsPage />
                     <Route path=StaticSegment("settings") view=SettingsPage />
                     <Route path=StaticSegment("embed") view=EmbedTestPage />
