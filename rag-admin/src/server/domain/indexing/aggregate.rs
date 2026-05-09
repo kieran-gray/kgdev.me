@@ -1,0 +1,542 @@
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::server::domain::Aggregate;
+use crate::shared::ChunkingConfig;
+
+use super::{
+    commands::IndexingCommand,
+    events::{
+        ChunkingCompleted, EmbeddingCompleted, IndexingCompleted, IndexingEvent, IndexingRemoved,
+        IngestRequested, IngestionFailed, IngestionRetried,
+    },
+    exceptions::IndexingError,
+    status::{IngestStage, IndexingStatus},
+};
+
+/// Namespace UUID for computing deterministic indexing IDs via UUIDv5.
+const INDEXING_NAMESPACE: Uuid = uuid::uuid!("e3b0a3d2-f1c4-4b8a-9e7d-2a6c5f891034");
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Indexing {
+    pub indexing_id: Uuid,
+    pub document_id: Uuid,
+    pub pipeline_configuration_id: Uuid,
+    pub document_version: u32,
+    pub chunking_config: ChunkingConfig,
+    pub chunk_set_id: Option<Uuid>,
+    pub embedding_set_id: Option<Uuid>,
+    pub status: IndexingStatus,
+    pub attempts: u32,
+    pub last_request_id: Option<Uuid>,
+    pub removed: bool,
+}
+
+impl Indexing {
+    /// Deterministic aggregate ID: UUIDv5 of (document_id, pipeline_configuration_id).
+    pub fn compute_id(document_id: Uuid, pipeline_configuration_id: Uuid) -> Uuid {
+        let name = format!("{document_id}:{pipeline_configuration_id}");
+        Uuid::new_v5(&INDEXING_NAMESPACE, name.as_bytes())
+    }
+
+    fn from_requested(e: &IngestRequested) -> Self {
+        Self {
+            indexing_id: Self::compute_id(e.document_id, e.pipeline_configuration_id),
+            document_id: e.document_id,
+            pipeline_configuration_id: e.pipeline_configuration_id,
+            document_version: e.document_version,
+            chunking_config: e.chunking_config.clone(),
+            chunk_set_id: None,
+            embedding_set_id: None,
+            status: IndexingStatus::Pending,
+            attempts: 1,
+            last_request_id: Some(e.request_id),
+            removed: false,
+        }
+    }
+}
+
+impl Aggregate for Indexing {
+    type Event = IndexingEvent;
+    type Command = IndexingCommand;
+    type Error = IndexingError;
+
+    fn aggregate_id(&self) -> String {
+        self.indexing_id.to_string()
+    }
+
+    fn apply(&mut self, event: &Self::Event) {
+        match event {
+            Self::Event::IngestRequested(e) => {
+                // Re-ingest: update version, config, reset state for new run.
+                self.document_version = e.document_version;
+                self.chunking_config = e.chunking_config.clone();
+                self.chunk_set_id = None;
+                self.embedding_set_id = None;
+                self.status = IndexingStatus::Pending;
+                self.attempts += 1;
+                self.last_request_id = Some(e.request_id);
+            }
+            Self::Event::ChunkingCompleted(e) => {
+                self.chunk_set_id = Some(e.chunk_set_id);
+                self.status = IndexingStatus::Chunking;
+            }
+            Self::Event::EmbeddingCompleted(e) => {
+                self.embedding_set_id = Some(e.embedding_set_id);
+                self.status = IndexingStatus::Embedding;
+            }
+            Self::Event::IndexingCompleted(_) => {
+                self.status = IndexingStatus::Indexed;
+            }
+            Self::Event::IngestionFailed(e) => {
+                self.status = IndexingStatus::Failed {
+                    stage: e.stage.clone(),
+                };
+            }
+            Self::Event::IngestionRetried(e) => {
+                self.last_request_id = Some(e.request_id);
+                self.status = match &self.status {
+                    IndexingStatus::Failed { stage } => match stage {
+                        IngestStage::Fetching | IngestStage::Chunking => IndexingStatus::Pending,
+                        IngestStage::Embedding => IndexingStatus::Chunking,
+                        IngestStage::Indexing => IndexingStatus::Embedding,
+                    },
+                    other => other.clone(),
+                };
+            }
+            Self::Event::IndexingRemoved(_) => {
+                self.removed = true;
+            }
+        }
+    }
+
+    fn handle_command(
+        state: Option<&Self>,
+        command: Self::Command,
+    ) -> Result<Vec<Self::Event>, Self::Error> {
+        match command {
+            Self::Command::RequestIngest(cmd) => {
+                match state {
+                    None => Ok(vec![Self::Event::IngestRequested(IngestRequested {
+                        document_id: cmd.document_id,
+                        pipeline_configuration_id: cmd.pipeline_configuration_id,
+                        document_version: cmd.document_version,
+                        chunking_config: cmd.chunking_config,
+                        request_id: cmd.request_id,
+                        occurred_at: cmd.occurred_at,
+                    })]),
+                    Some(s) if s.removed => Err(IndexingError::Removed),
+                    Some(s) if s.last_request_id == Some(cmd.request_id) => Ok(vec![]),
+                    Some(_) => Ok(vec![Self::Event::IngestRequested(IngestRequested {
+                        document_id: cmd.document_id,
+                        pipeline_configuration_id: cmd.pipeline_configuration_id,
+                        document_version: cmd.document_version,
+                        chunking_config: cmd.chunking_config,
+                        request_id: cmd.request_id,
+                        occurred_at: cmd.occurred_at,
+                    })]),
+                }
+            }
+
+            Self::Command::CompleteChunking(cmd) => {
+                let s = state.ok_or(IndexingError::NotFound)?;
+                if s.removed {
+                    return Err(IndexingError::Removed);
+                }
+                if s.status.is_at_least_chunking() {
+                    return Ok(vec![]);
+                }
+                Ok(vec![Self::Event::ChunkingCompleted(ChunkingCompleted {
+                    chunk_set_id: cmd.chunk_set_id,
+                    chunk_count: cmd.chunk_count,
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
+            Self::Command::CompleteEmbedding(cmd) => {
+                let s = state.ok_or(IndexingError::NotFound)?;
+                if s.removed {
+                    return Err(IndexingError::Removed);
+                }
+                if s.status.is_at_least_embedding() {
+                    return Ok(vec![]);
+                }
+                Ok(vec![Self::Event::EmbeddingCompleted(EmbeddingCompleted {
+                    embedding_set_id: cmd.embedding_set_id,
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
+            Self::Command::CompleteIndexing(cmd) => {
+                let s = state.ok_or(IndexingError::NotFound)?;
+                if s.removed {
+                    return Err(IndexingError::Removed);
+                }
+                if s.status.is_indexed() {
+                    return Ok(vec![]);
+                }
+                Ok(vec![Self::Event::IndexingCompleted(IndexingCompleted {
+                    vector_count: cmd.vector_count,
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
+            Self::Command::FailIngestion(cmd) => {
+                let s = state.ok_or(IndexingError::NotFound)?;
+                if s.removed {
+                    return Err(IndexingError::Removed);
+                }
+                Ok(vec![Self::Event::IngestionFailed(IngestionFailed {
+                    stage: cmd.stage,
+                    reason: cmd.reason,
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
+            Self::Command::RetryIngestion(cmd) => {
+                let s = state.ok_or(IndexingError::NotFound)?;
+                if s.removed {
+                    return Err(IndexingError::Removed);
+                }
+                if !s.status.is_failed() {
+                    return Err(IndexingError::NotFailed);
+                }
+                Ok(vec![Self::Event::IngestionRetried(IngestionRetried {
+                    request_id: cmd.request_id,
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
+            Self::Command::RemoveIndexing(cmd) => {
+                let s = state.ok_or(IndexingError::NotFound)?;
+                if s.removed {
+                    return Ok(vec![]);
+                }
+                Ok(vec![Self::Event::IndexingRemoved(IndexingRemoved {
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+        }
+    }
+
+    fn from_events(events: &[Self::Event]) -> Option<Self> {
+        let mut state: Option<Self> = None;
+
+        for event in events {
+            match (&mut state, event) {
+                (None, Self::Event::IngestRequested(e)) => {
+                    state = Some(Self::from_requested(e));
+                }
+                (None, _) => return None,
+                (Some(indexing), event) => indexing.apply(event),
+            }
+        }
+
+        state
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::domain::indexing::commands::*;
+    use crate::server::domain::indexing::events::*;
+    use crate::shared::SectionChunkingConfig;
+
+    fn base_request(doc_id: Uuid, pc_id: Uuid) -> IndexingCommand {
+        IndexingCommand::RequestIngest(RequestIngest {
+            document_id: doc_id,
+            pipeline_configuration_id: pc_id,
+            document_version: 1,
+            chunking_config: ChunkingConfig::Section(SectionChunkingConfig {
+                max_section_tokens: 512,
+            }),
+            request_id: Uuid::new_v4(),
+            occurred_at: "2024-01-01T00:00:00Z".to_string(),
+        })
+    }
+
+    fn base_state(doc_id: Uuid, pc_id: Uuid) -> Indexing {
+        let events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        Indexing::from_events(&events).unwrap()
+    }
+
+    #[test]
+    fn request_ingest_from_none_creates_aggregate() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], IndexingEvent::IngestRequested(_)));
+
+        let indexing = Indexing::from_events(&events).unwrap();
+        assert_eq!(indexing.document_id, doc_id);
+        assert_eq!(indexing.status, IndexingStatus::Pending);
+        assert_eq!(indexing.attempts, 1);
+        assert_eq!(indexing.indexing_id, Indexing::compute_id(doc_id, pc_id));
+    }
+
+    #[test]
+    fn duplicate_request_id_is_noop() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let request_id = Uuid::new_v4();
+        let first_events = Indexing::handle_command(
+            None,
+            IndexingCommand::RequestIngest(RequestIngest {
+                document_id: doc_id,
+                pipeline_configuration_id: pc_id,
+                document_version: 1,
+                chunking_config: ChunkingConfig::Section(SectionChunkingConfig {
+                    max_section_tokens: 512,
+                }),
+                request_id,
+                occurred_at: "2024-01-01T00:00:00Z".to_string(),
+            }),
+        )
+        .unwrap();
+        let indexing = Indexing::from_events(&first_events).unwrap();
+
+        let second = Indexing::handle_command(
+            Some(&indexing),
+            IndexingCommand::RequestIngest(RequestIngest {
+                document_id: doc_id,
+                pipeline_configuration_id: pc_id,
+                document_version: 1,
+                chunking_config: ChunkingConfig::Section(SectionChunkingConfig {
+                    max_section_tokens: 512,
+                }),
+                request_id,
+                occurred_at: "2024-01-02T00:00:00Z".to_string(),
+            }),
+        )
+        .unwrap();
+
+        assert!(second.is_empty());
+    }
+
+    #[test]
+    fn complete_chunking_advances_to_chunking() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let indexing = base_state(doc_id, pc_id);
+        let chunk_set_id = Uuid::new_v4();
+
+        let events = Indexing::handle_command(
+            Some(&indexing),
+            IndexingCommand::CompleteChunking(CompleteChunking {
+                chunk_set_id,
+                chunk_count: 42,
+                occurred_at: "2024-01-01T00:01:00Z".to_string(),
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(events.len(), 1);
+        if let IndexingEvent::ChunkingCompleted(e) = &events[0] {
+            assert_eq!(e.chunk_set_id, chunk_set_id);
+        } else {
+            panic!("expected ChunkingCompleted");
+        }
+
+        let mut all = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        all.extend(events);
+        let updated = Indexing::from_events(&all).unwrap();
+        assert_eq!(updated.status, IndexingStatus::Chunking);
+        assert_eq!(updated.chunk_set_id, Some(chunk_set_id));
+    }
+
+    #[test]
+    fn complete_chunking_is_idempotent() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let chunk_set_id = Uuid::new_v4();
+
+        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
+            chunk_set_id,
+            chunk_count: 10,
+            occurred_at: "2024-01-01T00:01:00Z".to_string(),
+        }));
+        let indexing = Indexing::from_events(&events).unwrap();
+
+        let repeat = Indexing::handle_command(
+            Some(&indexing),
+            IndexingCommand::CompleteChunking(CompleteChunking {
+                chunk_set_id: Uuid::new_v4(),
+                chunk_count: 10,
+                occurred_at: "2024-01-01T00:02:00Z".to_string(),
+            }),
+        )
+        .unwrap();
+
+        assert!(repeat.is_empty());
+    }
+
+    #[test]
+    fn full_pipeline_sequence_ends_at_indexed() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+
+        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
+            chunk_set_id: Uuid::new_v4(),
+            chunk_count: 10,
+            occurred_at: "2024-01-01T00:01:00Z".to_string(),
+        }));
+        events.push(IndexingEvent::EmbeddingCompleted(EmbeddingCompleted {
+            embedding_set_id: Uuid::new_v4(),
+            occurred_at: "2024-01-01T00:02:00Z".to_string(),
+        }));
+        events.push(IndexingEvent::IndexingCompleted(IndexingCompleted {
+            vector_count: 100,
+            occurred_at: "2024-01-01T00:03:00Z".to_string(),
+        }));
+
+        let indexing = Indexing::from_events(&events).unwrap();
+        assert_eq!(indexing.status, IndexingStatus::Indexed);
+        assert!(indexing.chunk_set_id.is_some());
+        assert!(indexing.embedding_set_id.is_some());
+    }
+
+    #[test]
+    fn fail_then_retry_resets_to_previous_stage() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+
+        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
+            chunk_set_id: Uuid::new_v4(),
+            chunk_count: 10,
+            occurred_at: "2024-01-01T00:01:00Z".to_string(),
+        }));
+        events.push(IndexingEvent::IngestionFailed(IngestionFailed {
+            stage: IngestStage::Embedding,
+            reason: "connection refused".to_string(),
+            occurred_at: "2024-01-01T00:02:00Z".to_string(),
+        }));
+        let failed = Indexing::from_events(&events).unwrap();
+        assert!(failed.status.is_failed());
+
+        let retry_events = Indexing::handle_command(
+            Some(&failed),
+            IndexingCommand::RetryIngestion(RetryIngestion {
+                request_id: Uuid::new_v4(),
+                occurred_at: "2024-01-01T00:05:00Z".to_string(),
+            }),
+        )
+        .unwrap();
+        assert_eq!(retry_events.len(), 1);
+
+        let mut all = events;
+        all.extend(retry_events);
+        let retried = Indexing::from_events(&all).unwrap();
+        // Failed at Embedding → reset to Chunking (chunking was done)
+        assert_eq!(retried.status, IndexingStatus::Chunking);
+    }
+
+    #[test]
+    fn retry_when_not_failed_returns_error() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let indexing = base_state(doc_id, pc_id);
+
+        let err = Indexing::handle_command(
+            Some(&indexing),
+            IndexingCommand::RetryIngestion(RetryIngestion {
+                request_id: Uuid::new_v4(),
+                occurred_at: "2024-01-01T00:05:00Z".to_string(),
+            }),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, IndexingError::NotFailed));
+    }
+
+    #[test]
+    fn remove_is_idempotent() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+
+        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        events.push(IndexingEvent::IndexingRemoved(IndexingRemoved {
+            occurred_at: "2024-01-01T00:10:00Z".to_string(),
+        }));
+        let removed = Indexing::from_events(&events).unwrap();
+
+        let second = Indexing::handle_command(
+            Some(&removed),
+            IndexingCommand::RemoveIndexing(RemoveIndexing {
+                occurred_at: "2024-01-01T00:11:00Z".to_string(),
+            }),
+        )
+        .unwrap();
+
+        assert!(second.is_empty());
+    }
+
+    #[test]
+    fn two_different_pipeline_ids_produce_different_aggregate_ids() {
+        let doc_id = Uuid::new_v4();
+        let pc1 = Uuid::new_v4();
+        let pc2 = Uuid::new_v4();
+
+        assert_ne!(
+            Indexing::compute_id(doc_id, pc1),
+            Indexing::compute_id(doc_id, pc2)
+        );
+    }
+
+    #[test]
+    fn same_inputs_produce_same_aggregate_id() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        assert_eq!(
+            Indexing::compute_id(doc_id, pc_id),
+            Indexing::compute_id(doc_id, pc_id)
+        );
+    }
+
+    #[test]
+    fn replay_requires_ingest_requested_as_first_event() {
+        let result = Indexing::from_events(&[IndexingEvent::ChunkingCompleted(
+            ChunkingCompleted {
+                chunk_set_id: Uuid::new_v4(),
+                chunk_count: 5,
+                occurred_at: "2024-01-01T00:00:00Z".to_string(),
+            },
+        )]);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn complete_embedding_is_idempotent_when_already_embedding() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let embedding_set_id = Uuid::new_v4();
+
+        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
+            chunk_set_id: Uuid::new_v4(),
+            chunk_count: 10,
+            occurred_at: "2024-01-01T00:01:00Z".to_string(),
+        }));
+        events.push(IndexingEvent::EmbeddingCompleted(EmbeddingCompleted {
+            embedding_set_id,
+            occurred_at: "2024-01-01T00:02:00Z".to_string(),
+        }));
+        let indexing = Indexing::from_events(&events).unwrap();
+
+        let repeat = Indexing::handle_command(
+            Some(&indexing),
+            IndexingCommand::CompleteEmbedding(CompleteEmbedding {
+                embedding_set_id: Uuid::new_v4(),
+                occurred_at: "2024-01-01T00:03:00Z".to_string(),
+            }),
+        )
+        .unwrap();
+
+        assert!(repeat.is_empty());
+    }
+}

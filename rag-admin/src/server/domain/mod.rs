@@ -1,6 +1,9 @@
 pub mod blog_post;
 pub mod chunk;
+pub mod chunk_set;
 pub mod configuration;
+pub mod embedding_set;
+pub mod indexing;
 pub mod manifest;
 pub mod post;
 pub mod source_document;

@@ -10,6 +10,7 @@ pub mod kv;
 pub mod llm;
 pub mod markdown;
 pub mod postgres;
+pub mod indexing;
 pub mod source_document;
 pub mod tokenizer;
 pub mod vector;

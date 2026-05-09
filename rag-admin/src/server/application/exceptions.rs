@@ -5,6 +5,11 @@ use crate::server::domain::configuration::{
     exceptions::ConfigurationError, pipeline_configuration::PipelineConfigurationRepositoryError,
     ConfigurationRepositoryError,
 };
+use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
+use crate::server::domain::embedding_set::repository::EmbeddingSetRepositoryError;
+use crate::server::domain::indexing::{
+    exceptions::IndexingError, repository::IndexingRepositoryError,
+};
 use crate::server::domain::source_document::{
     exceptions::SourceDocumentError, repository::SourceDocumentRepositoryError,
 };
@@ -57,6 +62,36 @@ impl From<SourceDocumentError> for AppError {
 
 impl From<SourceDocumentRepositoryError> for AppError {
     fn from(value: SourceDocumentRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<IndexingError> for AppError {
+    fn from(value: IndexingError) -> Self {
+        match value {
+            IndexingError::NotFound => AppError::NotFound(value.to_string()),
+            IndexingError::Removed => AppError::Validation(value.to_string()),
+            IndexingError::NotFailed => AppError::Validation(value.to_string()),
+            IndexingError::ValidationError(_) => AppError::Validation(value.to_string()),
+            IndexingError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+        }
+    }
+}
+
+impl From<IndexingRepositoryError> for AppError {
+    fn from(value: IndexingRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<ChunkSetRepositoryError> for AppError {
+    fn from(value: ChunkSetRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<EmbeddingSetRepositoryError> for AppError {
+    fn from(value: EmbeddingSetRepositoryError) -> Self {
         AppError::Internal(value.to_string())
     }
 }

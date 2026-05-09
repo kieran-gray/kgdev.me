@@ -6,9 +6,11 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::server::application::configuration::ports::ConfigurationEventStore;
+use crate::server::application::indexing::ports::IndexingEventStore;
 use crate::server::application::source_document::ports::SourceDocumentEventStore;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::events::ConfigurationEvent;
+use crate::server::domain::indexing::events::IndexingEvent;
 use crate::server::domain::source_document::events::SourceDocumentEvent;
 
 pub struct PostgresEventStore<E> {
@@ -144,6 +146,23 @@ impl SourceDocumentEventStore for PostgresEventStore<SourceDocumentEvent> {
         aggregate_id: Uuid,
         expected_version: usize,
         events: &[SourceDocumentEvent],
+    ) -> Result<(), AppError> {
+        self.append_events(aggregate_id, expected_version, events)
+            .await
+    }
+}
+
+#[async_trait]
+impl IndexingEventStore for PostgresEventStore<IndexingEvent> {
+    async fn load(&self, aggregate_id: Uuid) -> Result<Vec<IndexingEvent>, AppError> {
+        self.load_events(aggregate_id).await
+    }
+
+    async fn append(
+        &self,
+        aggregate_id: Uuid,
+        expected_version: usize,
+        events: &[IndexingEvent],
     ) -> Result<(), AppError> {
         self.append_events(aggregate_id, expected_version, events)
             .await
