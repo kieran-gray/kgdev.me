@@ -17,7 +17,7 @@ use crate::server::{
     },
     domain::Post,
 };
-use crate::shared::{EvaluationDataset, EvaluationQuestion, SettingsDto};
+use crate::shared::{EvaluationDatasetDto, EvaluationQuestionDto, SettingsDto};
 
 const DATASET_GENERATION_ATTEMPT_MULTIPLIER: usize = 12;
 const PREVIOUS_QUESTION_PROMPT_LIMIT: usize = 12;
@@ -174,7 +174,7 @@ impl GenerateSyntheticDatasetUseCase {
 
         let questions = gate.into_questions(target_questions);
 
-        let dataset = EvaluationDataset {
+        let dataset = EvaluationDatasetDto {
             slug: post.slug().to_string(),
             post_version: post.version().as_str().to_string(),
             generated_at: now_rfc3339(),
@@ -202,7 +202,7 @@ fn recent_previous_coverage(previous_coverage: &[String]) -> &[String] {
     &previous_coverage[start..]
 }
 
-fn previous_coverage_entry(question: &EvaluationQuestion) -> String {
+fn previous_coverage_entry(question: &EvaluationQuestionDto) -> String {
     let references = question
         .references
         .iter()
@@ -239,13 +239,13 @@ fn now_rfc3339() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::EvaluationReference;
+    use crate::shared::EvaluationReferenceDto;
 
     #[test]
     fn previous_coverage_entry_includes_question_and_reference_summary() {
-        let question = EvaluationQuestion {
+        let question = EvaluationQuestionDto {
             question: "What increments the in-memory total?".into(),
-            references: vec![EvaluationReference {
+            references: vec![EvaluationReferenceDto {
                 content: "When the fetch handler receives a WebSocket upgrade request, it increments the in-memory total.".into(),
                 char_start: 0,
                 char_end: 0,

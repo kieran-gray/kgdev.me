@@ -103,3 +103,31 @@ impl EvaluationRunReadModel {
         }
     }
 }
+
+impl From<EvaluationVariantResultDto> for crate::shared::EvaluationVariantResult {
+    fn from(v: EvaluationVariantResultDto) -> Self {
+        Self {
+            variant: crate::shared::ChunkingVariant {
+                label: v.variant_label,
+                config: crate::shared::ChunkingConfig::default(), // FIXME: where to get this?
+            },
+            options: crate::shared::EvaluationRunOptions::default(), // FIXME
+            split: v.split,
+            selected: v.selected,
+            metrics: crate::shared::EvaluationMetrics {
+                recall_mean: v.recall_mean,
+                recall_std: v.recall_std,
+                precision_mean: v.precision_mean,
+                precision_std: v.precision_std,
+                iou_mean: v.iou_mean,
+                iou_std: v.iou_std,
+                precision_omega_mean: v.precision_omega_mean,
+                precision_omega_std: v.precision_omega_std,
+            },
+            chunk_count: 0,
+            average_chunk_tokens: 0,
+            average_retrieved_tokens: 0,
+            question_results: Vec::new(),
+        }
+    }
+}

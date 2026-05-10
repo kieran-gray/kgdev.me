@@ -5,7 +5,7 @@ use async_trait::async_trait;
 
 use crate::server::application::evaluation::ports::EvaluationDatasetStore;
 use crate::server::application::AppError;
-use crate::shared::{EvaluationDataset, EvaluationDatasetStatus};
+use crate::shared::{EvaluationDatasetDto, EvaluationDatasetStatus};
 
 pub struct FileEvaluationDatasetStore {
     path: PathBuf,
@@ -26,7 +26,7 @@ impl FileEvaluationDatasetStore {
         &self,
         slug: &str,
         version: &str,
-    ) -> Result<EvaluationDataset, AppError> {
+    ) -> Result<EvaluationDatasetDto, AppError> {
         let path = self.dataset_path(slug, version);
         let bytes = tokio::fs::read(&path)
             .await
@@ -35,7 +35,7 @@ impl FileEvaluationDatasetStore {
             .map_err(|e| AppError::Internal(format!("parse evaluation dataset: {e}")))
     }
 
-    async fn write_to_disk(&self, dataset: &EvaluationDataset) -> Result<(), AppError> {
+    async fn write_to_disk(&self, dataset: &EvaluationDatasetDto) -> Result<(), AppError> {
         let path = self.dataset_path(&dataset.slug, &dataset.post_version);
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent)
@@ -52,7 +52,7 @@ impl FileEvaluationDatasetStore {
 
 #[async_trait]
 impl EvaluationDatasetStore for FileEvaluationDatasetStore {
-    async fn load(&self, slug: &str, version: &str) -> Result<EvaluationDataset, AppError> {
+    async fn load(&self, slug: &str, version: &str) -> Result<EvaluationDatasetDto, AppError> {
         self.read_from_disk(slug, version).await
     }
 
@@ -77,7 +77,7 @@ impl EvaluationDatasetStore for FileEvaluationDatasetStore {
         })
     }
 
-    async fn store(&self, dataset: &EvaluationDataset) -> Result<(), AppError> {
+    async fn store(&self, dataset: &EvaluationDatasetDto) -> Result<(), AppError> {
         self.write_to_disk(dataset).await
     }
 }

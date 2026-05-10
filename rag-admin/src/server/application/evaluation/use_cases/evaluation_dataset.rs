@@ -172,8 +172,15 @@ impl GenerateSyntheticDatasetUseCase {
                                             })
                                             .collect();
 
+                                        let question_to_save = crate::server::domain::evaluation::question::EvaluationQuestion {
+                                            sequence: accepted_sequence,
+                                            question: q.question.clone(),
+                                            references: references.clone(),
+                                            embedding: None,
+                                        };
+
                                         self.dataset_command_handler
-                                            .handle(
+                                            .handle_accept_question(
                                                 dataset_id,
                                                 EvaluationDatasetCommand::AcceptQuestion(
                                                     AcceptQuestion {
@@ -184,6 +191,7 @@ impl GenerateSyntheticDatasetUseCase {
                                                         occurred_at: self.clock.now(),
                                                     },
                                                 ),
+                                                question_to_save,
                                             )
                                             .await?;
                                         accepted_sequence += 1;
@@ -331,7 +339,7 @@ fn recent_previous_coverage(previous_coverage: &[String]) -> &[String] {
     &previous_coverage[start..]
 }
 
-fn question_coverage_entry(question: &crate::shared::EvaluationQuestion) -> String {
+fn question_coverage_entry(question: &crate::shared::EvaluationQuestionDto) -> String {
     let refs = question
         .references
         .iter()

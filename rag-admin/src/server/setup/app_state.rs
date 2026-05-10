@@ -8,14 +8,18 @@ use crate::server::application::chunking::chunkers::{
     register_builtin_chunkers, BuiltinChunkerDeps,
 };
 use crate::server::application::chunking::{ChunkerRegistry, PostChunkingService};
-use crate::server::application::configuration::{
-    ports::ConfigurationEventStore, ConfigurationCommandHandler, ConfigurationQueryService,
-    PipelineConfigurationQueryService,
+use crate::server::application::evaluation::command_handlers::{
+    EvaluationDatasetCommandHandler, EvaluationRunCommandHandler,
 };
-use crate::server::application::embedding::{ports::Embedder, EmbeddingService};
 use crate::server::application::evaluation::jobs::EvaluationJobService;
+use crate::server::application::evaluation::ports::{
+    EvaluationDatasetEventStore, EvaluationGenerator, EvaluationRunEventStore,
+};
+use crate::server::application::evaluation::query_service::EvaluationQueryService;
+use crate::server::application::evaluation::use_cases::evaluation_dataset::GenerateSyntheticDatasetUseCase;
+use crate::server::application::evaluation::use_cases::evaluation_run::RunEvaluationUseCase;
 use crate::server::application::evaluation::{
-    ports::EvaluationGenerator, ChunkingEvaluationService, ChunkingEvaluationServiceDeps,
+    ChunkingEvaluationService, ChunkingEvaluationServiceDeps,
 };
 use crate::server::application::indexing::ports::IndexingEventStore;
 use crate::server::application::indexing::IndexingCommandHandler;
@@ -27,9 +31,14 @@ use crate::server::application::source_document::{
     SourceDocumentCommandHandler, SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
     SourceDocumentQueryService,
 };
-use crate::server::application::{AppError, JobRegistry};
+use crate::server::application::{
+    ports::{Clock, IdGenerator},
+    AppError, JobRegistry,
+};
 use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::domain::configuration::ConfigurationRepository;
+use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
+use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
 use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::infrastructure::blog::HttpBlogSource;
@@ -41,6 +50,7 @@ use crate::server::infrastructure::configuration::{
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{
     FileEvaluationDatasetStore, FileEvaluationResultStore, OllamaEvaluationGenerator,
+    PostgresEvaluationDatasetRepository, PostgresEvaluationRunRepository,
 };
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
 use crate::server::infrastructure::id::UuidGenerator;
@@ -71,6 +81,7 @@ pub struct AppState {
     pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
     pub chunking_evaluation_service: Arc<ChunkingEvaluationService>,
     pub evaluation_job_service: Arc<EvaluationJobService>,
+    pub evaluation_query_service: Arc<EvaluationQueryService>,
     pub embedding_service: Arc<EmbeddingService>,
     pub job_registry: Arc<JobRegistry>,
     pub vector_store: Arc<dyn VectorIndex>,
@@ -114,6 +125,9 @@ impl AppState {
             .await
             .map_err(|e| SetupError::Internal(format!("migrations: {e}")))?;
 
+        let clock = Arc::new(SystemClock);
+        let id_generator = Arc::new(UuidGenerator);
+
         let configuration_event_store: Arc<dyn ConfigurationEventStore> =
             Arc::new(PostgresEventStore::new(pool.clone(), "configuration"));
         let configuration_repository: Arc<dyn ConfigurationRepository> =
@@ -133,6 +147,15 @@ impl AppState {
         let chunk_set_repository = Arc::new(PostgresChunkSetRepository::new(pool.clone()));
         let embedding_set_repository = Arc::new(PostgresEmbeddingSetRepository::new(pool.clone()));
         let vector_index_factory = CloudflareVectorIndexFactory::new(cf_api.clone());
+
+        let evaluation_dataset_event_store: Arc<dyn EvaluationDatasetEventStore> =
+            Arc::new(PostgresEventStore::new(pool.clone(), "evaluation_dataset"));
+        let evaluation_run_event_store: Arc<dyn EvaluationRunEventStore> =
+            Arc::new(PostgresEventStore::new(pool.clone(), "evaluation_run"));
+        let evaluation_dataset_repository: Arc<dyn EvaluationDatasetRepository> =
+            Arc::new(PostgresEvaluationDatasetRepository::new(pool.clone()));
+        let evaluation_run_repository: Arc<dyn EvaluationRunRepository> =
+            Arc::new(PostgresEvaluationRunRepository::new(pool.clone()));
 
         let vector_store: Arc<dyn VectorIndex> = VectorizeVectorIndex::new(
             cf_api.clone(),
@@ -178,6 +201,45 @@ impl AppState {
         let indexing_command_handler =
             IndexingCommandHandler::new(indexing_event_store, indexing_repository.clone());
 
+        let evaluation_dataset_command_handler = EvaluationDatasetCommandHandler::new(
+            evaluation_dataset_event_store,
+            evaluation_dataset_repository.clone(),
+        );
+        let evaluation_run_command_handler = EvaluationRunCommandHandler::new(
+            evaluation_run_event_store,
+            evaluation_run_repository.clone(),
+        );
+        let evaluation_query_service = EvaluationQueryService::new(
+            evaluation_dataset_repository.clone(),
+            evaluation_run_repository.clone(),
+        );
+
+        let generate_synthetic_dataset_use_case = GenerateSyntheticDatasetUseCase::new(
+            source_document_repository.clone(),
+            blob_store.clone(),
+            evaluation_generator.clone(),
+            embedding_service.clone(),
+            evaluation_dataset_command_handler,
+            settings.clone(),
+            clock.clone(),
+            id_generator.clone(),
+        );
+
+        let run_evaluation_use_case = RunEvaluationUseCase::new(
+            source_document_repository.clone(),
+            blob_store.clone(),
+            chunking_engine.clone(),
+            chunk_set_repository.clone(),
+            embedding_service.clone(),
+            embedding_set_repository.clone(),
+            evaluation_dataset_repository.clone(),
+            evaluation_run_command_handler,
+            configuration_repository.clone(),
+            pipeline_configuration_repository.clone(),
+            clock.clone(),
+            id_generator.clone(),
+        );
+
         let evaluation_dataset_store = FileEvaluationDatasetStore::new(evaluations_dir());
         let evaluation_result_store = FileEvaluationResultStore::new(evaluations_dir());
 
@@ -193,15 +255,15 @@ impl AppState {
                 tokenizer,
             });
 
-        let evaluation_job_service =
-            EvaluationJobService::new(job_registry.clone(), chunking_evaluation_service.clone());
+        let evaluation_job_service = EvaluationJobService::new(
+            job_registry.clone(),
+            generate_synthetic_dataset_use_case,
+            run_evaluation_use_case,
+        );
 
         let mut source_adapter_registry = SourceAdapterRegistry::new();
         source_adapter_registry.register(HttpBlogAdapter::new(blog_source.clone()));
         let source_adapter_registry = Arc::new(source_adapter_registry);
-
-        let clock = Arc::new(SystemClock);
-        let id_generator = Arc::new(UuidGenerator);
 
         let source_document_ingest_service =
             SourceDocumentIngestService::new(SourceDocumentIngestServiceDeps {
@@ -235,6 +297,7 @@ impl AppState {
             pipeline_configuration_query_service,
             chunking_evaluation_service,
             evaluation_job_service,
+            evaluation_query_service,
             embedding_service,
             job_registry,
             vector_store,

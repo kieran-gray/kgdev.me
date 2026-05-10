@@ -17,7 +17,7 @@ use crate::server::application::ports::Tokenizer;
 use crate::server::application::AppError;
 use crate::server::domain::Post;
 use crate::shared::{
-    plain_f32_vec, ChunkingVariant, EmbeddingModel, EvaluationDataset, EvaluationRunOptions,
+    plain_f32_vec, ChunkingVariant, EmbeddingModel, EvaluationDatasetDto, EvaluationRunOptions,
     EvaluationRunResult, EvaluationVariantResult, SettingsDto,
 };
 
@@ -33,7 +33,7 @@ pub struct RunEvaluationUseCase {
 
 pub(crate) struct EvaluationRunContext {
     pub post: Post,
-    pub dataset: EvaluationDataset,
+    pub dataset: EvaluationDatasetDto,
     pub model: EmbeddingModel,
     pub question_embeddings: Vec<Vec<f32>>,
 }
@@ -310,7 +310,7 @@ pub(crate) fn now_rfc3339() -> String {
 }
 
 fn cached_question_embeddings(
-    dataset: &EvaluationDataset,
+    dataset: &EvaluationDatasetDto,
     model: &EmbeddingModel,
 ) -> Option<Vec<Vec<f32>>> {
     if dataset.embedding_model_backend != Some(model.backend)

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::{ChunkingConfig, EmbedderBackend};
 
@@ -411,4 +412,49 @@ fn default_top_k() -> u32 {
 
 fn default_include_glossary() -> bool {
     true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvaluationDatasetSummaryDto {
+    pub dataset_id: Uuid,
+    pub label: String,
+    pub question_count: u32,
+    pub status: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvaluationDatasetDto {
+    pub dataset_id: Uuid,
+    pub document_id: Uuid,
+    pub label: String,
+    pub status: String,
+    pub questions: Vec<EvaluationQuestion>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvaluationRunSummaryDto {
+    pub run_id: Uuid,
+    pub dataset_id: Uuid,
+    pub status: String,
+    pub variant_count: u32,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunEvaluationRequestDto {
+    pub dataset_id: Uuid,
+    pub pipeline_configuration_id: Uuid,
+    pub variants: Vec<ChunkingVariant>,
+    pub options: Vec<EvaluationRunOptions>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvaluationRunDto {
+    pub run_id: Uuid,
+    pub dataset_id: Uuid,
+    pub status: String,
+    pub variants: Vec<EvaluationVariantResult>,
+    pub created_at: String,
 }

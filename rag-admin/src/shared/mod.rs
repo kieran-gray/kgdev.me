@@ -32,11 +32,12 @@ pub use embedding::{
 };
 pub use evaluation::{
     evaluation_score, ordered_f32_vec, plain_f32_vec, ChunkingVariant, EvaluationAutotuneRequest,
-    EvaluationAutotuneSummary, EvaluationDataset, EvaluationDatasetStatus,
-    EvaluationGenerationBackend, EvaluationJobInfo, EvaluationMetrics, EvaluationQuestion,
-    EvaluationQuestionResult, EvaluationReference, EvaluationReferenceResult,
-    EvaluationResultSplit, EvaluationRunOptions, EvaluationRunResult, EvaluationRunSummary,
-    EvaluationScorePolicy, EvaluationScoreWeights, EvaluationSettings, EvaluationVariantResult,
+    EvaluationAutotuneSummary, EvaluationDatasetDto, EvaluationDatasetStatus,
+    EvaluationDatasetSummaryDto, EvaluationGenerationBackend, EvaluationJobInfo, EvaluationMetrics,
+    EvaluationQuestionDto, EvaluationQuestionResult, EvaluationReferenceDto,
+    EvaluationReferenceResult, EvaluationResultSplit, EvaluationRunDto, EvaluationRunOptions,
+    EvaluationRunResult, EvaluationRunSummary, EvaluationRunSummaryDto, EvaluationScorePolicy,
+    EvaluationScoreWeights, EvaluationSettings, EvaluationVariantResult, RunEvaluationRequestDto,
 };
 pub use ingest::{IngestJobInfo, IngestOptions, LogEvent, LogLevel};
 pub use post::{ChunkPreview, GlossaryTermDto, PostDetailDto, PostSummary};

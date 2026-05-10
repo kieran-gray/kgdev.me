@@ -1,13 +1,13 @@
 use crate::server::application::evaluation::retrieval::{retrieve_chunks, EvalChunk};
 use crate::shared::{
-    ChunkingVariant, EvaluationMetrics, EvaluationQuestion, EvaluationQuestionResult,
+    ChunkingVariant, EvaluationMetrics, EvaluationQuestionDto, EvaluationQuestionResult,
     EvaluationReferenceResult, EvaluationResultSplit, EvaluationRunOptions,
     EvaluationVariantResult,
 };
 
 pub fn evaluate_variant(
     variant: ChunkingVariant,
-    questions: &[EvaluationQuestion],
+    questions: &[EvaluationQuestionDto],
     chunks: &[EvalChunk],
     chunk_embeddings: &[Vec<f32>],
     question_embeddings: &[Vec<f32>],
@@ -87,7 +87,10 @@ struct QuestionScore {
     reference_results: Vec<EvaluationReferenceResult>,
 }
 
-fn score_question(question: &EvaluationQuestion, retrieved_chunks: &[&EvalChunk]) -> QuestionScore {
+fn score_question(
+    question: &EvaluationQuestionDto,
+    retrieved_chunks: &[&EvalChunk],
+) -> QuestionScore {
     let reference_ranges: Vec<Range> = question
         .references
         .iter()
@@ -144,7 +147,7 @@ fn score_question(question: &EvaluationQuestion, retrieved_chunks: &[&EvalChunk]
 }
 
 fn reference_results(
-    question: &EvaluationQuestion,
+    question: &EvaluationQuestionDto,
     retrieved_chunks: &[&EvalChunk],
 ) -> Vec<EvaluationReferenceResult> {
     question
@@ -178,7 +181,7 @@ fn reference_results(
         .collect()
 }
 
-fn precision_omega(question: &EvaluationQuestion, chunks: &[EvalChunk]) -> f32 {
+fn precision_omega(question: &EvaluationQuestionDto, chunks: &[EvalChunk]) -> f32 {
     let reference_ranges: Vec<Range> = question
         .references
         .iter()
@@ -302,7 +305,7 @@ fn mean_u32(values: &[u32]) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::{ChunkingConfig, EvaluationReference};
+    use crate::shared::{ChunkingConfig, EvaluationReferenceDto};
 
     const EPS: f32 = 1e-4;
 
@@ -360,11 +363,11 @@ mod tests {
     }
 
     // Q1 reference 30..80 straddles C0 and C1; Q2 reference 100..150 straddles C1 and C2.
-    fn fixture_questions() -> Vec<EvaluationQuestion> {
+    fn fixture_questions() -> Vec<EvaluationQuestionDto> {
         vec![
-            EvaluationQuestion {
+            EvaluationQuestionDto {
                 question: "q1".into(),
-                references: vec![EvaluationReference {
+                references: vec![EvaluationReferenceDto {
                     content: "ref1".into(),
                     char_start: 30,
                     char_end: 80,
@@ -372,9 +375,9 @@ mod tests {
                 }],
                 embedding: None,
             },
-            EvaluationQuestion {
+            EvaluationQuestionDto {
                 question: "q2".into(),
-                references: vec![EvaluationReference {
+                references: vec![EvaluationReferenceDto {
                     content: "ref2".into(),
                     char_start: 100,
                     char_end: 150,
@@ -537,7 +540,7 @@ mod tests {
 
     #[test]
     fn evaluate_variant_handles_question_with_no_references() {
-        let questions = vec![EvaluationQuestion {
+        let questions = vec![EvaluationQuestionDto {
             question: "q-empty".into(),
             references: Vec::new(),
             embedding: None,

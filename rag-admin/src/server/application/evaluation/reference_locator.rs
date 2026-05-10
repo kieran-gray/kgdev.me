@@ -1,5 +1,5 @@
 use crate::server::application::AppError;
-use crate::shared::{EvaluationQuestion, EvaluationReference};
+use crate::shared::{EvaluationQuestionDto, EvaluationReferenceDto};
 
 use super::ports::GeneratedEvaluationQuestion;
 
@@ -11,7 +11,7 @@ impl ReferenceLocator {
     pub fn generated_to_question(
         generated: &GeneratedEvaluationQuestion,
         document: &str,
-    ) -> Result<EvaluationQuestion, AppError> {
+    ) -> Result<EvaluationQuestionDto, AppError> {
         if generated.references.len() > MAX_REFERENCE_COUNT {
             return Err(AppError::Validation(format!(
                 "too many references: {}",
@@ -27,7 +27,7 @@ impl ReferenceLocator {
                     truncate(reference, 120)
                 ))
             })?;
-            references.push(EvaluationReference {
+            references.push(EvaluationReferenceDto {
                 content: document[start..end].to_string(),
                 char_start: byte_to_char_index(document, start) as u32,
                 char_end: byte_to_char_index(document, end) as u32,
@@ -35,7 +35,7 @@ impl ReferenceLocator {
             });
         }
 
-        Ok(EvaluationQuestion {
+        Ok(EvaluationQuestionDto {
             question: generated.question.clone(),
             references,
             embedding: None,

@@ -68,4 +68,16 @@ impl EvaluationDatasetCommandHandler {
 
         Ok(())
     }
+
+    /// Handle an `AcceptQuestion` command and also persist the question row.
+    pub async fn handle_accept_question(
+        &self,
+        dataset_id: Uuid,
+        command: EvaluationDatasetCommand,
+        question: crate::server::domain::evaluation::question::EvaluationQuestion,
+    ) -> Result<(), AppError> {
+        self.handle(dataset_id, command).await?;
+        self.repository.save_question(dataset_id, question).await?;
+        Ok(())
+    }
 }

@@ -1,7 +1,7 @@
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::retrieval::cosine_similarity;
 use crate::server::application::AppError;
-use crate::shared::{ordered_f32_vec, EmbeddingModel, EvaluationQuestion};
+use crate::shared::{ordered_f32_vec, EmbeddingModel, EvaluationQuestionDto};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct QuestionFilterStats {
@@ -20,7 +20,7 @@ pub struct GeneratedQuestionGate<'a> {
     embedding_model: &'a EmbeddingModel,
     excerpt_similarity_threshold: f32,
     duplicate_similarity_threshold: f32,
-    questions: Vec<EvaluationQuestion>,
+    questions: Vec<EvaluationQuestionDto>,
     question_embeddings: Vec<Vec<f32>>,
     stats: QuestionFilterStats,
     generated_count: usize,
@@ -29,10 +29,10 @@ pub struct GeneratedQuestionGate<'a> {
 pub async fn filter_generated_questions(
     embedding_service: &EmbeddingService,
     model: &EmbeddingModel,
-    questions: Vec<EvaluationQuestion>,
+    questions: Vec<EvaluationQuestionDto>,
     excerpt_similarity_threshold: f32,
     duplicate_similarity_threshold: f32,
-) -> Result<(Vec<EvaluationQuestion>, QuestionFilterStats), AppError> {
+) -> Result<(Vec<EvaluationQuestionDto>, QuestionFilterStats), AppError> {
     if questions.is_empty() {
         return Ok((questions, QuestionFilterStats::default()));
     }
@@ -90,7 +90,7 @@ impl<'a> GeneratedQuestionGate<'a> {
 
     pub async fn try_accept(
         &mut self,
-        question: EvaluationQuestion,
+        question: EvaluationQuestionDto,
     ) -> Result<QuestionFilterDecision, AppError> {
         self.generated_count += 1;
 
@@ -158,24 +158,24 @@ impl<'a> GeneratedQuestionGate<'a> {
         self.stats
     }
 
-    pub fn latest_question(&self) -> Option<&EvaluationQuestion> {
+    pub fn latest_question(&self) -> Option<&EvaluationQuestionDto> {
         self.questions.last()
     }
 
-    pub fn into_questions(mut self, target_questions: usize) -> Vec<EvaluationQuestion> {
+    pub fn into_questions(mut self, target_questions: usize) -> Vec<EvaluationQuestionDto> {
         self.questions.truncate(target_questions);
         self.questions
     }
 }
 
 fn filter_questions_by_embeddings(
-    questions: Vec<EvaluationQuestion>,
+    questions: Vec<EvaluationQuestionDto>,
     question_embeddings: &[Vec<f32>],
     reference_embeddings: &[Vec<f32>],
     reference_question_indexes: &[usize],
     excerpt_similarity_threshold: f32,
     duplicate_similarity_threshold: f32,
-) -> (Vec<EvaluationQuestion>, QuestionFilterStats) {
+) -> (Vec<EvaluationQuestionDto>, QuestionFilterStats) {
     let mut references_by_question = vec![Vec::new(); questions.len()];
     for (reference_index, question_index) in reference_question_indexes.iter().copied().enumerate()
     {
@@ -271,12 +271,12 @@ fn classify_candidate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::EvaluationReference;
+    use crate::shared::EvaluationReferenceDto;
 
-    fn question(text: &str, reference: &str) -> EvaluationQuestion {
-        EvaluationQuestion {
+    fn question(text: &str, reference: &str) -> EvaluationQuestionDto {
+        EvaluationQuestionDto {
             question: text.into(),
-            references: vec![EvaluationReference {
+            references: vec![EvaluationReferenceDto {
                 content: reference.into(),
                 char_start: 0,
                 char_end: reference.chars().count() as u32,

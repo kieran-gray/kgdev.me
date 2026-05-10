@@ -47,6 +47,17 @@ impl EvaluationQueryService {
             .map_err(|e| AppError::Internal(format!("failed to list evaluation datasets: {e}")))
     }
 
+    pub async fn load_questions(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<Vec<crate::server::domain::evaluation::question::EvaluationQuestion>, AppError>
+    {
+        self.dataset_repository
+            .load_questions(dataset_id)
+            .await
+            .map_err(|e| AppError::Internal(format!("failed to load evaluation questions: {e}")))
+    }
+
     pub async fn get_run(&self, run_id: Uuid) -> Result<Option<EvaluationRunReadModel>, AppError> {
         let Some(mut run) = self
             .run_repository

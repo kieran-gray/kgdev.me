@@ -24,6 +24,12 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         read_model: EvaluationDatasetReadModel,
     ) -> Result<(), EvaluationDatasetRepositoryError>;
 
+    async fn save_question(
+        &self,
+        dataset_id: Uuid,
+        question: EvaluationQuestion,
+    ) -> Result<(), EvaluationDatasetRepositoryError>;
+
     async fn list_for_document(
         &self,
         document_id: Uuid,
