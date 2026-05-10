@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::server::domain::evaluation::question::EvaluationQuestion;
+
 use super::read_model::EvaluationDatasetReadModel;
 
 #[derive(Debug, Error)]
@@ -26,4 +28,9 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         &self,
         document_id: Uuid,
     ) -> Result<Vec<EvaluationDatasetReadModel>, EvaluationDatasetRepositoryError>;
+
+    async fn load_questions(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<Vec<EvaluationQuestion>, EvaluationDatasetRepositoryError>;
 }

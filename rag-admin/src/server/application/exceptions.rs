@@ -7,6 +7,10 @@ use crate::server::domain::configuration::{
     ConfigurationRepositoryError,
 };
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepositoryError;
+use crate::server::domain::evaluation::{
+    dataset::{exceptions::EvaluationDatasetError, repository::EvaluationDatasetRepositoryError},
+    run::{exceptions::EvaluationRunError, repository::EvaluationRunRepositoryError},
+};
 use crate::server::domain::indexing::{
     exceptions::IndexingError, repository::IndexingRepositoryError,
 };
@@ -92,6 +96,45 @@ impl From<ChunkSetRepositoryError> for AppError {
 
 impl From<EmbeddingSetRepositoryError> for AppError {
     fn from(value: EmbeddingSetRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<EvaluationDatasetError> for AppError {
+    fn from(value: EvaluationDatasetError) -> Self {
+        match value {
+            EvaluationDatasetError::AlreadyExists => AppError::Validation(value.to_string()),
+            EvaluationDatasetError::NotFound => AppError::NotFound(value.to_string()),
+            EvaluationDatasetError::GenerationNotInProgress
+            | EvaluationDatasetError::AlreadyCompleted
+            | EvaluationDatasetError::AlreadyFailed
+            | EvaluationDatasetError::NoQuestionsAccepted
+            | EvaluationDatasetError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+        }
+    }
+}
+
+impl From<EvaluationDatasetRepositoryError> for AppError {
+    fn from(value: EvaluationDatasetRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<EvaluationRunError> for AppError {
+    fn from(value: EvaluationRunError) -> Self {
+        match value {
+            EvaluationRunError::AlreadyExists => AppError::Validation(value.to_string()),
+            EvaluationRunError::NotFound => AppError::NotFound(value.to_string()),
+            EvaluationRunError::AlreadyCompleted
+            | EvaluationRunError::AlreadyFailed
+            | EvaluationRunError::NotAllVariantsScored
+            | EvaluationRunError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+        }
+    }
+}
+
+impl From<EvaluationRunRepositoryError> for AppError {
+    fn from(value: EvaluationRunRepositoryError) -> Self {
         AppError::Internal(value.to_string())
     }
 }
