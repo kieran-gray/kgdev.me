@@ -61,8 +61,8 @@ impl Aggregate for Indexing {
     type Command = IndexingCommand;
     type Error = IndexingError;
 
-    fn aggregate_id(&self) -> String {
-        self.indexing_id.to_string()
+    fn aggregate_type() -> &'static str {
+        "indexing"
     }
 
     fn apply(&mut self, event: &Self::Event) {

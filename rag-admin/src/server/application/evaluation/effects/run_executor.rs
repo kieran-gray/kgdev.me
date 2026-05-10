@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::embedding::EmbeddingService;
-use crate::server::application::evaluation::{
-    command_handlers::EvaluationRunCommandHandler,
-    progress::EvaluationProgress,
-    retrieval::{cosine_similarity, retrieve_chunks, EvalChunk},
+use crate::server::application::evaluation::retrieval::{
+    cosine_similarity, retrieve_chunks, EvalChunk,
 };
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::ports::{
@@ -18,35 +18,23 @@ use crate::server::domain::chunk_set::entity::{Chunk, ChunkSet};
 use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::domain::configuration::ConfigurationRepository;
 use crate::server::domain::embedding_set::entity::{ChunkEmbedding, EmbeddingSet};
-use crate::server::domain::evaluation::{
-    dataset::repository::EvaluationDatasetRepository,
-    question::EvaluationQuestion,
-    run::{
-        aggregate::EvaluationRun,
-        commands::{
-            CompleteRun, EvaluationRunCommand, MarkVariantPrepared, RequestRun, ScoreVariant,
-        },
-        events::RetrievalTraceEntry,
-        read_model::EvaluationVariantResultDto,
-        scoring_policy::ScoringPolicy,
-    },
+use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
+use crate::server::domain::evaluation::question::EvaluationQuestion;
+use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
+use crate::server::domain::evaluation::run::commands::{
+    CompleteRun, EvaluationRunCommand, FailRun, MarkVariantPrepared, ScoreVariant,
 };
+use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
+use crate::server::event_sourcing::command_processor::CommandProcessor;
+use crate::server::event_sourcing::process_manager::EffectExecutor;
 use crate::shared::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics, EvaluationResultSplit,
-    EvaluationRunOptions,
+    ChunkingVariant, EvaluationMetrics, EvaluationResultSplit, EvaluationRunOptions,
 };
 
-pub struct RunEvaluationRequest {
-    pub dataset_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
-    pub variants: Vec<ChunkingVariant>,
-    pub options: Vec<EvaluationRunOptions>,
-    pub autotune_request: Option<EvaluationAutotuneRequest>,
-    pub scoring_policy: ScoringPolicy,
-}
+use super::run::{EvaluationRunEffect, ExecuteRunEffect};
 
-pub struct RunEvaluationUseCase {
+pub struct EvaluationRunEffectExecutor {
     source_document_repository: Arc<dyn SourceDocumentRepository>,
     blob_store: Arc<dyn BlobStore>,
     chunker_registry: Arc<ChunkerRegistry>,
@@ -54,14 +42,14 @@ pub struct RunEvaluationUseCase {
     embedding_service: Arc<EmbeddingService>,
     embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
     dataset_repository: Arc<dyn EvaluationDatasetRepository>,
-    run_command_handler: Arc<EvaluationRunCommandHandler>,
+    command_processor: Arc<CommandProcessor<EvaluationRun>>,
     configuration_repository: Arc<dyn ConfigurationRepository>,
     pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
 }
 
-impl RunEvaluationUseCase {
+impl EvaluationRunEffectExecutor {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         source_document_repository: Arc<dyn SourceDocumentRepository>,
@@ -71,7 +59,7 @@ impl RunEvaluationUseCase {
         embedding_service: Arc<EmbeddingService>,
         embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
         dataset_repository: Arc<dyn EvaluationDatasetRepository>,
-        run_command_handler: Arc<EvaluationRunCommandHandler>,
+        command_processor: Arc<CommandProcessor<EvaluationRun>>,
         configuration_repository: Arc<dyn ConfigurationRepository>,
         pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository>,
         clock: Arc<dyn Clock>,
@@ -85,7 +73,7 @@ impl RunEvaluationUseCase {
             embedding_service,
             embedding_set_repository,
             dataset_repository,
-            run_command_handler,
+            command_processor,
             configuration_repository,
             pipeline_configuration_repository,
             clock,
@@ -93,34 +81,50 @@ impl RunEvaluationUseCase {
         })
     }
 
-    pub async fn execute(
-        &self,
-        request: RunEvaluationRequest,
-        progress: Option<Arc<dyn EvaluationProgress>>,
-    ) -> Result<Uuid, AppError> {
-        if request.variants.is_empty() {
-            return Err(AppError::Validation(
-                "at least one chunking variant is required".into(),
-            ));
+    async fn run(&self, effect: &ExecuteRunEffect) -> Result<(), AppError> {
+        if let Err(e) = self.run_inner(effect).await {
+            error!(
+                run_id = %effect.run_id,
+                dataset_id = %effect.dataset_id,
+                error = %e,
+                "evaluation run failed"
+            );
+            // Best-effort: tell the run aggregate we failed so the read model
+            // and process manager stop waiting on us. Swallow the secondary
+            // error so we still surface the original `e` to the ledger.
+            let _ = self
+                .command_processor
+                .handle(
+                    effect.run_id,
+                    EvaluationRunCommand::FailRun(FailRun {
+                        run_id: effect.run_id,
+                        reason: e.to_string(),
+                        occurred_at: self.clock.now(),
+                    }),
+                )
+                .await;
+            return Err(e);
         }
-        if request.options.is_empty() {
+        Ok(())
+    }
+
+    async fn run_inner(&self, effect: &ExecuteRunEffect) -> Result<(), AppError> {
+        if effect.autotune_request.is_some() {
             return Err(AppError::Validation(
-                "at least one option set is required".into(),
+                "autotune is not yet implemented in the new evaluation path".into(),
             ));
         }
 
         let dataset = self
             .dataset_repository
-            .load(request.dataset_id)
+            .load(effect.dataset_id)
             .await
             .map_err(|e| AppError::Internal(e.to_string()))?
-            .ok_or_else(|| {
-                AppError::NotFound(format!("evaluation dataset {}", request.dataset_id))
-            })?;
+            .ok_or_else(|| AppError::NotFound(format!("evaluation dataset {}", effect.dataset_id)))?;
 
         let questions = self
             .dataset_repository
-            .load_questions(request.dataset_id)
+            .load_questions(effect.dataset_id)
             .await
             .map_err(|e| AppError::Internal(e.to_string()))?;
 
@@ -148,11 +152,11 @@ impl RunEvaluationUseCase {
 
         let pc = pipeline_configs
             .iter()
-            .find(|p| p.pipeline_configuration_id == request.pipeline_configuration_id)
+            .find(|p| p.pipeline_configuration_id == effect.pipeline_configuration_id)
             .ok_or_else(|| {
                 AppError::NotFound(format!(
                     "pipeline configuration {}",
-                    request.pipeline_configuration_id
+                    effect.pipeline_configuration_id
                 ))
             })?;
 
@@ -169,49 +173,33 @@ impl RunEvaluationUseCase {
             .ok_or_else(|| AppError::NotFound("embedding model not found".into()))?
             .clone();
 
-        let run_id = EvaluationRun::compute_id(
-            request.dataset_id,
-            request.pipeline_configuration_id,
-            &request.variants,
-            &request.options,
-            request.autotune_request.as_ref(),
-        );
-
-        self.run_command_handler
-            .handle(
-                run_id,
-                EvaluationRunCommand::RequestRun(RequestRun {
-                    run_id,
-                    dataset_id: request.dataset_id,
-                    pipeline_configuration_id: request.pipeline_configuration_id,
-                    document_id: dataset.document_id,
-                    document_version: dataset.document_version,
-                    variants: request.variants.clone(),
-                    options: request.options.clone(),
-                    autotune_request: request.autotune_request.clone(),
-                    scoring_policy: request.scoring_policy,
-                    occurred_at: self.clock.now(),
-                }),
-            )
-            .await?;
-
-        // Embed questions for retrieval.
         let question_texts: Vec<String> = questions.iter().map(|q| q.question.clone()).collect();
         let shared_model = crate::shared::EmbeddingModel {
             id: embedding_model.model.clone(),
             ..Default::default()
         };
+
+        info!(
+            run_id = %effect.run_id,
+            dataset_id = %effect.dataset_id,
+            questions = question_texts.len(),
+            variants = effect.variants.len(),
+            options = effect.options.len(),
+            embedding_model = %shared_model.id,
+            "starting evaluation run"
+        );
+
         let question_embeddings = self
             .embedding_service
             .embed_batch(&shared_model, &question_texts)
             .await?;
 
-        // For each variant: prepare (chunk + embed) then score.
-        for variant in &request.variants {
-            if let Some(ref p) = progress {
-                p.info(format!("preparing variant '{}'...", variant.label))
-                    .await;
-            }
+        for variant in &effect.variants {
+            info!(
+                run_id = %effect.run_id,
+                variant = %variant.label,
+                "preparing variant"
+            );
 
             let (chunk_set_id, chunks) = self
                 .find_or_create_chunk_set(
@@ -231,10 +219,11 @@ impl RunEvaluationUseCase {
                 )
                 .await?;
 
-            self.run_command_handler
+            self.command_processor
                 .handle(
-                    run_id,
+                    effect.run_id,
                     EvaluationRunCommand::MarkVariantPrepared(MarkVariantPrepared {
+                        run_id: effect.run_id,
                         variant_label: variant.label.clone(),
                         chunk_set_id,
                         embedding_set_id,
@@ -243,82 +232,77 @@ impl RunEvaluationUseCase {
                 )
                 .await?;
 
-            if let Some(ref p) = progress {
-                p.info(format!("scoring variant '{}'...", variant.label))
-                    .await;
-            }
+            info!(
+                run_id = %effect.run_id,
+                variant = %variant.label,
+                chunks = chunks.len(),
+                %chunk_set_id,
+                %embedding_set_id,
+                "variant prepared"
+            );
 
-            // Score against each option set (for matrix runs).
-            let splits = if request.autotune_request.is_some() {
-                vec![
-                    EvaluationResultSplit::Tuning,
-                    EvaluationResultSplit::Holdout,
-                ]
-            } else {
-                vec![EvaluationResultSplit::Full]
-            };
+            let splits = vec![EvaluationResultSplit::Full];
 
-            for options in &request.options {
+            for options in &effect.options {
                 for split in &splits {
                     let (metrics, traces) = score_variant(
                         &questions,
                         &chunks,
                         &chunk_embeddings,
                         &question_embeddings,
-                        chunk_set_id,
                         options,
                     );
 
-                    let variant_result = EvaluationVariantResultDto {
-                        run_id,
-                        variant_label: variant.label.clone(),
-                        split: *split,
-                        recall_mean: metrics.recall_mean,
-                        recall_std: metrics.recall_std,
-                        precision_mean: metrics.precision_mean,
-                        precision_std: metrics.precision_std,
-                        iou_mean: metrics.iou_mean,
-                        iou_std: metrics.iou_std,
-                        precision_omega_mean: metrics.precision_omega_mean,
-                        precision_omega_std: metrics.precision_omega_std,
-                        chunk_set_id,
-                        embedding_set_id,
-                        selected: false,
-                        retrieval_traces: traces,
-                    };
+                    info!(
+                        run_id = %effect.run_id,
+                        variant = %variant.label,
+                        split = split.as_str(),
+                        top_k = options.top_k,
+                        recall_mean = format!("{:.3}", metrics.recall_mean),
+                        precision_mean = format!("{:.3}", metrics.precision_mean),
+                        iou_mean = format!("{:.3}", metrics.iou_mean),
+                        "variant scored"
+                    );
 
-                    self.run_command_handler
-                        .handle_score_variant(
-                            run_id,
+                    self.command_processor
+                        .handle(
+                            effect.run_id,
                             EvaluationRunCommand::ScoreVariant(ScoreVariant {
+                                run_id: effect.run_id,
                                 variant_label: variant.label.clone(),
+                                variant_config: variant.config.clone(),
+                                options: options.clone(),
                                 split: *split,
+                                chunk_set_id,
+                                embedding_set_id,
                                 metrics,
-                                retrieval_traces: variant_result.retrieval_traces.clone(),
+                                retrieval_traces: traces,
                                 selected: false,
                                 occurred_at: self.clock.now(),
                             }),
-                            variant_result,
                         )
                         .await?;
                 }
             }
         }
 
-        self.run_command_handler
+        self.command_processor
             .handle(
-                run_id,
+                effect.run_id,
                 EvaluationRunCommand::CompleteRun(CompleteRun {
+                    run_id: effect.run_id,
                     occurred_at: self.clock.now(),
                 }),
             )
             .await?;
 
-        if let Some(ref p) = progress {
-            p.success("evaluation complete".to_string()).await;
-        }
+        info!(
+            run_id = %effect.run_id,
+            variants = effect.variants.len(),
+            "evaluation run complete"
+        );
 
-        Ok(run_id)
+        Ok(())
     }
 
     async fn find_or_create_chunk_set(
@@ -440,12 +424,20 @@ impl RunEvaluationUseCase {
     }
 }
 
+#[async_trait]
+impl EffectExecutor<EvaluationRunEffect> for EvaluationRunEffectExecutor {
+    async fn execute(&self, effect: &EvaluationRunEffect) -> Result<(), AppError> {
+        match effect {
+            EvaluationRunEffect::ExecuteRun(e) => self.run(e).await,
+        }
+    }
+}
+
 fn score_variant(
     questions: &[EvaluationQuestion],
     chunks: &[Chunk],
     chunk_embeddings: &[Vec<f32>],
     question_embeddings: &[Vec<f32>],
-    _chunk_set_id: Uuid,
     options: &EvaluationRunOptions,
 ) -> (EvaluationMetrics, Vec<RetrievalTraceEntry>) {
     let eval_chunks: Vec<EvalChunk> = chunks

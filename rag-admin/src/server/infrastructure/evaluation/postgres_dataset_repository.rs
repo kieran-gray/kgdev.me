@@ -1,25 +1,26 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use sqlx::PgPool;
+use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
-use crate::server::{application::ports::Clock, domain::evaluation::{
+use crate::server::domain::evaluation::{
     dataset::{
-        read_model::EvaluationDatasetReadModel,
+        aggregate::DatasetGenerationStatus,
+        read_model::{EvaluationDatasetReadModel, NewDatasetSummary},
         repository::{EvaluationDatasetRepository, EvaluationDatasetRepositoryError},
     },
     question::EvaluationQuestion,
-}};
+};
+use crate::server::domain::shared::Timestamp;
+use crate::server::infrastructure::postgres::timestamps::to_offset_datetime;
 
 pub struct PostgresEvaluationDatasetRepository {
     pool: PgPool,
-    clock: Arc<dyn Clock>
 }
 
 impl PostgresEvaluationDatasetRepository {
-    pub fn new(pool: PgPool, clock: Arc<dyn Clock>) -> Self {
-        Self { pool, clock }
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 }
 
@@ -31,13 +32,13 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
     ) -> Result<Option<EvaluationDatasetReadModel>, EvaluationDatasetRepositoryError> {
         let row: Option<DatasetRow> = sqlx::query_as(
             r#"
-            SELECT 
+            SELECT
                 dataset_id, document_id, document_version, content_hash, label,
                 target_question_count, generation_model, generation_backend,
                 excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
                 embedding_model_id, status, question_count, rejection_count,
                 failure_reason, created_at
-            FROM evaluation_datasets 
+            FROM evaluation_datasets
             WHERE dataset_id = $1
             "#,
         )
@@ -49,143 +50,19 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         Ok(row.map(EvaluationDatasetReadModel::from))
     }
 
-    async fn save(
-        &self,
-        read_model: EvaluationDatasetReadModel,
-    ) -> Result<(), EvaluationDatasetRepositoryError> {
-        let status = serde_json::to_string(&read_model.status).map_err(|e| {
-            EvaluationDatasetRepositoryError::Internal(format!("serialize status: {e}"))
-        })?;
-
-        sqlx::query(
-            r#"
-            INSERT INTO evaluation_datasets (
-                dataset_id, document_id, document_version, content_hash, label,
-                target_question_count, generation_model, generation_backend,
-                excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
-                embedding_model_id, status, question_count, rejection_count,
-                failure_reason, created_at, updated_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
-            ON CONFLICT (dataset_id) DO UPDATE SET
-                status = $12,
-                question_count = $13,
-                rejection_count = $14,
-                failure_reason = $15,
-                updated_at = NOW()
-            "#,
-        )
-        .bind(read_model.dataset_id)
-        .bind(read_model.document_id)
-        .bind(read_model.document_version as i32)
-        .bind(&read_model.content_hash)
-        .bind(&read_model.label)
-        .bind(read_model.target_question_count as i32)
-        .bind(&read_model.generation_model)
-        .bind(&read_model.generation_backend)
-        .bind(read_model.excerpt_similarity_threshold_milli as i32)
-        .bind(read_model.duplicate_similarity_threshold_milli as i32)
-        .bind(read_model.embedding_model_id)
-        .bind(&status)
-        .bind(read_model.question_count as i32)
-        .bind(read_model.rejection_count as i32)
-        .bind(&read_model.failure_reason)
-        .bind(
-            chrono::DateTime::parse_from_rfc3339(&read_model.created_at)
-                .map_err(|e| {
-                    EvaluationDatasetRepositoryError::Internal(format!("parse created_at: {e}"))
-                })?
-                .with_timezone(&chrono::Utc),
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("save: {e}")))?;
-
-        Ok(())
-    }
-
-    async fn save_question(
-        &self,
-        dataset_id: Uuid,
-        question: EvaluationQuestion,
-    ) -> Result<(), EvaluationDatasetRepositoryError> {
-        let mut tx = self.pool.begin().await.map_err(|e| {
-            EvaluationDatasetRepositoryError::Internal(format!("begin transaction: {e}"))
-        })?;
-
-        let embedding = serde_json::to_value(&question.embedding).map_err(|e| {
-            EvaluationDatasetRepositoryError::Internal(format!("serialize question embedding: {e}"))
-        })?;
-
-        sqlx::query(
-            r#"
-            INSERT INTO evaluation_questions (dataset_id, sequence, question, embedding)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (dataset_id, sequence) DO UPDATE SET
-                question = $3,
-                embedding = $4
-            "#,
-        )
-        .bind(dataset_id)
-        .bind(question.sequence as i32)
-        .bind(&question.question)
-        .bind(&embedding)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("save_question: {e}")))?;
-
-        for (i, reference) in question.references.iter().enumerate() {
-            let ref_embedding = serde_json::to_value(&reference.embedding).map_err(|e| {
-                EvaluationDatasetRepositoryError::Internal(format!(
-                    "serialize reference embedding: {e}"
-                ))
-            })?;
-
-            sqlx::query(
-                r#"
-                INSERT INTO evaluation_references (
-                    dataset_id, question_sequence, sequence, content, char_start, char_end, embedding
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                ON CONFLICT (dataset_id, question_sequence, sequence) DO UPDATE SET
-                    content = $4,
-                    char_start = $5,
-                    char_end = $6,
-                    embedding = $7
-                "#,
-            )
-            .bind(dataset_id)
-            .bind(question.sequence as i32)
-            .bind(i as i32)
-            .bind(&reference.content)
-            .bind(reference.char_start as i32)
-            .bind(reference.char_end as i32)
-            .bind(&ref_embedding)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("save_reference: {e}")))?;
-        }
-
-        tx.commit().await.map_err(|e| {
-            EvaluationDatasetRepositoryError::Internal(format!("commit transaction: {e}"))
-        })?;
-
-        Ok(())
-    }
-
     async fn list_for_document(
         &self,
         document_id: Uuid,
     ) -> Result<Vec<EvaluationDatasetReadModel>, EvaluationDatasetRepositoryError> {
         let rows: Vec<DatasetRow> = sqlx::query_as(
             r#"
-            SELECT 
+            SELECT
                 dataset_id, document_id, document_version, content_hash, label,
                 target_question_count, generation_model, generation_backend,
                 excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
                 embedding_model_id, status, question_count, rejection_count,
                 failure_reason, created_at
-            FROM evaluation_datasets 
+            FROM evaluation_datasets
             WHERE document_id = $1
             ORDER BY created_at DESC
             "#,
@@ -207,10 +84,6 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         &self,
         dataset_id: Uuid,
     ) -> Result<Vec<EvaluationQuestion>, EvaluationDatasetRepositoryError> {
-        // This would involve joining with evaluation_questions and evaluation_references
-        // For now, let's keep it simple and just load questions.
-        // References can be loaded in a separate query or join.
-
         let question_rows: Vec<QuestionRow> = sqlx::query_as(
             "SELECT sequence, question, embedding FROM evaluation_questions WHERE dataset_id = $1 ORDER BY sequence ASC"
         )
@@ -240,6 +113,176 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
 
         Ok(questions)
     }
+
+    async fn insert_summary(
+        &self,
+        summary: NewDatasetSummary,
+    ) -> Result<(), EvaluationDatasetRepositoryError> {
+        let created_at = to_offset_datetime(&summary.created_at)
+            .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("{e}")))?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO evaluation_datasets (
+                dataset_id, document_id, document_version, content_hash, label,
+                target_question_count, generation_model, generation_backend,
+                excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
+                embedding_model_id, status, question_count, rejection_count,
+                failure_reason, created_at, updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'generating', 0, 0, NULL, $12, NOW())
+            ON CONFLICT (dataset_id) DO NOTHING
+            "#,
+        )
+        .bind(summary.dataset_id)
+        .bind(summary.document_id)
+        .bind(summary.document_version as i32)
+        .bind(&summary.content_hash)
+        .bind(&summary.label)
+        .bind(summary.target_question_count as i32)
+        .bind(&summary.generation_model)
+        .bind(&summary.generation_backend)
+        .bind(summary.excerpt_similarity_threshold_milli as i32)
+        .bind(summary.duplicate_similarity_threshold_milli as i32)
+        .bind(summary.embedding_model_id)
+        .bind(created_at)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("insert_summary: {e}")))?;
+
+        Ok(())
+    }
+
+    async fn save_question(
+        &self,
+        dataset_id: Uuid,
+        question: EvaluationQuestion,
+    ) -> Result<(), EvaluationDatasetRepositoryError> {
+        let mut tx = self.pool.begin().await.map_err(|e| {
+            EvaluationDatasetRepositoryError::Internal(format!("begin transaction: {e}"))
+        })?;
+
+        let embedding = serde_json::to_value(&question.embedding).map_err(|e| {
+            EvaluationDatasetRepositoryError::Internal(format!("serialize question embedding: {e}"))
+        })?;
+
+        let inserted: (i64,) = sqlx::query_as(
+            r#"
+            WITH inserted AS (
+                INSERT INTO evaluation_questions (dataset_id, sequence, question, embedding)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (dataset_id, sequence) DO UPDATE SET
+                    question = EXCLUDED.question,
+                    embedding = EXCLUDED.embedding
+                RETURNING (xmax = 0) AS is_new
+            )
+            SELECT CASE WHEN is_new THEN 1 ELSE 0 END FROM inserted
+            "#,
+        )
+        .bind(dataset_id)
+        .bind(question.sequence as i32)
+        .bind(&question.question)
+        .bind(&embedding)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("save_question: {e}")))?;
+
+        for (i, reference) in question.references.iter().enumerate() {
+            let ref_embedding = serde_json::to_value(&reference.embedding).map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!(
+                    "serialize reference embedding: {e}"
+                ))
+            })?;
+
+            sqlx::query(
+                r#"
+                INSERT INTO evaluation_references (
+                    dataset_id, question_sequence, sequence, content, char_start, char_end, embedding
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (dataset_id, question_sequence, sequence) DO UPDATE SET
+                    content = EXCLUDED.content,
+                    char_start = EXCLUDED.char_start,
+                    char_end = EXCLUDED.char_end,
+                    embedding = EXCLUDED.embedding
+                "#,
+            )
+            .bind(dataset_id)
+            .bind(question.sequence as i32)
+            .bind(i as i32)
+            .bind(&reference.content)
+            .bind(reference.char_start as i32)
+            .bind(reference.char_end as i32)
+            .bind(&ref_embedding)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!("save_reference: {e}"))
+            })?;
+        }
+
+        if inserted.0 == 1 {
+            sqlx::query(
+                "UPDATE evaluation_datasets SET question_count = question_count + 1, updated_at = NOW() WHERE dataset_id = $1",
+            )
+            .bind(dataset_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("bump question_count: {e}")))?;
+        }
+
+        tx.commit().await.map_err(|e| {
+            EvaluationDatasetRepositoryError::Internal(format!("commit transaction: {e}"))
+        })?;
+
+        Ok(())
+    }
+
+    async fn increment_rejection_count(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<(), EvaluationDatasetRepositoryError> {
+        sqlx::query(
+            "UPDATE evaluation_datasets SET rejection_count = rejection_count + 1, updated_at = NOW() WHERE dataset_id = $1",
+        )
+        .bind(dataset_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationDatasetRepositoryError::Internal(format!("increment_rejection_count: {e}"))
+        })?;
+        Ok(())
+    }
+
+    async fn mark_completed(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<(), EvaluationDatasetRepositoryError> {
+        sqlx::query(
+            "UPDATE evaluation_datasets SET status = 'completed', failure_reason = NULL, updated_at = NOW() WHERE dataset_id = $1",
+        )
+        .bind(dataset_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("mark_completed: {e}")))?;
+        Ok(())
+    }
+
+    async fn mark_failed(
+        &self,
+        dataset_id: Uuid,
+        reason: String,
+    ) -> Result<(), EvaluationDatasetRepositoryError> {
+        sqlx::query(
+            "UPDATE evaluation_datasets SET status = 'failed', failure_reason = $2, updated_at = NOW() WHERE dataset_id = $1",
+        )
+        .bind(dataset_id)
+        .bind(reason)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("mark_failed: {e}")))?;
+        Ok(())
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -259,7 +302,7 @@ struct DatasetRow {
     question_count: i32,
     rejection_count: i32,
     failure_reason: Option<String>,
-    created_at: chrono::DateTime<chrono::Utc>,
+    created_at: time::OffsetDateTime,
 }
 
 impl From<DatasetRow> for EvaluationDatasetReadModel {
@@ -276,11 +319,12 @@ impl From<DatasetRow> for EvaluationDatasetReadModel {
             excerpt_similarity_threshold_milli: row.excerpt_similarity_threshold_milli as u32,
             duplicate_similarity_threshold_milli: row.duplicate_similarity_threshold_milli as u32,
             embedding_model_id: row.embedding_model_id,
-            status: serde_json::from_str(&row.status).unwrap_or(crate::server::domain::evaluation::dataset::aggregate::DatasetGenerationStatus::Generating),
+            status: DatasetGenerationStatus::from_parts(&row.status, row.failure_reason.clone())
+                .unwrap_or(DatasetGenerationStatus::Generating),
             question_count: row.question_count as u32,
             rejection_count: row.rejection_count as u32,
             failure_reason: row.failure_reason,
-            created_at: row.created_at.to_rfc3339(),
+            created_at: Timestamp::from(row.created_at.format(&Rfc3339).unwrap_or_default()),
         }
     }
 }

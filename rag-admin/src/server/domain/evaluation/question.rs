@@ -16,23 +16,23 @@ pub struct EvaluationQuestion {
     pub embedding: Option<Vec<f32>>,
 }
 
-impl From<EvaluationQuestion> for EvaluationQuestion {
-    fn from(q: EvaluationQuestion) -> Self {
-        Self {
-            question: q.question,
-            references: q.references.into_iter().map(|r| r.into()).collect(),
-            embedding: q.embedding.map(crate::shared::ordered_f32_vec),
-        }
-    }
-}
-
-impl From<EvaluationReference> for EvaluationReference {
+impl From<EvaluationReference> for crate::shared::EvaluationReferenceDto {
     fn from(r: EvaluationReference) -> Self {
         Self {
             content: r.content,
             char_start: r.char_start,
             char_end: r.char_end,
             embedding: r.embedding.map(crate::shared::ordered_f32_vec),
+        }
+    }
+}
+
+impl From<EvaluationQuestion> for crate::shared::EvaluationQuestionDto {
+    fn from(q: EvaluationQuestion) -> Self {
+        Self {
+            question: q.question,
+            references: q.references.into_iter().map(Into::into).collect(),
+            embedding: q.embedding.map(crate::shared::ordered_f32_vec),
         }
     }
 }

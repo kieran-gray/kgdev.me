@@ -42,8 +42,8 @@ impl Aggregate for SourceDocument {
     type Command = SourceDocumentCommand;
     type Error = SourceDocumentError;
 
-    fn aggregate_id(&self) -> String {
-        self.document_id.to_string()
+    fn aggregate_type() -> &'static str {
+        "source_document"
     }
 
     fn apply(&mut self, event: &Self::Event) {

@@ -2,8 +2,8 @@ use uuid::Uuid;
 
 use crate::server::domain::shared::Timestamp;
 use crate::shared::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics, EvaluationResultSplit,
-    EvaluationRunOptions,
+    ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
+    EvaluationResultSplit, EvaluationRunOptions,
 };
 
 use super::{events::RetrievalTraceEntry, scoring_policy::ScoringPolicy};
@@ -22,6 +22,7 @@ pub struct RequestRun {
 }
 
 pub struct MarkVariantPrepared {
+    pub run_id: Uuid,
     pub variant_label: String,
     pub chunk_set_id: Uuid,
     pub embedding_set_id: Uuid,
@@ -29,8 +30,13 @@ pub struct MarkVariantPrepared {
 }
 
 pub struct ScoreVariant {
+    pub run_id: Uuid,
     pub variant_label: String,
+    pub variant_config: ChunkingConfig,
+    pub options: EvaluationRunOptions,
     pub split: EvaluationResultSplit,
+    pub chunk_set_id: Uuid,
+    pub embedding_set_id: Uuid,
     pub metrics: EvaluationMetrics,
     pub retrieval_traces: Vec<RetrievalTraceEntry>,
     pub selected: bool,
@@ -38,10 +44,12 @@ pub struct ScoreVariant {
 }
 
 pub struct CompleteRun {
+    pub run_id: Uuid,
     pub occurred_at: Timestamp,
 }
 
 pub struct FailRun {
+    pub run_id: Uuid,
     pub reason: String,
     pub occurred_at: Timestamp,
 }
@@ -52,4 +60,16 @@ pub enum EvaluationRunCommand {
     ScoreVariant(ScoreVariant),
     CompleteRun(CompleteRun),
     FailRun(FailRun),
+}
+
+impl EvaluationRunCommand {
+    pub fn run_id(&self) -> Uuid {
+        match self {
+            Self::RequestRun(c) => c.run_id,
+            Self::MarkVariantPrepared(c) => c.run_id,
+            Self::ScoreVariant(c) => c.run_id,
+            Self::CompleteRun(c) => c.run_id,
+            Self::FailRun(c) => c.run_id,
+        }
+    }
 }

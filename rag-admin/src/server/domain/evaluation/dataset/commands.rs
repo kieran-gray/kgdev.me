@@ -20,6 +20,7 @@ pub struct RequestDatasetGeneration {
 }
 
 pub struct AcceptQuestion {
+    pub dataset_id: Uuid,
     pub sequence: u32,
     pub question: String,
     pub references: Vec<EvaluationReference>,
@@ -28,16 +29,19 @@ pub struct AcceptQuestion {
 }
 
 pub struct RejectQuestion {
+    pub dataset_id: Uuid,
     pub attempt: u32,
     pub reason: String,
     pub occurred_at: Timestamp,
 }
 
 pub struct CompleteDatasetGeneration {
+    pub dataset_id: Uuid,
     pub occurred_at: Timestamp,
 }
 
 pub struct FailDatasetGeneration {
+    pub dataset_id: Uuid,
     pub reason: String,
     pub occurred_at: Timestamp,
 }
@@ -48,4 +52,26 @@ pub enum EvaluationDatasetCommand {
     RejectQuestion(RejectQuestion),
     CompleteDatasetGeneration(CompleteDatasetGeneration),
     FailDatasetGeneration(FailDatasetGeneration),
+}
+
+impl EvaluationDatasetCommand {
+    pub fn dataset_id(&self) -> Uuid {
+        match self {
+            Self::RequestDatasetGeneration(c) => c.dataset_id,
+            Self::AcceptQuestion(c) => c.dataset_id,
+            Self::RejectQuestion(c) => c.dataset_id,
+            Self::CompleteDatasetGeneration(c) => c.dataset_id,
+            Self::FailDatasetGeneration(c) => c.dataset_id,
+        }
+    }
+
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::RequestDatasetGeneration(_) => "request_dataset_generation",
+            Self::AcceptQuestion(_) => "accept_question",
+            Self::RejectQuestion(_) => "reject_question",
+            Self::CompleteDatasetGeneration(_) => "complete_dataset_generation",
+            Self::FailDatasetGeneration(_) => "fail_dataset_generation",
+        }
+    }
 }

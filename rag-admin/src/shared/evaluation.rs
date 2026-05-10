@@ -85,7 +85,7 @@ impl EvaluationSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct EvaluationReference {
+pub struct EvaluationReferenceDto {
     pub content: String,
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub char_start: u32,
@@ -96,9 +96,9 @@ pub struct EvaluationReference {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct EvaluationQuestion {
+pub struct EvaluationQuestionDto {
     pub question: String,
-    pub references: Vec<EvaluationReference>,
+    pub references: Vec<EvaluationReferenceDto>,
     #[serde(default)]
     pub embedding: Option<Vec<OrderedF32>>,
 }
@@ -114,7 +114,7 @@ pub struct EvaluationDataset {
     pub embedding_model_id: Option<String>,
     #[serde(default)]
     pub embedding_model_dims: Option<u32>,
-    pub questions: Vec<EvaluationQuestion>,
+    pub questions: Vec<EvaluationQuestionDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -184,7 +184,7 @@ pub struct EvaluationAutotuneRequest {
     pub include_glossary_values: Vec<bool>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum EvaluationResultSplit {
     #[default]
@@ -199,6 +199,15 @@ impl EvaluationResultSplit {
             Self::Full => "full",
             Self::Tuning => "tuning",
             Self::Holdout => "holdout",
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s {
+            "full" => Ok(Self::Full),
+            "tuning" => Ok(Self::Tuning),
+            "holdout" => Ok(Self::Holdout),
+            other => Err(format!("unknown evaluation split '{other}'")),
         }
     }
 }
@@ -429,7 +438,7 @@ pub struct EvaluationDatasetDto {
     pub document_id: Uuid,
     pub label: String,
     pub status: String,
-    pub questions: Vec<EvaluationQuestion>,
+    pub questions: Vec<EvaluationQuestionDto>,
     pub created_at: String,
 }
 

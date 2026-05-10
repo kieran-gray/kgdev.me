@@ -45,8 +45,8 @@ impl Aggregate for Configuration {
     type Command = ConfigurationCommand;
     type Error = ConfigurationError;
 
-    fn aggregate_id(&self) -> String {
-        self.configuration_id.to_string()
+    fn aggregate_type() -> &'static str {
+        "configuration"
     }
 
     fn apply(&mut self, event: &Self::Event) {

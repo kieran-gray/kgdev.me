@@ -3,9 +3,11 @@ use leptos::task::spawn_local;
 use leptos_router::hooks::use_params_map;
 
 mod chunk_card;
+mod evaluation_tab;
 mod utils;
 
 use chunk_card::ChunkCard;
+use evaluation_tab::EvaluationTab;
 use utils::{open_event_stream, short_hash};
 
 use crate::components::log_panel::LogPanel;
@@ -22,6 +24,7 @@ use crate::shared::{
 enum Tab {
     Ingest,
     Chunks,
+    Evaluation,
 }
 
 /// Document detail page — generic across all source document types.
@@ -139,6 +142,11 @@ fn DocumentView(
                         label="CHUNK_EXPLORER"
                         active=move || active_tab.get() == Tab::Chunks
                         on_click=Box::new(move || set_active_tab.set(Tab::Chunks))
+                    />
+                    <TabButton
+                        label="EVALUATION"
+                        active=move || active_tab.get() == Tab::Evaluation
+                        on_click=Box::new(move || set_active_tab.set(Tab::Evaluation))
                     />
                 </div>
             </div>
@@ -311,6 +319,25 @@ fn DocumentView(
                     view! {
                         <ChunksView indexings=indexings />
                     }.into_any()
+                }
+
+                Tab::Evaluation => {
+                    match detail_stored.get_value() {
+                        None => view! {
+                            <div class="card-outer p-8 flex flex-col items-center justify-center border-dashed opacity-40">
+                                <span class="tech-label">"INGEST_REQUIRED"</span>
+                                <p class="text-[10px] mt-1">
+                                    "Run the first ingest to enable evaluation."
+                                </p>
+                            </div>
+                        }.into_any(),
+                        Some(d) => view! {
+                            <EvaluationTab
+                                document_id=d.document.document_id
+                                pipelines=pipelines_stored.get_value()
+                            />
+                        }.into_any(),
+                    }
                 }
             }}
         </div>

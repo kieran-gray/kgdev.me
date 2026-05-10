@@ -13,6 +13,10 @@ use crate::server::domain::configuration::events::ConfigurationEvent;
 use crate::server::domain::indexing::events::IndexingEvent;
 use crate::server::domain::source_document::events::SourceDocumentEvent;
 
+/// Legacy per-aggregate event store, retained for the configuration / source_document
+/// / indexing aggregates that have not yet been migrated onto the generic
+/// `event_sourcing::EventStore` trait. New aggregates (including evaluation) use
+/// the generic adapter under `infrastructure/event_sourcing/`.
 pub struct PostgresEventStore<E> {
     pool: PgPool,
     aggregate_type: &'static str,
@@ -35,9 +39,10 @@ where
 {
     pub async fn load_events(&self, aggregate_id: Uuid) -> Result<Vec<E>, AppError> {
         let rows: Vec<(serde_json::Value,)> = sqlx::query_as(
-            "SELECT event_data FROM events WHERE stream_id = $1 ORDER BY position ASC",
+            "SELECT event_data FROM events WHERE stream_id = $1 AND aggregate_type = $2 ORDER BY position ASC",
         )
         .bind(aggregate_id)
+        .bind(self.aggregate_type)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| AppError::Internal(format!("load events: {e}")))?;
@@ -62,12 +67,14 @@ where
             .await
             .map_err(|e| AppError::Internal(format!("begin transaction: {e}")))?;
 
-        let (current_count,): (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-                .bind(aggregate_id)
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(|e| AppError::Internal(format!("read stream version: {e}")))?;
+        let (current_count,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND aggregate_type = $2",
+        )
+        .bind(aggregate_id)
+        .bind(self.aggregate_type)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(format!("read stream version: {e}")))?;
 
         if current_count as usize != expected_version {
             return Err(AppError::Validation(format!(
@@ -77,7 +84,7 @@ where
         }
 
         for (i, event) in events.iter().enumerate() {
-            let position = (expected_version + i) as i64;
+            let position = (expected_version + i + 1) as i64;
             let json = serde_json::to_value(event)
                 .map_err(|e| AppError::Internal(format!("serialize event: {e}")))?;
             let event_type = json

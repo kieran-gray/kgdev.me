@@ -1,10 +1,11 @@
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::domain::shared::Timestamp;
 use crate::server::domain::Aggregate;
 
-use super::super::question::EvaluationQuestion;
 use super::{
     commands::EvaluationDatasetCommand,
     events::{
@@ -14,6 +15,8 @@ use super::{
     exceptions::EvaluationDatasetError,
 };
 
+pub const AGGREGATE_TYPE: &str = "evaluation_dataset";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DatasetGenerationStatus {
     Generating,
@@ -21,22 +24,46 @@ pub enum DatasetGenerationStatus {
     Failed { reason: String },
 }
 
+impl DatasetGenerationStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Generating => "generating",
+            Self::Completed => "completed",
+            Self::Failed { .. } => "failed",
+        }
+    }
+
+    pub fn from_parts(status: &str, failure_reason: Option<String>) -> Result<Self, String> {
+        match status {
+            "generating" => Ok(Self::Generating),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed {
+                reason: failure_reason.unwrap_or_default(),
+            }),
+            other => Err(format!("unknown dataset status '{other}'")),
+        }
+    }
+}
+
+/// Write-side state for an evaluation dataset.
+///
+/// Holds only what `handle_command` needs to enforce invariants:
+///   - `status` to gate further commands once Generating finishes,
+///   - `accepted_sequences` to detect duplicate `AcceptQuestion` requests,
+///   - `target_question_count` so `CompleteDatasetGeneration` can reject empty
+///     datasets.
+///
+/// Question content, references, embeddings, rejection details, and the rest
+/// of the metadata live in the read model and are derived by projectors —
+/// they are not invariants.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationDataset {
     pub dataset_id: Uuid,
     pub document_id: Uuid,
     pub document_version: u32,
-    pub content_hash: String,
-    pub label: String,
     pub target_question_count: u32,
-    pub generation_model: String,
-    pub generation_backend: String,
-    pub excerpt_similarity_threshold_milli: u32,
-    pub duplicate_similarity_threshold_milli: u32,
-    pub embedding_model_id: Uuid,
-    pub questions: Vec<EvaluationQuestion>,
-    pub rejection_count: u32,
     pub status: DatasetGenerationStatus,
+    pub accepted_sequences: BTreeSet<u32>,
     pub created_at: Timestamp,
 }
 
@@ -46,17 +73,9 @@ impl EvaluationDataset {
             dataset_id: e.dataset_id,
             document_id: e.document_id,
             document_version: e.document_version,
-            content_hash: e.content_hash.clone(),
-            label: e.label.clone(),
             target_question_count: e.target_question_count,
-            generation_model: e.generation_model.clone(),
-            generation_backend: e.generation_backend.clone(),
-            excerpt_similarity_threshold_milli: e.excerpt_similarity_threshold_milli,
-            duplicate_similarity_threshold_milli: e.duplicate_similarity_threshold_milli,
-            embedding_model_id: e.embedding_model_id,
-            questions: Vec::new(),
-            rejection_count: 0,
             status: DatasetGenerationStatus::Generating,
+            accepted_sequences: BTreeSet::new(),
             created_at: e.occurred_at.clone(),
         }
     }
@@ -67,24 +86,17 @@ impl Aggregate for EvaluationDataset {
     type Command = EvaluationDatasetCommand;
     type Error = EvaluationDatasetError;
 
-    fn aggregate_id(&self) -> String {
-        self.dataset_id.to_string()
+    fn aggregate_type() -> &'static str {
+        AGGREGATE_TYPE
     }
 
     fn apply(&mut self, event: &Self::Event) {
         match event {
             Self::Event::DatasetGenerationRequested(_) => {}
             Self::Event::QuestionAccepted(e) => {
-                self.questions.push(EvaluationQuestion {
-                    sequence: e.sequence,
-                    question: e.question.clone(),
-                    references: e.references.clone(),
-                    embedding: e.embedding.clone(),
-                });
+                self.accepted_sequences.insert(e.sequence);
             }
-            Self::Event::QuestionRejected(_) => {
-                self.rejection_count += 1;
-            }
+            Self::Event::QuestionRejected(_) => {}
             Self::Event::DatasetGenerationCompleted(_) => {
                 self.status = DatasetGenerationStatus::Completed;
             }
@@ -129,6 +141,9 @@ impl Aggregate for EvaluationDataset {
                 if !matches!(dataset.status, DatasetGenerationStatus::Generating) {
                     return Err(EvaluationDatasetError::GenerationNotInProgress);
                 }
+                if dataset.accepted_sequences.contains(&cmd.sequence) {
+                    return Ok(vec![]);
+                }
                 Ok(vec![Self::Event::QuestionAccepted(QuestionAccepted {
                     dataset_id: dataset.dataset_id,
                     sequence: cmd.sequence,
@@ -161,7 +176,7 @@ impl Aggregate for EvaluationDataset {
                     }
                     DatasetGenerationStatus::Generating => {}
                 }
-                if dataset.questions.is_empty() {
+                if dataset.accepted_sequences.is_empty() {
                     return Err(EvaluationDatasetError::NoQuestionsAccepted);
                 }
                 Ok(vec![Self::Event::DatasetGenerationCompleted(
@@ -255,8 +270,9 @@ mod tests {
 
     use crate::server::domain::evaluation::question::EvaluationReference;
 
-    fn make_accept_cmd(sequence: u32) -> EvaluationDatasetCommand {
+    fn make_accept_cmd(dataset_id: Uuid, sequence: u32) -> EvaluationDatasetCommand {
         EvaluationDatasetCommand::AcceptQuestion(AcceptQuestion {
+            dataset_id,
             sequence,
             question: format!("Question {sequence}?"),
             references: vec![EvaluationReference {
@@ -287,7 +303,7 @@ mod tests {
         let dataset = EvaluationDataset::from_events(&events).unwrap();
         assert_eq!(dataset.dataset_id, dataset_id);
         assert_eq!(dataset.document_id, document_id);
-        assert_eq!(dataset.questions.len(), 0);
+        assert!(dataset.accepted_sequences.is_empty());
         assert!(matches!(
             dataset.status,
             DatasetGenerationStatus::Generating
@@ -323,40 +339,38 @@ mod tests {
     }
 
     #[test]
-    fn accept_question_adds_to_questions_list() {
+    fn accept_question_records_sequence() {
         let dataset_id = Uuid::new_v4();
         let document_id = Uuid::new_v4();
         let mut events = vec![make_requested_event(dataset_id, document_id)];
         let dataset = EvaluationDataset::from_events(&events).unwrap();
 
         let new_events =
-            EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(0)).unwrap();
+            EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(dataset_id, 0))
+                .unwrap();
         assert_eq!(new_events.len(), 1);
 
         events.extend(new_events);
         let dataset = EvaluationDataset::from_events(&events).unwrap();
-        assert_eq!(dataset.questions.len(), 1);
-        assert_eq!(dataset.questions[0].sequence, 0);
+        assert!(dataset.accepted_sequences.contains(&0));
     }
 
     #[test]
-    fn reject_question_increments_rejection_count() {
+    fn duplicate_accept_is_noop() {
         let dataset_id = Uuid::new_v4();
         let document_id = Uuid::new_v4();
         let mut events = vec![make_requested_event(dataset_id, document_id)];
         let dataset = EvaluationDataset::from_events(&events).unwrap();
-
-        let reject_cmd = EvaluationDatasetCommand::RejectQuestion(RejectQuestion {
-            attempt: 1,
-            reason: "too similar to existing question".to_string(),
-            occurred_at: "2024-01-01T00:01:00Z".into(),
-        });
-        let new_events = EvaluationDataset::handle_command(Some(&dataset), reject_cmd).unwrap();
-        events.extend(new_events);
-
+        events.extend(
+            EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(dataset_id, 0))
+                .unwrap(),
+        );
         let dataset = EvaluationDataset::from_events(&events).unwrap();
-        assert_eq!(dataset.rejection_count, 1);
-        assert_eq!(dataset.questions.len(), 0);
+
+        let again =
+            EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(dataset_id, 0))
+                .unwrap();
+        assert!(again.is_empty());
     }
 
     #[test]
@@ -369,6 +383,7 @@ mod tests {
         let err = EvaluationDataset::handle_command(
             Some(&dataset),
             EvaluationDatasetCommand::CompleteDatasetGeneration(CompleteDatasetGeneration {
+                dataset_id,
                 occurred_at: "2024-01-01T00:02:00Z".into(),
             }),
         )
@@ -383,13 +398,16 @@ mod tests {
         let document_id = Uuid::new_v4();
         let mut events = vec![make_requested_event(dataset_id, document_id)];
         let dataset = EvaluationDataset::from_events(&events).unwrap();
-        events
-            .extend(EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(0)).unwrap());
+        events.extend(
+            EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(dataset_id, 0))
+                .unwrap(),
+        );
 
         let dataset = EvaluationDataset::from_events(&events).unwrap();
         let complete_events = EvaluationDataset::handle_command(
             Some(&dataset),
             EvaluationDatasetCommand::CompleteDatasetGeneration(CompleteDatasetGeneration {
+                dataset_id,
                 occurred_at: "2024-01-01T00:02:00Z".into(),
             }),
         )
@@ -398,39 +416,6 @@ mod tests {
 
         let dataset = EvaluationDataset::from_events(&events).unwrap();
         assert!(matches!(dataset.status, DatasetGenerationStatus::Completed));
-    }
-
-    #[test]
-    fn complete_already_completed_is_idempotent() {
-        let dataset_id = Uuid::new_v4();
-        let document_id = Uuid::new_v4();
-        let mut events = vec![make_requested_event(dataset_id, document_id)];
-        let dataset = EvaluationDataset::from_events(&events).unwrap();
-        events
-            .extend(EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(0)).unwrap());
-        let dataset = EvaluationDataset::from_events(&events).unwrap();
-        events.extend(
-            EvaluationDataset::handle_command(
-                Some(&dataset),
-                EvaluationDatasetCommand::CompleteDatasetGeneration(CompleteDatasetGeneration {
-                    occurred_at: "2024-01-01T00:02:00Z".into(),
-                }),
-            )
-            .unwrap(),
-        );
-
-        let dataset = EvaluationDataset::from_events(&events).unwrap();
-        let second_complete = EvaluationDataset::handle_command(
-            Some(&dataset),
-            EvaluationDatasetCommand::CompleteDatasetGeneration(CompleteDatasetGeneration {
-                occurred_at: "2024-01-01T00:03:00Z".into(),
-            }),
-        )
-        .unwrap();
-        assert!(
-            second_complete.is_empty(),
-            "re-completing should be a no-op"
-        );
     }
 
     #[test]
@@ -443,6 +428,7 @@ mod tests {
         let fail_events = EvaluationDataset::handle_command(
             Some(&dataset),
             EvaluationDatasetCommand::FailDatasetGeneration(FailDatasetGeneration {
+                dataset_id,
                 reason: "LLM unavailable".to_string(),
                 occurred_at: "2024-01-01T00:02:00Z".into(),
             }),
@@ -458,47 +444,21 @@ mod tests {
     }
 
     #[test]
-    fn fail_already_failed_is_idempotent() {
-        let dataset_id = Uuid::new_v4();
-        let document_id = Uuid::new_v4();
-        let mut events = vec![make_requested_event(dataset_id, document_id)];
-        let dataset = EvaluationDataset::from_events(&events).unwrap();
-        events.extend(
-            EvaluationDataset::handle_command(
-                Some(&dataset),
-                EvaluationDatasetCommand::FailDatasetGeneration(FailDatasetGeneration {
-                    reason: "LLM unavailable".to_string(),
-                    occurred_at: "2024-01-01T00:02:00Z".into(),
-                }),
-            )
-            .unwrap(),
-        );
-
-        let dataset = EvaluationDataset::from_events(&events).unwrap();
-        let second_fail = EvaluationDataset::handle_command(
-            Some(&dataset),
-            EvaluationDatasetCommand::FailDatasetGeneration(FailDatasetGeneration {
-                reason: "still unavailable".to_string(),
-                occurred_at: "2024-01-01T00:03:00Z".into(),
-            }),
-        )
-        .unwrap();
-        assert!(second_fail.is_empty(), "re-failing should be a no-op");
-    }
-
-    #[test]
     fn accept_question_after_completion_fails() {
         let dataset_id = Uuid::new_v4();
         let document_id = Uuid::new_v4();
         let mut events = vec![make_requested_event(dataset_id, document_id)];
         let dataset = EvaluationDataset::from_events(&events).unwrap();
-        events
-            .extend(EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(0)).unwrap());
+        events.extend(
+            EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(dataset_id, 0))
+                .unwrap(),
+        );
         let dataset = EvaluationDataset::from_events(&events).unwrap();
         events.extend(
             EvaluationDataset::handle_command(
                 Some(&dataset),
                 EvaluationDatasetCommand::CompleteDatasetGeneration(CompleteDatasetGeneration {
+                    dataset_id,
                     occurred_at: "2024-01-01T00:02:00Z".into(),
                 }),
             )
@@ -506,8 +466,47 @@ mod tests {
         );
 
         let dataset = EvaluationDataset::from_events(&events).unwrap();
-        let err =
-            EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(1)).unwrap_err();
+        let err = EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(dataset_id, 1))
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            EvaluationDatasetError::GenerationNotInProgress
+        ));
+    }
+
+    #[test]
+    fn reject_only_valid_while_generating() {
+        let dataset_id = Uuid::new_v4();
+        let document_id = Uuid::new_v4();
+        let mut events = vec![make_requested_event(dataset_id, document_id)];
+        let dataset = EvaluationDataset::from_events(&events).unwrap();
+        events.extend(
+            EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(dataset_id, 0))
+                .unwrap(),
+        );
+        let dataset = EvaluationDataset::from_events(&events).unwrap();
+        events.extend(
+            EvaluationDataset::handle_command(
+                Some(&dataset),
+                EvaluationDatasetCommand::CompleteDatasetGeneration(CompleteDatasetGeneration {
+                    dataset_id,
+                    occurred_at: "2024-01-01T00:02:00Z".into(),
+                }),
+            )
+            .unwrap(),
+        );
+
+        let dataset = EvaluationDataset::from_events(&events).unwrap();
+        let err = EvaluationDataset::handle_command(
+            Some(&dataset),
+            EvaluationDatasetCommand::RejectQuestion(RejectQuestion {
+                dataset_id,
+                attempt: 1,
+                reason: "too similar".into(),
+                occurred_at: "2024-01-01T00:03:00Z".into(),
+            }),
+        )
+        .unwrap_err();
         assert!(matches!(
             err,
             EvaluationDatasetError::GenerationNotInProgress

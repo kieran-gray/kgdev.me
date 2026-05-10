@@ -3,8 +3,8 @@ use uuid::Uuid;
 
 use crate::server::domain::shared::Timestamp;
 use crate::shared::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics, EvaluationResultSplit,
-    EvaluationRunOptions,
+    ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
+    EvaluationResultSplit, EvaluationRunOptions,
 };
 
 use super::scoring_policy::ScoringPolicy;
@@ -42,11 +42,18 @@ pub struct VariantPrepared {
     pub occurred_at: Timestamp,
 }
 
+/// Variant scored event. Carries the variant config, options, and chunk/embedding
+/// set IDs the score was computed against — projectors persist these into the
+/// `evaluation_variant_results` row directly without re-loading the run aggregate.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VariantScored {
     pub run_id: Uuid,
     pub variant_label: String,
+    pub variant_config: ChunkingConfig,
+    pub options: EvaluationRunOptions,
     pub split: EvaluationResultSplit,
+    pub chunk_set_id: Uuid,
+    pub embedding_set_id: Uuid,
     pub metrics: EvaluationMetrics,
     pub retrieval_traces: Vec<RetrievalTraceEntry>,
     pub selected: bool,
