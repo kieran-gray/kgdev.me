@@ -239,7 +239,12 @@ mod tests {
     use super::*;
     use crate::server::domain::indexing::commands::*;
     use crate::server::domain::indexing::events::*;
+    use crate::server::domain::shared::Timestamp;
     use crate::shared::SectionChunkingConfig;
+
+    fn now() -> Timestamp {
+        "2024-01-01T00:00:00Z".into()
+    }
 
     fn base_request(doc_id: Uuid, pc_id: Uuid) -> IndexingCommand {
         IndexingCommand::RequestIngest(RequestIngest {
@@ -250,7 +255,7 @@ mod tests {
                 max_section_tokens: 512,
             }),
             request_id: Uuid::new_v4(),
-            occurred_at: "2024-01-01T00:00:00Z".to_string(),
+            occurred_at: now(),
         })
     }
 
@@ -290,7 +295,7 @@ mod tests {
                     max_section_tokens: 512,
                 }),
                 request_id,
-                occurred_at: "2024-01-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap();
@@ -306,7 +311,7 @@ mod tests {
                     max_section_tokens: 512,
                 }),
                 request_id,
-                occurred_at: "2024-01-02T00:00:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap();
@@ -326,7 +331,7 @@ mod tests {
             IndexingCommand::CompleteChunking(CompleteChunking {
                 chunk_set_id,
                 chunk_count: 42,
-                occurred_at: "2024-01-01T00:01:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap();
@@ -355,7 +360,7 @@ mod tests {
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id,
             chunk_count: 10,
-            occurred_at: "2024-01-01T00:01:00Z".to_string(),
+            occurred_at: now(),
         }));
         let indexing = Indexing::from_events(&events).unwrap();
 
@@ -364,7 +369,7 @@ mod tests {
             IndexingCommand::CompleteChunking(CompleteChunking {
                 chunk_set_id: Uuid::new_v4(),
                 chunk_count: 10,
-                occurred_at: "2024-01-01T00:02:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap();
@@ -381,15 +386,15 @@ mod tests {
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,
-            occurred_at: "2024-01-01T00:01:00Z".to_string(),
+            occurred_at: now(),
         }));
         events.push(IndexingEvent::EmbeddingCompleted(EmbeddingCompleted {
             embedding_set_id: Uuid::new_v4(),
-            occurred_at: "2024-01-01T00:02:00Z".to_string(),
+            occurred_at: now(),
         }));
         events.push(IndexingEvent::IndexingCompleted(IndexingCompleted {
             vector_count: 100,
-            occurred_at: "2024-01-01T00:03:00Z".to_string(),
+            occurred_at: now(),
         }));
 
         let indexing = Indexing::from_events(&events).unwrap();
@@ -407,12 +412,12 @@ mod tests {
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,
-            occurred_at: "2024-01-01T00:01:00Z".to_string(),
+            occurred_at: now(),
         }));
         events.push(IndexingEvent::IngestionFailed(IngestionFailed {
             stage: IngestStage::Embedding,
             reason: "connection refused".to_string(),
-            occurred_at: "2024-01-01T00:02:00Z".to_string(),
+            occurred_at: now(),
         }));
         let failed = Indexing::from_events(&events).unwrap();
         assert!(failed.status.is_failed());
@@ -421,7 +426,7 @@ mod tests {
             Some(&failed),
             IndexingCommand::RetryIngestion(RetryIngestion {
                 request_id: Uuid::new_v4(),
-                occurred_at: "2024-01-01T00:05:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap();
@@ -444,7 +449,7 @@ mod tests {
             Some(&indexing),
             IndexingCommand::RetryIngestion(RetryIngestion {
                 request_id: Uuid::new_v4(),
-                occurred_at: "2024-01-01T00:05:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap_err();
@@ -459,15 +464,13 @@ mod tests {
 
         let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
         events.push(IndexingEvent::IndexingRemoved(IndexingRemoved {
-            occurred_at: "2024-01-01T00:10:00Z".to_string(),
+            occurred_at: now(),
         }));
         let removed = Indexing::from_events(&events).unwrap();
 
         let second = Indexing::handle_command(
             Some(&removed),
-            IndexingCommand::RemoveIndexing(RemoveIndexing {
-                occurred_at: "2024-01-01T00:11:00Z".to_string(),
-            }),
+            IndexingCommand::RemoveIndexing(RemoveIndexing { occurred_at: now() }),
         )
         .unwrap();
 
@@ -502,7 +505,7 @@ mod tests {
             Indexing::from_events(&[IndexingEvent::ChunkingCompleted(ChunkingCompleted {
                 chunk_set_id: Uuid::new_v4(),
                 chunk_count: 5,
-                occurred_at: "2024-01-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             })]);
         assert!(result.is_none());
     }
@@ -517,11 +520,11 @@ mod tests {
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,
-            occurred_at: "2024-01-01T00:01:00Z".to_string(),
+            occurred_at: now(),
         }));
         events.push(IndexingEvent::EmbeddingCompleted(EmbeddingCompleted {
             embedding_set_id,
-            occurred_at: "2024-01-01T00:02:00Z".to_string(),
+            occurred_at: now(),
         }));
         let indexing = Indexing::from_events(&events).unwrap();
 
@@ -529,7 +532,7 @@ mod tests {
             Some(&indexing),
             IndexingCommand::CompleteEmbedding(CompleteEmbedding {
                 embedding_set_id: Uuid::new_v4(),
-                occurred_at: "2024-01-01T00:03:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap();

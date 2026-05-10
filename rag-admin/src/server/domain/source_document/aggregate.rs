@@ -165,7 +165,7 @@ impl SourceDocument {
                     published_at: "2024-01-01".to_string(),
                 }),
             },
-            occurred_at: "2024-01-01T00:00:00Z".to_string(),
+            occurred_at: "2024-01-01T00:00:00Z".into(),
         })
     }
 }
@@ -173,11 +173,11 @@ impl SourceDocument {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::domain::source_document::{
+    use crate::server::domain::{shared::Timestamp, source_document::{
         commands::{AddVersion, DeleteDocument, NewVersion},
         events::{DocumentCreated, VersionAdded},
         version::{BlogPostMetadata, ContentHash, DocumentMetadata},
-    };
+    }};
 
     fn make_created_events(document_id: Uuid, slug: &str) -> Vec<SourceDocumentEvent> {
         vec![
@@ -187,7 +187,7 @@ mod tests {
                 source_ref: SourceRef::UpstreamSlug {
                     slug: slug.to_string(),
                 },
-                occurred_at: "2024-01-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             }),
             SourceDocumentEvent::VersionAdded(VersionAdded {
                 version_number: 1,
@@ -196,9 +196,13 @@ mod tests {
                     title: "My Post".to_string(),
                     published_at: "2024-01-01".to_string(),
                 }),
-                occurred_at: "2024-01-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             }),
         ]
+    }
+
+    fn now() -> Timestamp {
+        "2024-01-01T00:00:00Z".into()
     }
 
     fn make_hash(s: &str) -> ContentHash {
@@ -256,7 +260,7 @@ mod tests {
                     content_hash: make_hash("def456"),
                     metadata: make_metadata(),
                 },
-                occurred_at: "2024-02-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap();
@@ -284,7 +288,7 @@ mod tests {
                     content_hash: make_hash("abc123"),
                     metadata: make_metadata(),
                 },
-                occurred_at: "2024-02-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap();
@@ -303,7 +307,7 @@ mod tests {
                     content_hash: make_hash("abc123"),
                     metadata: make_metadata(),
                 },
-                occurred_at: "2024-01-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap_err();
@@ -321,7 +325,7 @@ mod tests {
             Some(&doc),
             SourceDocumentCommand::DeleteDocument(DeleteDocument {
                 document_id: id,
-                occurred_at: "2024-03-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap();
@@ -338,7 +342,7 @@ mod tests {
         let id = Uuid::new_v4();
         let mut events = make_created_events(id, "my-post");
         events.push(SourceDocumentEvent::DocumentDeleted(DocumentDeleted {
-            occurred_at: "2024-03-01T00:00:00Z".to_string(),
+            occurred_at: now(),
         }));
         let doc = SourceDocument::from_events(&events).unwrap();
 
@@ -346,7 +350,7 @@ mod tests {
             Some(&doc),
             SourceDocumentCommand::DeleteDocument(DeleteDocument {
                 document_id: id,
-                occurred_at: "2024-04-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap_err();
@@ -359,7 +363,7 @@ mod tests {
         let id = Uuid::new_v4();
         let mut events = make_created_events(id, "my-post");
         events.push(SourceDocumentEvent::DocumentDeleted(DocumentDeleted {
-            occurred_at: "2024-03-01T00:00:00Z".to_string(),
+            occurred_at: now(),
         }));
         let doc = SourceDocument::from_events(&events).unwrap();
 
@@ -371,7 +375,7 @@ mod tests {
                     content_hash: make_hash("new123"),
                     metadata: make_metadata(),
                 },
-                occurred_at: "2024-04-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             }),
         )
         .unwrap_err();
@@ -386,7 +390,7 @@ mod tests {
                 version_number: 1,
                 content_hash: make_hash("abc"),
                 metadata: make_metadata(),
-                occurred_at: "2024-01-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             })]);
 
         assert!(result.is_none());
@@ -400,7 +404,7 @@ mod tests {
             version_number: 2,
             content_hash: make_hash("v2"),
             metadata: make_metadata(),
-            occurred_at: "2024-02-01T00:00:00Z".to_string(),
+            occurred_at: now(),
         }));
 
         let doc = SourceDocument::from_events(&events).unwrap();

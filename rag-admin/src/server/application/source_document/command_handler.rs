@@ -75,14 +75,17 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::server::domain::source_document::{
-        commands::{CreateDocument, NewVersion},
-        document_type::DocumentType,
-        events::SourceDocumentEvent,
-        read_model::SourceDocumentReadModel,
-        repository::SourceDocumentRepositoryError,
-        source_ref::SourceRef,
-        version::{BlogPostMetadata, ContentHash, DocumentMetadata},
+    use crate::server::domain::{
+        shared::Timestamp,
+        source_document::{
+            commands::{CreateDocument, NewVersion},
+            document_type::DocumentType,
+            events::SourceDocumentEvent,
+            read_model::SourceDocumentReadModel,
+            repository::SourceDocumentRepositoryError,
+            source_ref::SourceRef,
+            version::{BlogPostMetadata, ContentHash, DocumentMetadata},
+        },
     };
 
     #[derive(Default)]
@@ -148,6 +151,10 @@ mod tests {
         }
     }
 
+    fn now() -> Timestamp {
+        "2024-01-01T00:00:00Z".into()
+    }
+
     fn make_create_command(document_id: Uuid) -> SourceDocumentCommand {
         SourceDocumentCommand::CreateDocument(CreateDocument {
             document_id,
@@ -162,7 +169,7 @@ mod tests {
                     published_at: "2024-01-01".to_string(),
                 }),
             },
-            occurred_at: "2024-01-01T00:00:00Z".to_string(),
+            occurred_at: now(),
         })
     }
 
@@ -219,7 +226,7 @@ mod tests {
                         published_at: "2024-02-01".to_string(),
                     }),
                 },
-                occurred_at: "2024-02-01T00:00:00Z".to_string(),
+                occurred_at: now(),
             }))
             .await
             .unwrap();
@@ -259,7 +266,7 @@ mod tests {
                         published_at: "2024-01-01".to_string(),
                     }),
                 },
-                occurred_at: "2024-01-02T00:00:00Z".to_string(),
+                occurred_at: now(),
             }))
             .await
             .unwrap();

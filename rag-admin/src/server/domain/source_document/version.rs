@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::server::domain::shared::Timestamp;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContentHash(String);
 
@@ -35,6 +37,6 @@ pub enum DocumentMetadata {
 pub struct DocumentVersion {
     pub version_number: u32,
     pub content_hash: ContentHash,
-    pub occurred_at: String,
+    pub occurred_at: Timestamp,
     pub metadata: DocumentMetadata,
 }

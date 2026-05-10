@@ -131,13 +131,13 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::server::domain::indexing::{
+    use crate::server::domain::{indexing::{
         commands::{CompleteChunking, RequestIngest},
         events::IndexingEvent,
         read_model::IndexingReadModel,
         repository::IndexingRepositoryError,
         status::IndexingStatus,
-    };
+    }, shared::Timestamp};
     use crate::shared::ChunkingConfig;
     use crate::shared::SectionChunkingConfig;
 
@@ -195,6 +195,10 @@ mod tests {
         }
     }
 
+    fn now() -> Timestamp {
+        "2024-01-01T00:00:00Z".into()
+    }
+
     fn make_request(doc_id: Uuid, pc_id: Uuid) -> IndexingCommand {
         IndexingCommand::RequestIngest(RequestIngest {
             document_id: doc_id,
@@ -204,7 +208,7 @@ mod tests {
                 max_section_tokens: 512,
             }),
             request_id: Uuid::new_v4(),
-            occurred_at: "2024-01-01T00:00:00Z".to_string(),
+            occurred_at: now(),
         })
     }
 
@@ -245,7 +249,7 @@ mod tests {
                         max_section_tokens: 512,
                     }),
                     request_id: Uuid::new_v4(),
-                    occurred_at: "2024-01-01T00:00:00Z".to_string(),
+                    occurred_at: now(),
                 }),
             )
             .unwrap()
@@ -264,7 +268,7 @@ mod tests {
                 IndexingCommand::CompleteChunking(CompleteChunking {
                     chunk_set_id: Uuid::new_v4(),
                     chunk_count: 20,
-                    occurred_at: "2024-01-01T00:01:00Z".to_string(),
+                    occurred_at: now(),
                 }),
             )
             .await

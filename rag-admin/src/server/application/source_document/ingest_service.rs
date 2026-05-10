@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::embedding::EmbeddingService;
+use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::{AppError, IngestLogEvent, Job, JobRegistry};
 use crate::server::domain::chunk_set::entity::{Chunk, ChunkSet};
 use crate::server::domain::configuration::embedding_model::EmbeddingModel;
@@ -54,6 +55,8 @@ pub struct SourceDocumentIngestServiceDeps {
     pub configuration_repository: Arc<dyn ConfigurationRepository>,
     pub pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository>,
     pub job_registry: Arc<JobRegistry>,
+    pub clock: Arc<dyn Clock>,
+    pub id_generator: Arc<dyn IdGenerator>,
 }
 
 pub struct SourceDocumentIngestService {
@@ -70,6 +73,8 @@ pub struct SourceDocumentIngestService {
     configuration_repository: Arc<dyn ConfigurationRepository>,
     pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository>,
     job_registry: Arc<JobRegistry>,
+    clock: Arc<dyn Clock>,
+    id_generator: Arc<dyn IdGenerator>,
     running: Mutex<HashSet<String>>,
 }
 
@@ -91,6 +96,8 @@ impl SourceDocumentIngestService {
             configuration_repository: deps.configuration_repository,
             pipeline_configuration_repository: deps.pipeline_configuration_repository,
             job_registry: deps.job_registry,
+            clock: deps.clock,
+            id_generator: deps.id_generator,
             running: Mutex::new(HashSet::new()),
         })
     }
@@ -148,7 +155,7 @@ impl SourceDocumentIngestService {
         chunking_config: ChunkingConfig,
         job: Arc<Job>,
     ) -> Result<(), AppError> {
-        let occurred_at = now_rfc3339();
+        let occurred_at = self.clock.now();
 
         job.emit(IngestLogEvent::info(format!(
             "fetching '{}' from source…",
@@ -179,7 +186,7 @@ impl SourceDocumentIngestService {
             None => {
                 job.emit(IngestLogEvent::info("creating new source document…"))
                     .await;
-                let document_id = Uuid::new_v4();
+                let document_id = self.id_generator.new_uuid();
                 self.source_document_command_handler
                     .handle(SourceDocumentCommand::CreateDocument(CreateDocument {
                         document_id,
@@ -235,7 +242,7 @@ impl SourceDocumentIngestService {
         )))
         .await;
 
-        let request_id = Uuid::new_v4();
+        let request_id = self.id_generator.new_uuid();
         let indexing_id = Indexing::compute_id(document_id, pipeline_configuration_id);
 
         self.indexing_command_handler
@@ -262,12 +269,12 @@ impl SourceDocumentIngestService {
             .map_err(|e| AppError::Internal(format!("chunking failed: {e}")))?;
 
         let chunk_count = chunk_outputs.len() as u32;
-        let chunk_set_id = Uuid::new_v4();
+        let chunk_set_id = self.id_generator.new_uuid();
         let chunks: Vec<Chunk> = chunk_outputs
             .into_iter()
             .enumerate()
             .map(|(i, co)| Chunk {
-                chunk_id: Uuid::new_v4(),
+                chunk_id: self.id_generator.new_uuid(),
                 chunk_set_id,
                 sequence: i as u32,
                 heading: co.heading,
@@ -282,7 +289,7 @@ impl SourceDocumentIngestService {
             document_id,
             document_version,
             chunking_config: chunking_config.clone(),
-            created_at: occurred_at.clone(),
+            created_at: occurred_at.to_string(),
         };
 
         self.chunk_set_repository
@@ -345,14 +352,14 @@ impl SourceDocumentIngestService {
                 all_vectors.extend(vecs);
             }
 
-            let new_set_id = Uuid::new_v4();
+            let new_set_id = self.id_generator.new_uuid();
             let embedding_set = EmbeddingSet {
                 embedding_set_id: new_set_id,
                 chunk_set_id,
                 embedding_model_id: embedding_model.embedding_model_id,
                 embedding_model_snapshot: embedding_model.clone(),
                 dimensions: embedding_model.dimensions,
-                created_at: occurred_at.clone(),
+                created_at: occurred_at.to_string(),
             };
 
             let embeddings: Vec<ChunkEmbedding> = chunks
@@ -503,12 +510,4 @@ impl SourceDocumentIngestService {
 
         Ok((embedding_model, vector_index_name))
     }
-}
-
-fn now_rfc3339() -> String {
-    use time::format_description::well_known::Rfc3339;
-    use time::OffsetDateTime;
-    OffsetDateTime::now_utc()
-        .format(&Rfc3339)
-        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".into())
 }

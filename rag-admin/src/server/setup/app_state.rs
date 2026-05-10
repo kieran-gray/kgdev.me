@@ -43,6 +43,7 @@ use crate::server::infrastructure::evaluation::{
     FileEvaluationDatasetStore, FileEvaluationResultStore, OllamaEvaluationGenerator,
 };
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
+use crate::server::infrastructure::id::UuidGenerator;
 use crate::server::infrastructure::indexing::PostgresIndexingRepository;
 use crate::server::infrastructure::llm::OllamaChatClient;
 use crate::server::infrastructure::markdown::MarkdownRsParser;
@@ -51,6 +52,7 @@ use crate::server::infrastructure::source_document::{
     HttpBlogAdapter, PostgresBlobStore, PostgresChunkSetRepository, PostgresEmbeddingSetRepository,
     PostgresSourceDocumentRepository,
 };
+use crate::server::infrastructure::time::SystemClock;
 use crate::server::infrastructure::tokenizer::HuggingFaceTokenizer;
 use crate::server::infrastructure::vector::{CloudflareVectorIndexFactory, VectorizeVectorIndex};
 use crate::server::setup::config::Config;
@@ -198,6 +200,9 @@ impl AppState {
         source_adapter_registry.register(HttpBlogAdapter::new(blog_source.clone()));
         let source_adapter_registry = Arc::new(source_adapter_registry);
 
+        let clock = Arc::new(SystemClock);
+        let id_generator = Arc::new(UuidGenerator);
+
         let source_document_ingest_service =
             SourceDocumentIngestService::new(SourceDocumentIngestServiceDeps {
                 source_document_command_handler,
@@ -213,6 +218,8 @@ impl AppState {
                 configuration_repository,
                 pipeline_configuration_repository,
                 job_registry: job_registry.clone(),
+                clock,
+                id_generator,
             });
 
         let source_document_query_service = SourceDocumentQueryService::new(

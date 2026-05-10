@@ -32,7 +32,7 @@ impl From<&SourceDocument> for SourceDocumentReadModel {
             latest_version_number: latest.version_number,
             latest_content_hash: latest.content_hash.clone(),
             latest_metadata: latest.metadata.clone(),
-            latest_version_occurred_at: latest.occurred_at.clone(),
+            latest_version_occurred_at: latest.occurred_at.to_string(),
             deleted: doc.deleted,
         }
     }

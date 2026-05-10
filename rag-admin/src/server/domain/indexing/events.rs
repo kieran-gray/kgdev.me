@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::server::domain::shared::Timestamp;
 use crate::shared::ChunkingConfig;
 
 use super::status::IngestStage;
@@ -12,44 +13,44 @@ pub struct IngestRequested {
     pub document_version: u32,
     pub chunking_config: ChunkingConfig,
     pub request_id: Uuid,
-    pub occurred_at: String,
+    pub occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ChunkingCompleted {
     pub chunk_set_id: Uuid,
     pub chunk_count: u32,
-    pub occurred_at: String,
+    pub occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EmbeddingCompleted {
     pub embedding_set_id: Uuid,
-    pub occurred_at: String,
+    pub occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IndexingCompleted {
     pub vector_count: u32,
-    pub occurred_at: String,
+    pub occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IngestionFailed {
     pub stage: IngestStage,
     pub reason: String,
-    pub occurred_at: String,
+    pub occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IngestionRetried {
     pub request_id: Uuid,
-    pub occurred_at: String,
+    pub occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IndexingRemoved {
-    pub occurred_at: String,
+    pub occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
