@@ -131,13 +131,16 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::server::domain::{indexing::{
-        commands::{CompleteChunking, RequestIngest},
-        events::IndexingEvent,
-        read_model::IndexingReadModel,
-        repository::IndexingRepositoryError,
-        status::IndexingStatus,
-    }, shared::Timestamp};
+    use crate::server::domain::{
+        indexing::{
+            commands::{CompleteChunking, RequestIngest},
+            events::IndexingEvent,
+            read_model::IndexingReadModel,
+            repository::IndexingRepositoryError,
+            status::IndexingStatus,
+        },
+        shared::Timestamp,
+    };
     use crate::shared::ChunkingConfig;
     use crate::shared::SectionChunkingConfig;
 

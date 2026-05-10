@@ -173,11 +173,14 @@ impl SourceDocument {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::domain::{shared::Timestamp, source_document::{
-        commands::{AddVersion, DeleteDocument, NewVersion},
-        events::{DocumentCreated, VersionAdded},
-        version::{BlogPostMetadata, ContentHash, DocumentMetadata},
-    }};
+    use crate::server::domain::{
+        shared::Timestamp,
+        source_document::{
+            commands::{AddVersion, DeleteDocument, NewVersion},
+            events::{DocumentCreated, VersionAdded},
+            version::{BlogPostMetadata, ContentHash, DocumentMetadata},
+        },
+    };
 
     fn make_created_events(document_id: Uuid, slug: &str) -> Vec<SourceDocumentEvent> {
         vec![

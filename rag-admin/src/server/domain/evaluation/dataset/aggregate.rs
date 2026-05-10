@@ -4,6 +4,7 @@ use uuid::Uuid;
 use crate::server::domain::shared::Timestamp;
 use crate::server::domain::Aggregate;
 
+use super::super::question::EvaluationQuestion;
 use super::{
     commands::EvaluationDatasetCommand,
     events::{
@@ -12,7 +13,6 @@ use super::{
     },
     exceptions::EvaluationDatasetError,
 };
-use super::super::question::EvaluationQuestion;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DatasetGenerationStatus {
@@ -212,11 +212,11 @@ impl Aggregate for EvaluationDataset {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::commands::{
         AcceptQuestion, CompleteDatasetGeneration, FailDatasetGeneration, RejectQuestion,
         RequestDatasetGeneration,
     };
+    use super::*;
     use uuid::Uuid;
 
     fn make_request_cmd(dataset_id: Uuid, document_id: Uuid) -> EvaluationDatasetCommand {
@@ -351,8 +351,7 @@ mod tests {
             reason: "too similar to existing question".to_string(),
             occurred_at: "2024-01-01T00:01:00Z".into(),
         });
-        let new_events =
-            EvaluationDataset::handle_command(Some(&dataset), reject_cmd).unwrap();
+        let new_events = EvaluationDataset::handle_command(Some(&dataset), reject_cmd).unwrap();
         events.extend(new_events);
 
         let dataset = EvaluationDataset::from_events(&events).unwrap();
@@ -384,7 +383,8 @@ mod tests {
         let document_id = Uuid::new_v4();
         let mut events = vec![make_requested_event(dataset_id, document_id)];
         let dataset = EvaluationDataset::from_events(&events).unwrap();
-        events.extend(EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(0)).unwrap());
+        events
+            .extend(EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(0)).unwrap());
 
         let dataset = EvaluationDataset::from_events(&events).unwrap();
         let complete_events = EvaluationDataset::handle_command(
@@ -406,7 +406,8 @@ mod tests {
         let document_id = Uuid::new_v4();
         let mut events = vec![make_requested_event(dataset_id, document_id)];
         let dataset = EvaluationDataset::from_events(&events).unwrap();
-        events.extend(EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(0)).unwrap());
+        events
+            .extend(EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(0)).unwrap());
         let dataset = EvaluationDataset::from_events(&events).unwrap();
         events.extend(
             EvaluationDataset::handle_command(
@@ -426,7 +427,10 @@ mod tests {
             }),
         )
         .unwrap();
-        assert!(second_complete.is_empty(), "re-completing should be a no-op");
+        assert!(
+            second_complete.is_empty(),
+            "re-completing should be a no-op"
+        );
     }
 
     #[test]
@@ -488,7 +492,8 @@ mod tests {
         let document_id = Uuid::new_v4();
         let mut events = vec![make_requested_event(dataset_id, document_id)];
         let dataset = EvaluationDataset::from_events(&events).unwrap();
-        events.extend(EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(0)).unwrap());
+        events
+            .extend(EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(0)).unwrap());
         let dataset = EvaluationDataset::from_events(&events).unwrap();
         events.extend(
             EvaluationDataset::handle_command(
@@ -501,7 +506,8 @@ mod tests {
         );
 
         let dataset = EvaluationDataset::from_events(&events).unwrap();
-        let err = EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(1)).unwrap_err();
+        let err =
+            EvaluationDataset::handle_command(Some(&dataset), make_accept_cmd(1)).unwrap_err();
         assert!(matches!(
             err,
             EvaluationDatasetError::GenerationNotInProgress

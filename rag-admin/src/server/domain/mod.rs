@@ -7,10 +7,10 @@ pub mod evaluation;
 pub mod indexing;
 pub mod manifest;
 pub mod post;
+pub mod shared;
 pub mod source_document;
 pub mod traits;
 pub mod vector;
-pub mod shared;
 
 pub use blog_post::{BlogPost, BlogPostSummary, GlossarySource, GlossaryTerm};
 pub use chunk::Chunk;
