@@ -1,9 +1,3 @@
-//! Pipelines page — the named compositions (`PipelineConfiguration`) only.
-//!
-//! Registry items (providers, models, indexes) live under Settings. This page
-//! is intentionally narrow: it's the day-to-day surface for choosing which
-//! pipeline to ingest / evaluate against, not the place to build the catalogue.
-
 use leptos::prelude::*;
 use leptos_router::components::A;
 use uuid::Uuid;

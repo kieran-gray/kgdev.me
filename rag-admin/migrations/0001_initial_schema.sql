@@ -102,9 +102,16 @@ CREATE TABLE chunking_configurations (
 
 CREATE TABLE source_documents (
     document_id UUID PRIMARY KEY,
-    read_model JSONB NOT NULL,
+    document_type TEXT NOT NULL,
+    source_ref JSONB NOT NULL,
+    latest_version_number INT NOT NULL,
+    latest_content_hash TEXT NOT NULL,
+    latest_metadata JSONB NOT NULL,
+    latest_version_occurred_at TEXT NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX source_documents_source_ref_idx ON source_documents USING GIN (source_ref);
 
 CREATE TABLE source_document_blobs (
     content_hash TEXT PRIMARY KEY,
@@ -119,7 +126,15 @@ CREATE TABLE source_document_blobs (
 CREATE TABLE indexings (
     indexing_id UUID PRIMARY KEY,
     document_id UUID NOT NULL,
-    read_model JSONB NOT NULL,
+    pipeline_configuration_id UUID NOT NULL,
+    document_version INT NOT NULL,
+    chunking_config JSONB NOT NULL,
+    chunk_set_id UUID,
+    embedding_set_id UUID,
+    status TEXT NOT NULL,
+    failure_stage TEXT,
+    attempts INT NOT NULL,
+    removed BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX indexings_document_id_idx ON indexings (document_id);

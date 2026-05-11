@@ -1,14 +1,3 @@
-//! Client-side event bus.
-//!
-//! Opens a single websocket to `/api/events/ws` (no `stream_id` filter, so the
-//! server delivers every `PublishedEvent`) and exposes signals that drive
-//! Resource invalidation across the app.
-//!
-//! Consumers don't poke the websocket directly. They either read the bus
-//! signals from context, or use [`use_invalidator`] to derive a Resource key
-//! that increments whenever a matching event arrives or the connection
-//! reconnects.
-
 use leptos::prelude::*;
 
 use crate::shared::PublishedEvent;
@@ -123,12 +112,18 @@ where
 
 #[cfg(feature = "hydrate")]
 mod hydrate {
+    use std::cell::RefCell;
+
     use leptos::prelude::*;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
     use web_sys::{CloseEvent, MessageEvent, WebSocket};
 
     use super::{ConnectionState, PublishedEvent};
+
+    thread_local! {
+        static ACTIVE_SOCKET: RefCell<Option<WebSocket>> = RefCell::new(None);
+    }
 
     pub fn connect(
         set_last_event: WriteSignal<Option<PublishedEvent>>,
@@ -190,6 +185,9 @@ mod hydrate {
         // onclose / onerror — schedule a reconnect with exponential backoff
         // capped at 30s. Capture the handlers for both paths.
         let reconnect = move || {
+            ACTIVE_SOCKET.with(|socket| {
+                socket.borrow_mut().take();
+            });
             set_connection.set(ConnectionState::Closed);
             schedule_reconnect(set_last_event, set_epoch, set_connection, attempt + 1);
         };
@@ -207,6 +205,13 @@ mod hydrate {
         });
         ws.set_onerror(Some(on_error.as_ref().unchecked_ref()));
         on_error.forget();
+
+        // Keep the JS WebSocket object rooted after `open_socket` returns.
+        // Without this, browser GC can collect the socket and the client stops
+        // receiving invalidation events even though the handlers were attached.
+        ACTIVE_SOCKET.with(|socket| {
+            *socket.borrow_mut() = Some(ws);
+        });
     }
 
     fn schedule_reconnect(
