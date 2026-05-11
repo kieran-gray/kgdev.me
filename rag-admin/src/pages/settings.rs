@@ -18,16 +18,16 @@ use crate::pages::configuration::commands::{run_configuration_command, short_uui
 use crate::server_functions::configuration::get_configuration;
 use crate::server_functions::settings::{load_settings, save_settings};
 use crate::shared::{
-    AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto, AiProviderKindDto,
-    ConfigurationCommandDto, ConfigurationDto, EmbeddingModelDto, EvaluationGenerationBackend,
-    GenerationModelDto, RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto,
-    SettingsDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
-    VectorIndexDto, VectorStoreKindDto,
+    aggregate_type, AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
+    AiProviderKindDto, ConfigurationCommandDto, ConfigurationDto, EmbeddingModelDto,
+    EvaluationGenerationBackend, GenerationModelDto, RemoveEmbeddingModelDto,
+    RemoveGenerationModelDto, RemoveVectorIndexDto, SettingsDto, UpdateEmbeddingModelDto,
+    UpdateGenerationModelDto, UpdateVectorIndexDto, VectorIndexDto, VectorStoreKindDto,
 };
 
 #[component]
 pub fn SettingsPage() -> impl IntoView {
-    let invalidator = use_invalidator(|e| e.from_any(&["Configuration"]));
+    let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION]));
     let (refresh, set_refresh) = signal(0u32);
 
     let configuration = Resource::new(
@@ -432,7 +432,9 @@ fn RegistryFormDialog(
 
     let submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
-        let Some(active) = form.get_untracked() else { return; };
+        let Some(active) = form.get_untracked() else {
+            return;
+        };
         let command = match build_command(
             active,
             name.get_untracked(),
@@ -604,7 +606,9 @@ fn RegistryDeleteDialog(
     let close = Callback::new(move |_| set_target.set(None));
 
     let confirm = move |_| {
-        let Some(t) = target.get_untracked() else { return; };
+        let Some(t) = target.get_untracked() else {
+            return;
+        };
         let command = match t {
             DeleteTarget::EmbeddingModel(m) => {
                 ConfigurationCommandDto::RemoveEmbeddingModel(RemoveEmbeddingModelDto {
@@ -751,15 +755,6 @@ fn EvaluationDefaults(initial: SettingsDto) -> impl IntoView {
                         value=Signal::derive(move || eval.get().duplicate_similarity_threshold_milli)
                         on_change=move |v| set_eval.update(|c| c.duplicate_similarity_threshold_milli = v.min(1000))
                         min=0
-                    />
-                    <LabelledSelectStatic
-                        label="Include glossary".to_string()
-                        value=Signal::derive(move || if eval.get().include_glossary { "true".to_string() } else { "false".to_string() })
-                        on_change=move |v: String| set_eval.update(|c| c.include_glossary = v == "true")
-                        options=vec![
-                            ("true".to_string(), "Include glossary".to_string()),
-                            ("false".to_string(), "Exclude glossary".to_string()),
-                        ]
                     />
                 </div>
 

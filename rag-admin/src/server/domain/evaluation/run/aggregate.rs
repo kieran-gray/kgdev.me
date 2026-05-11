@@ -632,13 +632,25 @@ mod tests {
         }];
         let options = vec![EvaluationRunOptions::default()];
 
-        let expected_json = r#"["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002",[{"label":"section-512","config":{"section":{"max_section_tokens":512}}}],[{"top_k":5,"min_score_milli":0,"include_glossary":true}],null]"#;
-        let actual_json = serde_json::to_string(&(dataset_id, pipeline_id, &variants, &options, Option::<&crate::shared::EvaluationAutotuneRequest>::None)).unwrap();
-        assert_eq!(actual_json, expected_json, "compute_id JSON payload changed — run IDs will fork");
+        let expected_json = r#"["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002",[{"label":"section-512","config":{"section":{"max_section_tokens":512}}}],[{"top_k":5,"min_score_milli":0}],null]"#;
+        let actual_json = serde_json::to_string(&(
+            dataset_id,
+            pipeline_id,
+            &variants,
+            &options,
+            Option::<&crate::shared::EvaluationAutotuneRequest>::None,
+        ))
+        .unwrap();
+        assert_eq!(
+            actual_json, expected_json,
+            "compute_id JSON payload changed — run IDs will fork"
+        );
 
+        // UUID derived from the JSON payload above; regenerate if the schema
+        // intentionally changes.
         let id = EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None);
-        // UUID locked against the lowercase-`section` JSON above.
-        assert_eq!(id.to_string(), "7004cb85-7ff7-5ac3-96bc-e6775edf33cf");
+        let expected_id = uuid::Uuid::new_v5(&EVAL_RUN_NAMESPACE, expected_json.as_bytes());
+        assert_eq!(id, expected_id);
     }
 
     #[test]

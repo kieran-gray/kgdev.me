@@ -76,7 +76,9 @@ impl DocumentChunker for LlmChunker {
             return Ok(Vec::new());
         }
 
-        let model_name = self.resolve_generation_model(config.generation_model_id).await?;
+        let model_name = self
+            .resolve_generation_model(config.generation_model_id)
+            .await?;
 
         let split_points = find_split_points(
             &micro_chunks,

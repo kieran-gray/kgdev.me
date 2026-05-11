@@ -7,7 +7,7 @@ use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
 use crate::pages::configuration::commands::{parse_uuid_or_none, run_configuration_command};
 use crate::server_functions::configuration::{get_configuration, get_pipeline_configurations};
 use crate::shared::{
-    ConfigurationCommandDto, ConfigurationDto, CreatePipelineConfigurationDto,
+    aggregate_type, ConfigurationCommandDto, ConfigurationDto, CreatePipelineConfigurationDto,
     DeletePipelineConfigurationDto, PipelineConfigurationDto, UpdatePipelineConfigurationDto,
 };
 
@@ -19,7 +19,7 @@ enum FormMode {
 
 #[component]
 pub fn PipelinesPage() -> impl IntoView {
-    let invalidator = use_invalidator(|e| e.from_any(&["Configuration"]));
+    let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION]));
     let (refresh, set_refresh) = signal(0u32);
 
     // Both Resources track the websocket invalidator AND a manual refresh
@@ -185,11 +185,18 @@ fn PipelineCard(
     let pc_clone_edit = pc.clone();
     let pc_clone_delete = pc.clone();
     let name = pc.name.clone();
-    let embedding =
-        pc.embedding_model_name.clone().unwrap_or_else(|| short_uuid(pc.embedding_model_id));
-    let generation =
-        pc.generation_model_name.clone().unwrap_or_else(|| short_uuid(pc.generation_model_id));
-    let index = pc.vector_index_name.clone().unwrap_or_else(|| short_uuid(pc.vector_index_id));
+    let embedding = pc
+        .embedding_model_name
+        .clone()
+        .unwrap_or_else(|| short_uuid(pc.embedding_model_id));
+    let generation = pc
+        .generation_model_name
+        .clone()
+        .unwrap_or_else(|| short_uuid(pc.generation_model_id));
+    let index = pc
+        .vector_index_name
+        .clone()
+        .unwrap_or_else(|| short_uuid(pc.vector_index_id));
 
     view! {
         <div class="surface p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -250,10 +257,10 @@ fn PipelineFormDialog(
                 set_embedding_id.set(
                     config.with_value(|c| c.embedding_models.first().map(|m| m.embedding_model_id)),
                 );
-                set_generation_id.set(
-                    config
-                        .with_value(|c| c.generation_models.first().map(|m| m.generation_model_id)),
-                );
+                set_generation_id
+                    .set(config.with_value(|c| {
+                        c.generation_models.first().map(|m| m.generation_model_id)
+                    }));
                 set_vector_index_id
                     .set(config.with_value(|c| c.vector_indexes.first().map(|i| i.index_id)));
             }
@@ -273,10 +280,14 @@ fn PipelineFormDialog(
 
     let submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
-        let (Some(emb), Some(gen), Some(idx)) =
-            (embedding_id.get(), generation_id.get(), vector_index_id.get())
-        else {
-            set_dialog_error.set(Some("Pick an embedding model, generation model, and vector index.".into()));
+        let (Some(emb), Some(gen), Some(idx)) = (
+            embedding_id.get(),
+            generation_id.get(),
+            vector_index_id.get(),
+        ) else {
+            set_dialog_error.set(Some(
+                "Pick an embedding model, generation model, and vector index.".into(),
+            ));
             return;
         };
         let name_val = name.get().trim().to_string();
@@ -285,23 +296,23 @@ fn PipelineFormDialog(
             return;
         }
         let command = match form_mode.get() {
-            Some(FormMode::Add) => {
-                ConfigurationCommandDto::CreatePipelineConfiguration(CreatePipelineConfigurationDto {
+            Some(FormMode::Add) => ConfigurationCommandDto::CreatePipelineConfiguration(
+                CreatePipelineConfigurationDto {
                     name: name_val,
                     embedding_model_id: emb,
                     generation_model_id: gen,
                     vector_index_id: idx,
-                })
-            }
-            Some(FormMode::Edit(pc)) => {
-                ConfigurationCommandDto::UpdatePipelineConfiguration(UpdatePipelineConfigurationDto {
+                },
+            ),
+            Some(FormMode::Edit(pc)) => ConfigurationCommandDto::UpdatePipelineConfiguration(
+                UpdatePipelineConfigurationDto {
                     pipeline_configuration_id: pc.pipeline_configuration_id,
                     name: name_val,
                     embedding_model_id: emb,
                     generation_model_id: gen,
                     vector_index_id: idx,
-                })
-            }
+                },
+            ),
             None => return,
         };
         run_configuration_command(
@@ -410,7 +421,9 @@ fn DeleteConfirmDialog(
     let close = Callback::new(move |_| set_target.set(None));
 
     let confirm = move |_| {
-        let Some(pc) = target.get_untracked() else { return; };
+        let Some(pc) = target.get_untracked() else {
+            return;
+        };
         run_configuration_command(
             ConfigurationCommandDto::DeletePipelineConfiguration(DeletePipelineConfigurationDto {
                 pipeline_configuration_id: pc.pipeline_configuration_id,

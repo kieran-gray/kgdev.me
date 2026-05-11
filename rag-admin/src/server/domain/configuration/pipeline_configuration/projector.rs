@@ -28,10 +28,7 @@ impl Projector<ConfigurationEvent> for PipelineConfigurationProjector {
         Self::NAME
     }
 
-    async fn project(
-        &self,
-        events: &[EventEnvelope<ConfigurationEvent>],
-    ) -> Result<(), AppError> {
+    async fn project(&self, events: &[EventEnvelope<ConfigurationEvent>]) -> Result<(), AppError> {
         for envelope in events {
             match &envelope.event {
                 ConfigurationEvent::PipelineConfigurationCreated(e) => {

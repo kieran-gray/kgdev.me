@@ -65,9 +65,7 @@ impl VectorIndexResolver {
             .vector_indexes
             .iter()
             .find(|i| i.index_id == index_id)
-            .ok_or_else(|| {
-                AppError::NotFound(format!("vector index {index_id} not registered"))
-            })?;
+            .ok_or_else(|| AppError::NotFound(format!("vector index {index_id} not registered")))?;
         Ok(ResolvedVectorIndex {
             index_id: index.index_id,
             kind: index.kind,

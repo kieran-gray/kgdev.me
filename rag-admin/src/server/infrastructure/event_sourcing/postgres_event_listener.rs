@@ -15,10 +15,7 @@ use tracing::{debug, error, info, warn};
 /// `Notify` against the aggregate types they care about. On reconnect the
 /// listener re-establishes; the projection drivers' 2s heartbeat catches any
 /// notifications missed during the gap.
-pub fn spawn_postgres_event_listener(
-    pool: PgPool,
-    wakeups: HashMap<String, Arc<Notify>>,
-) {
+pub fn spawn_postgres_event_listener(pool: PgPool, wakeups: HashMap<String, Arc<Notify>>) {
     tokio::spawn(async move {
         loop {
             match PgListener::connect_with(&pool).await {
@@ -33,10 +30,7 @@ pub fn spawn_postgres_event_listener(
                         match listener.recv().await {
                             Ok(notification) => {
                                 let aggregate_type = notification.payload();
-                                debug!(
-                                    aggregate_type,
-                                    "postgres listener: events_appended notify"
-                                );
+                                debug!(aggregate_type, "postgres listener: events_appended notify");
                                 if let Some(notify) = wakeups.get(aggregate_type) {
                                     notify.notify_one();
                                 } else {

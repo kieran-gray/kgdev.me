@@ -44,12 +44,9 @@ impl EvaluationDefaultsStore for FileEvaluationDefaultsStore {
     async fn save(&self, settings: SettingsDto) -> Result<(), AppError> {
         let _guard = self.lock.lock().await;
         if let Some(parent) = self.path.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                AppError::Internal(format!(
-                    "create dir {}: {e}",
-                    parent.display()
-                ))
-            })?;
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| AppError::Internal(format!("create dir {}: {e}", parent.display())))?;
         }
         let bytes = serde_json::to_vec_pretty(&settings)
             .map_err(|e| AppError::Internal(format!("encode evaluation defaults: {e}")))?;

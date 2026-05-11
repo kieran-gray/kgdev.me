@@ -3,9 +3,8 @@ use thiserror::Error;
 
 use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::configuration::{
-    chunking_configuration::ChunkingConfigurationRepositoryError,
-    exceptions::ConfigurationError, pipeline_configuration::PipelineConfigurationRepositoryError,
-    ConfigurationRepositoryError,
+    chunking_configuration::ChunkingConfigurationRepositoryError, exceptions::ConfigurationError,
+    pipeline_configuration::PipelineConfigurationRepositoryError, ConfigurationRepositoryError,
 };
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepositoryError;
 use crate::server::domain::evaluation::{

@@ -1,10 +1,7 @@
 use async_trait::async_trait;
 
 use crate::{
-    server::{
-        application::{markdown::Document, ports::Tokenizer, AppError},
-        domain::Chunk,
-    },
+    server::application::{markdown::Document, ports::Tokenizer, AppError},
     shared::{ChunkStrategy, ChunkingConfig},
 };
 
@@ -15,20 +12,6 @@ pub struct ChunkOutput {
     pub text: String,
     pub char_start: u32,
     pub char_end: u32,
-}
-
-impl From<ChunkOutput> for Chunk {
-    fn from(value: ChunkOutput) -> Chunk {
-        Chunk {
-            chunk_id: value.chunk_id,
-            heading: value.heading,
-            text: value.text,
-            char_start: value.char_start,
-            char_end: value.char_end,
-            sources: Vec::new(),
-            is_glossary: false,
-        }
-    }
 }
 
 #[async_trait]

@@ -34,7 +34,9 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         .await
         .map_err(|e| ChunkingConfigurationRepositoryError::Internal(format!("load_all: {e}")))?;
 
-        rows.into_iter().map(ChunkingConfigurationRow::try_into).collect()
+        rows.into_iter()
+            .map(ChunkingConfigurationRow::try_into)
+            .collect()
     }
 
     async fn save(
@@ -74,7 +76,6 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
 
         Ok(())
     }
-
 }
 
 struct ChunkingConfigurationRow {

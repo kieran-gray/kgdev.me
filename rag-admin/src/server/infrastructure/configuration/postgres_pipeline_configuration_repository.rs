@@ -75,7 +75,6 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
 
         Ok(())
     }
-
 }
 
 struct PipelineConfigurationRow {

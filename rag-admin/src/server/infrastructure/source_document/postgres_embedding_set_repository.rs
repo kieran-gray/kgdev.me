@@ -4,6 +4,9 @@ use uuid::Uuid;
 
 use crate::server::application::{source_document::ports::EmbeddingSetRepository, AppError};
 use crate::server::domain::embedding_set::entity::{ChunkEmbedding, EmbeddingSet};
+use crate::server::infrastructure::postgres::pgvector_codec::{
+    format_vector_literal, parse_vector_literal,
+};
 
 pub struct PostgresEmbeddingSetRepository {
     pool: PgPool,
@@ -52,20 +55,18 @@ impl EmbeddingSetRepository for PostgresEmbeddingSetRepository {
         .map_err(|e| AppError::Internal(format!("save embedding_set: {e}")))?;
 
         for embedding in &embeddings {
-            // REAL[] is stored as a JSON array for portability; migrate to pgvector later.
-            let vector_json = serde_json::to_value(&embedding.vector)
-                .map_err(|e| AppError::Internal(format!("serialize vector: {e}")))?;
+            let vec_literal = format_vector_literal(&embedding.vector);
 
             sqlx::query(
                 r#"
-                INSERT INTO chunk_embeddings (chunk_id, embedding_set_id, vector)
-                VALUES ($1, $2, $3)
+                INSERT INTO chunk_embeddings (chunk_id, embedding_set_id, vec)
+                VALUES ($1, $2, $3::vector)
                 ON CONFLICT (chunk_id, embedding_set_id) DO NOTHING
                 "#,
             )
             .bind(embedding.chunk_id)
             .bind(embedding.embedding_set_id)
-            .bind(&vector_json)
+            .bind(&vec_literal)
             .execute(&mut *tx)
             .await
             .map_err(|e| AppError::Internal(format!("save chunk_embedding: {e}")))?;
@@ -116,8 +117,11 @@ impl EmbeddingSetRepository for PostgresEmbeddingSetRepository {
         &self,
         embedding_set_id: Uuid,
     ) -> Result<Vec<ChunkEmbedding>, AppError> {
+        // vec::text renders the pgvector value as its `[a,b,c]` literal, which
+        // `parse_vector_literal` round-trips. No pgvector-crate dependency.
         let rows: Vec<EmbeddingRow> = sqlx::query_as(
-            "SELECT chunk_id, embedding_set_id, vector FROM chunk_embeddings WHERE embedding_set_id = $1",
+            "SELECT chunk_id, embedding_set_id, vec::text AS vec_text
+             FROM chunk_embeddings WHERE embedding_set_id = $1",
         )
         .bind(embedding_set_id)
         .fetch_all(&self.pool)
@@ -170,7 +174,7 @@ impl TryFrom<EmbeddingSetRow> for EmbeddingSet {
 struct EmbeddingRow {
     chunk_id: Uuid,
     embedding_set_id: Uuid,
-    vector: serde_json::Value,
+    vec_text: String,
 }
 
 impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for EmbeddingRow {
@@ -179,7 +183,7 @@ impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for EmbeddingRow {
         Ok(Self {
             chunk_id: row.try_get("chunk_id")?,
             embedding_set_id: row.try_get("embedding_set_id")?,
-            vector: row.try_get("vector")?,
+            vec_text: row.try_get("vec_text")?,
         })
     }
 }
@@ -191,8 +195,7 @@ impl TryFrom<EmbeddingRow> for ChunkEmbedding {
         Ok(ChunkEmbedding {
             chunk_id: row.chunk_id,
             embedding_set_id: row.embedding_set_id,
-            vector: serde_json::from_value(row.vector)
-                .map_err(|e| AppError::Internal(format!("deserialize vector: {e}")))?,
+            vector: parse_vector_literal(&row.vec_text)?,
         })
     }
 }

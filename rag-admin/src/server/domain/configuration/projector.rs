@@ -29,10 +29,7 @@ impl Projector<ConfigurationEvent> for ConfigurationProjector {
         Self::NAME
     }
 
-    async fn project(
-        &self,
-        events: &[EventEnvelope<ConfigurationEvent>],
-    ) -> Result<(), AppError> {
+    async fn project(&self, events: &[EventEnvelope<ConfigurationEvent>]) -> Result<(), AppError> {
         let mut model = self.repository.load().await?;
         let mut changed = false;
         for envelope in events {

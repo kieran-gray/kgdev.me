@@ -9,9 +9,7 @@ use crate::components::event_bus::provide_event_bus;
 use crate::components::shell::AppShell;
 use crate::pages::{
     chunking::ChunkingPage,
-    document_detail::{
-        DatasetDetailPage, DocumentByIdRedirect, DocumentDetailPage, RunDetailPage,
-    },
+    document_detail::{DatasetDetailPage, DocumentByIdRedirect, DocumentDetailPage, RunDetailPage},
     embed_test::EmbedTestPage,
     evaluations::EvaluationsPage,
     pipelines::PipelinesPage,

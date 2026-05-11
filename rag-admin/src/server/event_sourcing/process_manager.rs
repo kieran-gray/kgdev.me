@@ -47,10 +47,8 @@ where
 /// Function reducing one envelope + aggregate state into a list of pending effects.
 ///
 /// Concrete instances are built per-domain and route by event variant.
-pub type DeriveEffectsFn<A, R> = fn(
-    envelope: &EventEnvelope<<A as Aggregate>::Event>,
-    state: &A,
-) -> Vec<PendingEffect<R>>;
+pub type DeriveEffectsFn<A, R> =
+    fn(envelope: &EventEnvelope<<A as Aggregate>::Event>, state: &A) -> Vec<PendingEffect<R>>;
 
 impl<A, R> ProcessManager<A, R>
 where
@@ -87,7 +85,10 @@ where
         let mut by_stream: std::collections::BTreeMap<Uuid, Vec<&EventEnvelope<A::Event>>> =
             std::collections::BTreeMap::new();
         for env in envelopes {
-            by_stream.entry(env.metadata.stream_id).or_default().push(env);
+            by_stream
+                .entry(env.metadata.stream_id)
+                .or_default()
+                .push(env);
         }
 
         for (stream_id, events) in by_stream {

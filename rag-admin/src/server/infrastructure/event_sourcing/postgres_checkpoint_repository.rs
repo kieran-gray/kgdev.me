@@ -18,10 +18,7 @@ impl PostgresCheckpointRepository {
 
 #[async_trait]
 impl CheckpointRepository for PostgresCheckpointRepository {
-    async fn load(
-        &self,
-        projector_name: &str,
-    ) -> Result<Option<ProjectionCheckpoint>, AppError> {
+    async fn load(&self, projector_name: &str) -> Result<Option<ProjectionCheckpoint>, AppError> {
         let row: Option<CheckpointRow> = sqlx::query_as(
             "SELECT projector_name, last_processed_log_position, status, error_message, error_count, updated_at \
              FROM projection_checkpoints WHERE projector_name = $1",

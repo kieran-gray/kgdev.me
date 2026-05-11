@@ -140,8 +140,10 @@ pub async fn start_generate_synthetic_dataset(
                 target_question_count: eval_settings.question_count,
                 generation_model_id: pipeline.generation_model.generation_model_id,
                 generation_model: pipeline.generation_model.model.clone(),
-                excerpt_similarity_threshold_milli: eval_settings.excerpt_similarity_threshold_milli,
-                duplicate_similarity_threshold_milli: eval_settings.duplicate_similarity_threshold_milli,
+                excerpt_similarity_threshold_milli: eval_settings
+                    .excerpt_similarity_threshold_milli,
+                duplicate_similarity_threshold_milli: eval_settings
+                    .duplicate_similarity_threshold_milli,
                 embedding_model_id: pipeline.embedding_model.embedding_model_id,
                 occurred_at,
             }),
@@ -235,7 +237,10 @@ pub async fn start_run_evaluation(
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| {
-            ServerFnError::new(format!("evaluation dataset {} not found", request.dataset_id))
+            ServerFnError::new(format!(
+                "evaluation dataset {} not found",
+                request.dataset_id
+            ))
         })?;
 
     let scoring_policy = ScoringPolicy::default();

@@ -12,7 +12,6 @@ pub enum EvaluationRunRepositoryError {
 
 #[async_trait]
 pub trait EvaluationRunRepository: Send + Sync {
-
     async fn load(
         &self,
         run_id: Uuid,
@@ -48,10 +47,7 @@ pub trait EvaluationRunRepository: Send + Sync {
         result: EvaluationVariantResultDto,
     ) -> Result<(), EvaluationRunRepositoryError>;
 
-    async fn mark_completed(
-        &self,
-        run_id: Uuid,
-    ) -> Result<(), EvaluationRunRepositoryError>;
+    async fn mark_completed(&self, run_id: Uuid) -> Result<(), EvaluationRunRepositoryError>;
 
     async fn mark_failed(
         &self,

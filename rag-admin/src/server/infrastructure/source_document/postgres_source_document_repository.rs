@@ -154,23 +154,21 @@ impl TryFrom<SourceDocumentRow> for SourceDocumentReadModel {
     type Error = SourceDocumentRepositoryError;
 
     fn try_from(row: SourceDocumentRow) -> Result<Self, Self::Error> {
-        let document_type: DocumentType =
-            serde_json::from_value(serde_json::Value::String(row.document_type.clone())).map_err(
-                |e| {
-                    SourceDocumentRepositoryError::Internal(format!(
-                        "deserialize document_type '{}': {e}",
-                        row.document_type
-                    ))
-                },
-            )?;
+        let document_type: DocumentType = serde_json::from_value(serde_json::Value::String(
+            row.document_type.clone(),
+        ))
+        .map_err(|e| {
+            SourceDocumentRepositoryError::Internal(format!(
+                "deserialize document_type '{}': {e}",
+                row.document_type
+            ))
+        })?;
         let source_ref: SourceRef = serde_json::from_value(row.source_ref).map_err(|e| {
             SourceDocumentRepositoryError::Internal(format!("deserialize source_ref: {e}"))
         })?;
         let latest_metadata: DocumentMetadata = serde_json::from_value(row.latest_metadata)
             .map_err(|e| {
-                SourceDocumentRepositoryError::Internal(format!(
-                    "deserialize latest_metadata: {e}"
-                ))
+                SourceDocumentRepositoryError::Internal(format!("deserialize latest_metadata: {e}"))
             })?;
 
         Ok(Self {

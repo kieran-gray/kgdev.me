@@ -18,7 +18,7 @@ use crate::shared::{
     RunEvaluationRequestDto, SectionChunkingConfig,
 };
 
-use super::eval_parser::{parse_bool_values, parse_u32_values};
+use super::eval_parser::parse_u32_values;
 
 // ── Modes ──────────────────────────────────────────────────────────────────
 
@@ -116,11 +116,8 @@ pub fn EvaluationLauncher(
     let (options_expanded, set_options_expanded) = signal(false);
     let (single_top_k, set_single_top_k) = signal(5u32);
     let (single_min_score_milli, set_single_min_score_milli) = signal(0u32);
-    let (single_glossary, set_single_glossary) = signal(true);
     let (sweep_top_k_input, set_sweep_top_k_input) = signal("2,3,5,8".to_string());
-    let (sweep_min_score_input, set_sweep_min_score_input) =
-        signal("0,200,500,800".to_string());
-    let (sweep_glossary_input, set_sweep_glossary_input) = signal("true,false".to_string());
+    let (sweep_min_score_input, set_sweep_min_score_input) = signal("0,200,500,800".to_string());
 
     // ── Run mode state ─────────────────────────────────────────────────────
     let (run_mode, set_run_mode) = signal(RunMode::ScoreAll);
@@ -203,27 +200,20 @@ pub fn EvaluationLauncher(
             OptionsMode::Single => Ok(vec![EvaluationRunOptions {
                 top_k: single_top_k.get(),
                 min_score_milli: single_min_score_milli.get(),
-                include_glossary: single_glossary.get(),
             }]),
             OptionsMode::Sweep => {
                 let top_ks = parse_u32_values(&sweep_top_k_input.get(), 1, 100, 1)
                     .map_err(|e| format!("top-k: {e}"))?;
                 let min_scores = parse_u32_values(&sweep_min_score_input.get(), 0, 1000, 100)
                     .map_err(|e| format!("min-score: {e}"))?;
-                let glossaries = parse_bool_values(&sweep_glossary_input.get())
-                    .map_err(|e| format!("glossary: {e}"))?;
 
-                let mut combos =
-                    Vec::with_capacity(top_ks.len() * min_scores.len() * glossaries.len());
+                let mut combos = Vec::with_capacity(top_ks.len() * min_scores.len());
                 for &t in &top_ks {
                     for &m in &min_scores {
-                        for &g in &glossaries {
-                            combos.push(EvaluationRunOptions {
-                                top_k: t,
-                                min_score_milli: m,
-                                include_glossary: g,
-                            });
-                        }
+                        combos.push(EvaluationRunOptions {
+                            top_k: t,
+                            min_score_milli: m,
+                        });
                     }
                 }
                 Ok(combos)
@@ -266,15 +256,14 @@ pub fn EvaluationLauncher(
         let autotune = match run_mode.get() {
             RunMode::ScoreAll => None,
             RunMode::Autotune => Some(EvaluationAutotuneRequest {
-                current_config: variants.first().map(|v| v.config.clone()).unwrap_or_default(),
+                current_config: variants
+                    .first()
+                    .map(|v| v.config.clone())
+                    .unwrap_or_default(),
                 top_k_values: options.iter().map(|o| o.top_k).collect::<Vec<_>>(),
                 min_score_milli_values: options
                     .iter()
                     .map(|o| o.min_score_milli)
-                    .collect::<Vec<_>>(),
-                include_glossary_values: options
-                    .iter()
-                    .map(|o| o.include_glossary)
                     .collect::<Vec<_>>(),
             }),
         };
@@ -371,14 +360,10 @@ pub fn EvaluationLauncher(
                         set_single_top_k=set_single_top_k
                         single_min_score_milli=single_min_score_milli
                         set_single_min_score_milli=set_single_min_score_milli
-                        single_glossary=single_glossary
-                        set_single_glossary=set_single_glossary
                         sweep_top_k_input=sweep_top_k_input
                         set_sweep_top_k_input=set_sweep_top_k_input
                         sweep_min_score_input=sweep_min_score_input
                         set_sweep_min_score_input=set_sweep_min_score_input
-                        sweep_glossary_input=sweep_glossary_input
-                        set_sweep_glossary_input=set_sweep_glossary_input
                         options_computed=options_computed
                     />
                 </Section>
@@ -779,14 +764,10 @@ fn OptionsPicker(
     set_single_top_k: WriteSignal<u32>,
     single_min_score_milli: ReadSignal<u32>,
     set_single_min_score_milli: WriteSignal<u32>,
-    single_glossary: ReadSignal<bool>,
-    set_single_glossary: WriteSignal<bool>,
     sweep_top_k_input: ReadSignal<String>,
     set_sweep_top_k_input: WriteSignal<String>,
     sweep_min_score_input: ReadSignal<String>,
     set_sweep_min_score_input: WriteSignal<String>,
-    sweep_glossary_input: ReadSignal<String>,
-    set_sweep_glossary_input: WriteSignal<String>,
     options_computed: Memo<Result<Vec<EvaluationRunOptions>, String>>,
 ) -> impl IntoView {
     view! {
@@ -805,7 +786,6 @@ fn OptionsPicker(
                     <FieldRow>
                         <NumField label="top-k".to_string() value=single_top_k set_value=set_single_top_k min=1 />
                         <NumField label="min-score (milli)".to_string() value=single_min_score_milli set_value=set_single_min_score_milli min=0 />
-                        <BoolField label="Include glossary".to_string() value=single_glossary set_value=set_single_glossary />
                     </FieldRow>
                 }.into_any(),
                 OptionsMode::Sweep => view! {
@@ -821,12 +801,6 @@ fn OptionsPicker(
                             hint="milli, e.g. 0,500,800 or 0-800:200".to_string()
                             value=sweep_min_score_input
                             set_value=set_sweep_min_score_input
-                        />
-                        <TextField
-                            label="glossary values".to_string()
-                            hint="true,false".to_string()
-                            value=sweep_glossary_input
-                            set_value=set_sweep_glossary_input
                         />
                     </FieldRow>
                 }.into_any(),
@@ -1037,26 +1011,6 @@ fn TextField(
     }
 }
 
-#[component]
-fn BoolField(
-    label: String,
-    value: ReadSignal<bool>,
-    set_value: WriteSignal<bool>,
-) -> impl IntoView {
-    view! {
-        <label class="flex flex-col gap-1 min-w-32">
-            <span class="eyebrow">{label}</span>
-            <select
-                class="input"
-                on:change=move |e| set_value.set(event_target_value(&e) == "true")
-            >
-                <option value="true" selected=move || value.get()>"true"</option>
-                <option value="false" selected=move || !value.get()>"false"</option>
-            </select>
-        </label>
-    }
-}
-
 // ── Summary helpers ────────────────────────────────────────────────────────
 
 fn variants_summary(computed: Memo<Result<Vec<ChunkingVariant>, String>>) -> String {
@@ -1085,10 +1039,9 @@ fn options_summary(computed: Memo<Result<Vec<EvaluationRunOptions>, String>>) ->
             1 => {
                 let o = &list[0];
                 format!(
-                    "top-k {} · min-score {:.2} · glossary {}",
+                    "top-k {} · min-score {:.2}",
                     o.top_k,
                     o.min_score_milli as f32 / 1000.0,
-                    if o.include_glossary { "on" } else { "off" }
                 )
             }
             n => format!("{n} option sets"),

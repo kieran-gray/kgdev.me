@@ -513,3 +513,107 @@ header::before {
 
 .grid-cell { background-color: var(--color-page-bg); }
 .grid-cell-alt { background-color: var(--color-surface-2); opacity: 0.5; }
+
+/* ── Metric bar (run-detail visualization) ─────────────────────────────── */
+
+.metric-bar-row {
+    display: grid;
+    grid-template-columns: 9rem 1fr 6.5rem;
+    align-items: center;
+    column-gap: 0.75rem;
+    font-size: 0.8125rem;
+}
+
+.metric-bar-label {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.metric-bar-label-name {
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+.metric-bar-label-short {
+    color: var(--color-text-faint);
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.metric-bar-track {
+    position: relative;
+    height: 0.625rem;
+    border-radius: 2px;
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+}
+
+.metric-bar-tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: var(--color-border-strong);
+    opacity: 0.6;
+}
+
+.metric-bar-stddev {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background-color: var(--color-text-faint);
+    opacity: 0.18;
+}
+
+.metric-bar-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    opacity: 0.92;
+}
+
+.metric-bar-best-tick {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    width: 2px;
+    background-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-page-bg);
+}
+
+.metric-bar-value {
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    font-size: 0.75rem;
+}
+
+.metric-bar-axis {
+    display: grid;
+    grid-template-columns: 9rem 1fr 6.5rem;
+    column-gap: 0.75rem;
+    align-items: center;
+    color: var(--color-text-faint);
+    font-size: 0.65rem;
+    font-variant-numeric: tabular-nums;
+    margin-top: 0.5rem;
+}
+
+.metric-bar-axis-scale {
+    position: relative;
+    height: 0.75rem;
+}
+
+.metric-bar-axis-scale span {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
+.metric-bar-axis-scale span:first-child { transform: none; }
+.metric-bar-axis-scale span:last-child { transform: translateX(-100%); }

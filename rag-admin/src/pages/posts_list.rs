@@ -4,13 +4,15 @@ use leptos_router::components::A;
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 use crate::server_functions::source_document::list_documents_with_status;
-use crate::shared::DocumentListItemDto;
+use crate::shared::{aggregate_type, DocumentListItemDto};
 
 #[component]
 pub fn PostsListPage() -> impl IntoView {
     // Refetch whenever a source-document or indexing event arrives, and once on
     // every websocket reconnect.
-    let invalidator = use_invalidator(|e| e.from_any(&["SourceDocument", "Indexing"]));
+    let invalidator = use_invalidator(|e| {
+        e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
+    });
     let docs = Resource::new(
         move || invalidator.get(),
         |_| async move { list_documents_with_status().await },

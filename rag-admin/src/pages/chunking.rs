@@ -11,11 +11,9 @@ use uuid::Uuid;
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
 use crate::pages::configuration::commands::{parse_uuid_or_none, run_configuration_command};
-use crate::server_functions::configuration::{
-    get_chunking_configurations, get_configuration,
-};
+use crate::server_functions::configuration::{get_chunking_configurations, get_configuration};
 use crate::shared::{
-    BertChunkingConfig, ChunkStrategy, ChunkingConfig, ChunkingConfigurationDto,
+    aggregate_type, BertChunkingConfig, ChunkStrategy, ChunkingConfig, ChunkingConfigurationDto,
     ConfigurationCommandDto, ConfigurationDto, CreateChunkingConfigurationDto,
     DeleteChunkingConfigurationDto, LlmChunkingConfig, SectionChunkingConfig,
     UpdateChunkingConfigurationDto,
@@ -29,7 +27,7 @@ enum FormMode {
 
 #[component]
 pub fn ChunkingPage() -> impl IntoView {
-    let invalidator = use_invalidator(|e| e.from_any(&["Configuration"]));
+    let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION]));
     let (refresh, set_refresh) = signal(0u32);
 
     let configurations = Resource::new(
@@ -278,9 +276,7 @@ fn ChunkingFormDialog(
         let config = current_config();
         if let ChunkingConfig::Llm(llm) = &config {
             if llm.generation_model_id == Uuid::nil() {
-                set_dialog_error.set(Some(
-                    "Pick a generation model for LLM chunking.".into(),
-                ));
+                set_dialog_error.set(Some("Pick a generation model for LLM chunking.".into()));
                 return;
             }
         }
@@ -511,7 +507,9 @@ fn DeleteConfirmDialog(
     let close = Callback::new(move |_| set_target.set(None));
 
     let confirm = move |_| {
-        let Some(cc) = target.get_untracked() else { return; };
+        let Some(cc) = target.get_untracked() else {
+            return;
+        };
         run_configuration_command(
             ConfigurationCommandDto::DeleteChunkingConfiguration(DeleteChunkingConfigurationDto {
                 chunking_configuration_id: cc.chunking_configuration_id,
@@ -600,4 +598,3 @@ fn NumberField(
         </label>
     }
 }
-

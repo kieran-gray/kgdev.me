@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{ChunkingConfig, EmbedderBackend};
+use super::ChunkingConfig;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -51,8 +51,6 @@ pub struct EvaluationSettings {
         deserialize_with = "crate::shared::serde_compat::u32_from_string"
     )]
     pub min_score_milli: u32,
-    #[serde(default = "default_include_glossary")]
-    pub include_glossary: bool,
 }
 
 impl Default for EvaluationSettings {
@@ -65,7 +63,6 @@ impl Default for EvaluationSettings {
             duplicate_similarity_threshold_milli: default_duplicate_similarity_threshold_milli(),
             top_k: default_top_k(),
             min_score_milli: 0,
-            include_glossary: default_include_glossary(),
         }
     }
 }
@@ -101,29 +98,6 @@ pub struct EvaluationQuestionDto {
     pub references: Vec<EvaluationReferenceDto>,
     #[serde(default)]
     pub embedding: Option<Vec<OrderedF32>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct EvaluationDataset {
-    pub slug: String,
-    pub post_version: String,
-    pub generated_at: String,
-    #[serde(default)]
-    pub embedding_model_backend: Option<EmbedderBackend>,
-    #[serde(default)]
-    pub embedding_model_id: Option<String>,
-    #[serde(default)]
-    pub embedding_model_dims: Option<u32>,
-    pub questions: Vec<EvaluationQuestionDto>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct EvaluationDatasetStatus {
-    pub slug: String,
-    pub post_version: String,
-    pub exists: bool,
-    pub question_count: u32,
-    pub generated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -163,7 +137,6 @@ pub struct EvaluationRunOptions {
     pub top_k: u32,
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub min_score_milli: u32,
-    pub include_glossary: bool,
 }
 
 impl Default for EvaluationRunOptions {
@@ -171,7 +144,6 @@ impl Default for EvaluationRunOptions {
         Self {
             top_k: default_top_k(),
             min_score_milli: 0,
-            include_glossary: default_include_glossary(),
         }
     }
 }
@@ -181,7 +153,6 @@ pub struct EvaluationAutotuneRequest {
     pub current_config: ChunkingConfig,
     pub top_k_values: Vec<u32>,
     pub min_score_milli_values: Vec<u32>,
-    pub include_glossary_values: Vec<bool>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -417,10 +388,6 @@ fn default_duplicate_similarity_threshold_milli() -> u32 {
 
 fn default_top_k() -> u32 {
     5
-}
-
-fn default_include_glossary() -> bool {
-    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

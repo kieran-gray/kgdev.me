@@ -29,10 +29,7 @@ impl Projector<IndexingEvent> for IndexingProjector {
         Self::NAME
     }
 
-    async fn project(
-        &self,
-        events: &[EventEnvelope<IndexingEvent>],
-    ) -> Result<(), AppError> {
+    async fn project(&self, events: &[EventEnvelope<IndexingEvent>]) -> Result<(), AppError> {
         for envelope in events {
             let indexing_id = envelope.metadata.stream_id;
             match &envelope.event {
@@ -125,4 +122,3 @@ impl IndexingProjector {
         Ok(())
     }
 }
-

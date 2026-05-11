@@ -10,8 +10,8 @@ use crate::server_functions::source_document::{
     start_upsert_stage,
 };
 use crate::shared::{
-    ChunkingConfig, ChunkingConfigurationDto, IndexingDto, IngestJobInfo, LogEvent, LogLevel,
-    PipelineConfigurationDto, SourceDocumentDetailDto,
+    aggregate_type, ChunkingConfig, ChunkingConfigurationDto, IndexingDto, IngestJobInfo, LogEvent,
+    LogLevel, PipelineConfigurationDto, SourceDocumentDetailDto,
 };
 
 use super::utils::open_event_stream;
@@ -32,7 +32,8 @@ pub fn IndexingsTab(
 
     // Pull live chunking configurations so the launcher can pick a named
     // config rather than hard-coded inline params.
-    let invalidator = use_invalidator(|e| e.from_any(&["Configuration", "Indexing"]));
+    let invalidator =
+        use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION, aggregate_type::INDEXING]));
     let chunking_configurations = Resource::new(
         move || invalidator.get(),
         |_| async move {
@@ -161,9 +162,8 @@ fn StageControls(ix: IndexingDto) -> impl IntoView {
         }
     };
 
-    let chunk_done = status.contains("Chunking")
-        || status.contains("Embedding")
-        || status.contains("Indexed");
+    let chunk_done =
+        status.contains("Chunking") || status.contains("Embedding") || status.contains("Indexed");
     let embed_done = status.contains("Embedding") || status.contains("Indexed");
     let indexed_done = status.contains("Indexed");
 
@@ -175,19 +175,31 @@ fn StageControls(ix: IndexingDto) -> impl IntoView {
     let on_chunk = make_runner("chunk", |id| {
         Box::pin(start_chunking_stage(id))
             as std::pin::Pin<
-                Box<dyn std::future::Future<Output = Result<IngestJobInfo, leptos::prelude::ServerFnError>> + Send>,
+                Box<
+                    dyn std::future::Future<
+                            Output = Result<IngestJobInfo, leptos::prelude::ServerFnError>,
+                        > + Send,
+                >,
             >
     });
     let on_embed = make_runner("embed", |id| {
         Box::pin(start_embedding_stage(id))
             as std::pin::Pin<
-                Box<dyn std::future::Future<Output = Result<IngestJobInfo, leptos::prelude::ServerFnError>> + Send>,
+                Box<
+                    dyn std::future::Future<
+                            Output = Result<IngestJobInfo, leptos::prelude::ServerFnError>,
+                        > + Send,
+                >,
             >
     });
     let on_upsert = make_runner("upsert", |id| {
         Box::pin(start_upsert_stage(id))
             as std::pin::Pin<
-                Box<dyn std::future::Future<Output = Result<IngestJobInfo, leptos::prelude::ServerFnError>> + Send>,
+                Box<
+                    dyn std::future::Future<
+                            Output = Result<IngestJobInfo, leptos::prelude::ServerFnError>,
+                        > + Send,
+                >,
             >
     });
 
@@ -237,10 +249,7 @@ fn StageButton(
     on_click: Box<dyn Fn(leptos::ev::MouseEvent) + Send + Sync>,
 ) -> impl IntoView {
     let disabled_reason_stored = StoredValue::new(disabled_reason);
-    let blocked = move || {
-        disabled_reason_stored
-            .with_value(|f| f.as_ref().and_then(|f| f()))
-    };
+    let blocked = move || disabled_reason_stored.with_value(|f| f.as_ref().and_then(|f| f()));
     let on_click_stored = StoredValue::new(on_click);
     view! {
         <button
@@ -297,8 +306,11 @@ fn NewIndexingPanel(
 
     let resolve_chunking_config = move || -> Option<ChunkingConfig> {
         let id = active_chunking.get()?;
-        chunking_configurations
-            .with_value(|c| c.iter().find(|cc| cc.chunking_configuration_id == id).map(|cc| cc.config))
+        chunking_configurations.with_value(|c| {
+            c.iter()
+                .find(|cc| cc.chunking_configuration_id == id)
+                .map(|cc| cc.config)
+        })
     };
 
     let can_start = move || {

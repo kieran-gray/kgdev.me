@@ -288,7 +288,6 @@ impl ChunkingConfig {
             ),
         }
     }
-
 }
 
 #[cfg(test)]
@@ -316,5 +315,4 @@ mod tests {
             );
         }
     }
-
 }

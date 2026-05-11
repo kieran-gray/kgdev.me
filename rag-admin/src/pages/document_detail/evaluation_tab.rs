@@ -21,8 +21,8 @@ use crate::server_functions::evaluation::{
     start_run_evaluation,
 };
 use crate::shared::{
-    ChunkingConfigurationDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto, LogEvent,
-    LogLevel, PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto,
+    aggregate_type, ChunkingConfigurationDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto,
+    LogEvent, LogLevel, PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto,
 };
 
 use super::eval_launcher::{EvaluationLauncher, LauncherCallbacks};
@@ -57,7 +57,8 @@ pub fn EvaluationTab(
             pipelines=pipelines_stored
             chunking_configurations=chunking_stored
         />
-    }.into_any()
+    }
+    .into_any()
 }
 
 #[component]
@@ -67,7 +68,8 @@ fn EvaluationWorkspace(
     chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
 ) -> impl IntoView {
     // ── Eventful Resources ─────────────────────────────────────────────────
-    let dataset_invalidator = use_invalidator(|e| e.from_any(&["EvaluationDataset"]));
+    let dataset_invalidator =
+        use_invalidator(|e| e.from_any(&[aggregate_type::EVALUATION_DATASET]));
     let datasets = Resource::new(
         move || dataset_invalidator.get(),
         move |_| async move {
@@ -77,7 +79,7 @@ fn EvaluationWorkspace(
         },
     );
 
-    let run_invalidator = use_invalidator(|e| e.from_any(&["EvaluationRun"]));
+    let run_invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::EVALUATION_RUN]));
     let runs = Resource::new(
         move || run_invalidator.get(),
         move |_| async move { get_runs_for_document(document_id).await.unwrap_or_default() },
@@ -114,12 +116,14 @@ fn EvaluationWorkspace(
     let on_generate = move |_| {
         let label = dataset_label.get();
         let Some(pipeline_configuration_id) = active_pipeline.get() else {
-            set_log_events.update(|evs| evs.push(LogEvent {
-                level: LogLevel::Error,
-                message:
-                    "Select a pipeline configuration before generating a synthetic dataset."
-                        .to_string(),
-            }));
+            set_log_events.update(|evs| {
+                evs.push(LogEvent {
+                    level: LogLevel::Error,
+                    message:
+                        "Select a pipeline configuration before generating a synthetic dataset."
+                            .to_string(),
+                })
+            });
             return;
         };
         set_log_events.set(vec![]);
@@ -131,10 +135,12 @@ fn EvaluationWorkspace(
                 Ok(job) => open_event_stream(job.stream_url, set_log_events, set_job_running),
                 Err(e) => {
                     set_job_running.set(false);
-                    set_log_events.update(|evs| evs.push(LogEvent {
-                        level: LogLevel::Error,
-                        message: format!("{e}"),
-                    }));
+                    set_log_events.update(|evs| {
+                        evs.push(LogEvent {
+                            level: LogLevel::Error,
+                            message: format!("{e}"),
+                        })
+                    });
                 }
             }
         });
@@ -148,10 +154,12 @@ fn EvaluationWorkspace(
                 Ok(job) => open_event_stream(job.stream_url, set_log_events, set_job_running),
                 Err(e) => {
                     set_job_running.set(false);
-                    set_log_events.update(|evs| evs.push(LogEvent {
-                        level: LogLevel::Error,
-                        message: format!("{e}"),
-                    }));
+                    set_log_events.update(|evs| {
+                        evs.push(LogEvent {
+                            level: LogLevel::Error,
+                            message: format!("{e}"),
+                        })
+                    });
                 }
             }
         });
@@ -324,7 +332,11 @@ where
 #[component]
 fn RunCard(run: EvaluationRunSummaryDto) -> impl IntoView {
     let (kind, label) = eval_status(&run.status);
-    let when = run.created_at.get(..16).unwrap_or(&run.created_at).to_string();
+    let when = run
+        .created_at
+        .get(..16)
+        .unwrap_or(&run.created_at)
+        .to_string();
     let run_short = run.run_id.to_string()[..8].to_string();
     let variant_count = run.variant_count;
     let run_id = run.run_id;

@@ -22,7 +22,7 @@ use crate::server::application::evaluation::effects::{
     EvaluationDatasetEffect, EvaluationDatasetEffectExecutor, EvaluationRunEffect,
     EvaluationRunEffectExecutor,
 };
-use crate::server::application::evaluation::ports::EvaluationGenerator;
+use crate::server::application::evaluation::ports::{EvaluationGenerator, Retriever};
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 use crate::server::application::indexing::IndexingCommandHandler;
 use crate::server::application::ingest::ports::VectorIndex;
@@ -36,6 +36,7 @@ use crate::server::application::source_document::{
     SourceDocumentCommandHandler, SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
     SourceDocumentQueryService,
 };
+use crate::server::application::AppError;
 use crate::server::application::JobRegistry;
 use crate::server::domain::configuration::aggregate::Configuration;
 use crate::server::domain::configuration::chunking_configuration::{
@@ -80,7 +81,7 @@ use crate::server::infrastructure::configuration::{
 };
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{
-    ChatBasedEvaluationGenerator, PostgresEvaluationDatasetRepository,
+    ChatBasedEvaluationGenerator, PgvectorRetriever, PostgresEvaluationDatasetRepository,
     PostgresEvaluationRunRepository,
 };
 use crate::server::infrastructure::event_sourcing::{
@@ -105,7 +106,6 @@ use crate::server::setup::paths::{
     evaluation_defaults_path, post_chunking_config_path, tokenizer_path,
 };
 use crate::server::setup::seed::seed_if_empty;
-use crate::server::application::AppError;
 
 pub struct AppState {
     pub configuration_command_handler: Arc<ConfigurationCommandHandler>,
@@ -202,16 +202,20 @@ impl AppState {
             AiProviderKind::Ollama,
             ollama_chat_client.clone() as Arc<dyn ChatClient>,
         )]);
-        let chat_service =
-            ChatService::new(chat_clients, configuration_wiring.aggregate_repository.clone());
+        let chat_service = ChatService::new(
+            chat_clients,
+            configuration_wiring.aggregate_repository.clone(),
+        );
 
         let vector_providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>> =
             HashMap::from([(
                 VectorStoreKind::CloudflareVectorize,
                 CloudflareVectorIndexProvider::new(cf_api.clone()) as Arc<dyn VectorIndexProvider>,
             )]);
-        let vector_index_resolver =
-            VectorIndexResolver::new(vector_providers, configuration_wiring.aggregate_repository.clone());
+        let vector_index_resolver = VectorIndexResolver::new(
+            vector_providers,
+            configuration_wiring.aggregate_repository.clone(),
+        );
 
         let pipeline_resolver = PipelineResolver::new(
             pipeline_configuration_repository.clone(),
@@ -263,7 +267,9 @@ impl AppState {
         spawn_driver::<Configuration, ()>(
             configuration_wiring.event_store.clone(),
             vec![
-                Arc::new(ConfigurationProjector::new(configuration_repository.clone())),
+                Arc::new(ConfigurationProjector::new(
+                    configuration_repository.clone(),
+                )),
                 Arc::new(PipelineConfigurationProjector::new(
                     pipeline_configuration_repository.clone(),
                 )),
@@ -313,6 +319,9 @@ impl AppState {
             dataset_wiring.command_processor.clone(),
             clock.clone(),
         );
+        let evaluation_retriever: Arc<dyn Retriever> =
+            Arc::new(PgvectorRetriever::new(pool.clone()));
+
         let run_effect_executor = EvaluationRunEffectExecutor::new(
             source_document_repository.clone(),
             blob_store.clone(),
@@ -321,6 +330,7 @@ impl AppState {
             embedding_service.clone(),
             embedding_set_repository.clone(),
             evaluation_dataset_repository.clone(),
+            evaluation_retriever,
             run_wiring.command_processor.clone(),
             pipeline_resolver.clone(),
             clock.clone(),
@@ -476,9 +486,10 @@ where
     A: Aggregate + 'static,
     AppError: From<A::Error>,
 {
-    let event_store: Arc<dyn EventStore<A::Event>> = Arc::new(
-        PostgresEventStore::<A::Event>::new(pool.clone(), A::aggregate_type()),
-    );
+    let event_store: Arc<dyn EventStore<A::Event>> = Arc::new(PostgresEventStore::<A::Event>::new(
+        pool.clone(),
+        A::aggregate_type(),
+    ));
     let snapshot_store = Arc::new(PostgresAggregateSnapshotStore::<A>::new(pool.clone()));
     let aggregate_repository = Arc::new(AggregateRepository::<A>::new(
         event_store.clone(),

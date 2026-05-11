@@ -28,10 +28,7 @@ impl Projector<SourceDocumentEvent> for SourceDocumentProjector {
         Self::NAME
     }
 
-    async fn project(
-        &self,
-        events: &[EventEnvelope<SourceDocumentEvent>],
-    ) -> Result<(), AppError> {
+    async fn project(&self, events: &[EventEnvelope<SourceDocumentEvent>]) -> Result<(), AppError> {
         for envelope in events {
             let document_id = envelope.metadata.stream_id;
             match &envelope.event {

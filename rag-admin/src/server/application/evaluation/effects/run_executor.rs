@@ -7,9 +7,7 @@ use uuid::Uuid;
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::PipelineResolver;
 use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
-use crate::server::application::evaluation::retrieval::{
-    cosine_similarity, retrieve_chunks, EvalChunk,
-};
+use crate::server::application::evaluation::ports::{RetrievalQuery, Retriever};
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::ports::{
     BlobStore, ChunkSetRepository, EmbeddingSetRepository,
@@ -41,6 +39,7 @@ pub struct EvaluationRunEffectExecutor {
     embedding_service: Arc<EmbeddingService>,
     embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
     dataset_repository: Arc<dyn EvaluationDatasetRepository>,
+    retriever: Arc<dyn Retriever>,
     command_processor: Arc<CommandProcessor<EvaluationRun>>,
     pipeline_resolver: Arc<PipelineResolver>,
     clock: Arc<dyn Clock>,
@@ -57,6 +56,7 @@ impl EvaluationRunEffectExecutor {
         embedding_service: Arc<EmbeddingService>,
         embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
         dataset_repository: Arc<dyn EvaluationDatasetRepository>,
+        retriever: Arc<dyn Retriever>,
         command_processor: Arc<CommandProcessor<EvaluationRun>>,
         pipeline_resolver: Arc<PipelineResolver>,
         clock: Arc<dyn Clock>,
@@ -70,6 +70,7 @@ impl EvaluationRunEffectExecutor {
             embedding_service,
             embedding_set_repository,
             dataset_repository,
+            retriever,
             command_processor,
             pipeline_resolver,
             clock,
@@ -116,7 +117,9 @@ impl EvaluationRunEffectExecutor {
             .load(effect.dataset_id)
             .await
             .map_err(|e| AppError::Internal(e.to_string()))?
-            .ok_or_else(|| AppError::NotFound(format!("evaluation dataset {}", effect.dataset_id)))?;
+            .ok_or_else(|| {
+                AppError::NotFound(format!("evaluation dataset {}", effect.dataset_id))
+            })?;
 
         let questions = self
             .dataset_repository
@@ -179,7 +182,7 @@ impl EvaluationRunEffectExecutor {
                 )
                 .await?;
 
-            let (embedding_set_id, chunk_embeddings) = self
+            let embedding_set_id = self
                 .find_or_create_embedding_set(chunk_set_id, &chunks, embedding_model)
                 .await?;
 
@@ -209,13 +212,15 @@ impl EvaluationRunEffectExecutor {
 
             for options in &effect.options {
                 for split in &splits {
-                    let (metrics, traces) = score_variant(
-                        &questions,
-                        &chunks,
-                        &chunk_embeddings,
-                        &question_embeddings,
-                        options,
-                    );
+                    let (metrics, traces) = self
+                        .score_variant(
+                            embedding_set_id,
+                            &questions,
+                            &chunks,
+                            &question_embeddings,
+                            options,
+                        )
+                        .await?;
 
                     info!(
                         run_id = %effect.run_id,
@@ -332,18 +337,13 @@ impl EvaluationRunEffectExecutor {
         chunk_set_id: Uuid,
         chunks: &[Chunk],
         embedding_model: &ResolvedEmbeddingModel,
-    ) -> Result<(Uuid, Vec<Vec<f32>>), AppError> {
+    ) -> Result<Uuid, AppError> {
         if let Some(existing) = self
             .embedding_set_repository
             .find_by(chunk_set_id, embedding_model.embedding_model_id)
             .await?
         {
-            let embeddings = self
-                .embedding_set_repository
-                .load_embeddings(existing.embedding_set_id)
-                .await?;
-            let vecs: Vec<Vec<f32>> = embeddings.into_iter().map(|e| e.vector).collect();
-            return Ok((existing.embedding_set_id, vecs));
+            return Ok(existing.embedding_set_id);
         }
 
         let texts: Vec<String> = chunks.iter().map(|c| c.text.clone()).collect();
@@ -383,7 +383,80 @@ impl EvaluationRunEffectExecutor {
             .save(embedding_set, embeddings)
             .await?;
 
-        Ok((embedding_set_id, vectors))
+        Ok(embedding_set_id)
+    }
+
+    async fn score_variant(
+        &self,
+        embedding_set_id: Uuid,
+        questions: &[EvaluationQuestion],
+        chunks: &[Chunk],
+        question_embeddings: &[Vec<f32>],
+        options: &EvaluationRunOptions,
+    ) -> Result<(EvaluationMetrics, Vec<RetrievalTraceEntry>), AppError> {
+        let chunk_by_id: std::collections::HashMap<Uuid, &Chunk> =
+            chunks.iter().map(|c| (c.chunk_id, c)).collect();
+
+        let mut recall_scores = Vec::with_capacity(questions.len());
+        let mut precision_scores = Vec::with_capacity(questions.len());
+        let mut iou_scores = Vec::with_capacity(questions.len());
+        let mut omega_scores = Vec::with_capacity(questions.len());
+        let mut traces = Vec::with_capacity(questions.len());
+
+        for (q_idx, (question, q_emb)) in
+            questions.iter().zip(question_embeddings.iter()).enumerate()
+        {
+            let retrieved = self
+                .retriever
+                .retrieve(&RetrievalQuery {
+                    embedding_set_id,
+                    query_vector: q_emb.clone(),
+                    top_k: options.top_k,
+                    min_score: options.min_score(),
+                })
+                .await?;
+
+            let mut retrieved_refs = Vec::with_capacity(retrieved.len());
+            let mut retrieved_chunk_ids = Vec::with_capacity(retrieved.len());
+            let mut scores = Vec::with_capacity(retrieved.len());
+            for r in &retrieved {
+                if let Some(&chunk) = chunk_by_id.get(&r.chunk_id) {
+                    retrieved_refs.push(chunk);
+                    retrieved_chunk_ids.push(r.chunk_id);
+                    scores.push(r.score);
+                }
+            }
+
+            let (recall, precision, iou) = score_question(question, &retrieved_refs);
+            let omega = precision_omega(question, chunks);
+
+            recall_scores.push(recall);
+            precision_scores.push(precision);
+            iou_scores.push(iou);
+            omega_scores.push(omega);
+
+            traces.push(RetrievalTraceEntry {
+                question_sequence: q_idx as u32,
+                retrieved_chunk_ids,
+                scores,
+                recall,
+                precision,
+                iou,
+            });
+        }
+
+        let metrics = EvaluationMetrics {
+            recall_mean: mean(&recall_scores),
+            recall_std: std_dev(&recall_scores),
+            precision_mean: mean(&precision_scores),
+            precision_std: std_dev(&precision_scores),
+            iou_mean: mean(&iou_scores),
+            iou_std: std_dev(&iou_scores),
+            precision_omega_mean: mean(&omega_scores),
+            precision_omega_std: std_dev(&omega_scores),
+        };
+
+        Ok((metrics, traces))
     }
 }
 
@@ -396,95 +469,15 @@ impl EffectExecutor<EvaluationRunEffect> for EvaluationRunEffectExecutor {
     }
 }
 
-fn score_variant(
-    questions: &[EvaluationQuestion],
-    chunks: &[Chunk],
-    chunk_embeddings: &[Vec<f32>],
-    question_embeddings: &[Vec<f32>],
-    options: &EvaluationRunOptions,
-) -> (EvaluationMetrics, Vec<RetrievalTraceEntry>) {
-    let eval_chunks: Vec<EvalChunk> = chunks
-        .iter()
-        .enumerate()
-        .map(|(i, c)| EvalChunk {
-            chunk_id: i as u32,
-            text: c.text.clone(),
-            token_count: 0,
-            char_start: c.char_start,
-            char_end: c.char_end,
-            body_chunk: true,
-        })
-        .collect();
-
-    let mut recall_scores = Vec::new();
-    let mut precision_scores = Vec::new();
-    let mut iou_scores = Vec::new();
-    let mut omega_scores = Vec::new();
-    let mut traces = Vec::new();
-
-    for (q_idx, (question, q_emb)) in questions.iter().zip(question_embeddings).enumerate() {
-        let retrieved = retrieve_chunks(q_emb, &eval_chunks, chunk_embeddings, options);
-        let retrieved_refs: Vec<&EvalChunk> = retrieved
-            .iter()
-            .map(|r| &eval_chunks[r.chunk_index])
-            .collect();
-
-        let retrieved_chunk_ids: Vec<Uuid> = retrieved
-            .iter()
-            .map(|r| chunks[r.chunk_index].chunk_id)
-            .collect();
-        let scores: Vec<f32> = retrieved
-            .iter()
-            .map(|r| cosine_similarity(q_emb, &chunk_embeddings[r.chunk_index]))
-            .collect();
-
-        let (recall, precision, iou) = score_question(question, &retrieved_refs);
-        let omega = precision_omega(question, &eval_chunks);
-
-        recall_scores.push(recall);
-        precision_scores.push(precision);
-        iou_scores.push(iou);
-        omega_scores.push(omega);
-
-        traces.push(RetrievalTraceEntry {
-            question_sequence: q_idx as u32,
-            retrieved_chunk_ids,
-            scores,
-            recall,
-            precision,
-            iou,
-        });
-    }
-
-    let metrics = EvaluationMetrics {
-        recall_mean: mean(&recall_scores),
-        recall_std: std_dev(&recall_scores),
-        precision_mean: mean(&precision_scores),
-        precision_std: std_dev(&precision_scores),
-        iou_mean: mean(&iou_scores),
-        iou_std: std_dev(&iou_scores),
-        precision_omega_mean: mean(&omega_scores),
-        precision_omega_std: std_dev(&omega_scores),
-    };
-
-    (metrics, traces)
-}
-
-fn score_question(question: &EvaluationQuestion, retrieved: &[&EvalChunk]) -> (f32, f32, f32) {
-    let reference_ranges: Vec<(u32, u32)> = question
-        .references
-        .iter()
-        .filter(|r| r.char_end > r.char_start)
-        .map(|r| (r.char_start, r.char_end))
-        .collect();
-
-    let relevant_len: u32 = non_overlapping_len(&reference_ranges);
+fn score_question(question: &EvaluationQuestion, retrieved: &[&Chunk]) -> (f32, f32, f32) {
+    let reference_ranges = reference_ranges(question);
+    let relevant_len = non_overlapping_len(&reference_ranges);
     if relevant_len == 0 {
         return (0.0, 0.0, 0.0);
     }
 
     let mut intersection_len = 0u32;
-    for chunk in retrieved.iter().filter(|c| c.body_chunk) {
+    for chunk in retrieved {
         for &(ref_start, ref_end) in &reference_ranges {
             let overlap_start = chunk.char_start.max(ref_start);
             let overlap_end = chunk.char_end.min(ref_end);
@@ -512,14 +505,8 @@ fn score_question(question: &EvaluationQuestion, retrieved: &[&EvalChunk]) -> (f
     (recall, precision, iou)
 }
 
-fn precision_omega(question: &EvaluationQuestion, all_chunks: &[EvalChunk]) -> f32 {
-    let reference_ranges: Vec<(u32, u32)> = question
-        .references
-        .iter()
-        .filter(|r| r.char_end > r.char_start)
-        .map(|r| (r.char_start, r.char_end))
-        .collect();
-
+fn precision_omega(question: &EvaluationQuestion, all_chunks: &[Chunk]) -> f32 {
+    let reference_ranges = reference_ranges(question);
     let relevant_len = non_overlapping_len(&reference_ranges);
     if relevant_len == 0 {
         return 0.0;
@@ -527,17 +514,13 @@ fn precision_omega(question: &EvaluationQuestion, all_chunks: &[EvalChunk]) -> f
 
     let min_possible: u32 = all_chunks
         .iter()
-        .filter(|c| c.body_chunk)
         .map(|c| {
-            let overlap: u32 = reference_ranges
-                .iter()
-                .map(|&(rs, re)| {
-                    let os = c.char_start.max(rs);
-                    let oe = c.char_end.min(re);
-                    oe.saturating_sub(os)
-                })
-                .sum();
-            if overlap > 0 {
+            let touches_reference = reference_ranges.iter().any(|&(rs, re)| {
+                let os = c.char_start.max(rs);
+                let oe = c.char_end.min(re);
+                oe > os
+            });
+            if touches_reference {
                 c.char_end - c.char_start
             } else {
                 0
@@ -550,6 +533,15 @@ fn precision_omega(question: &EvaluationQuestion, all_chunks: &[EvalChunk]) -> f
     } else {
         relevant_len as f32 / min_possible as f32
     }
+}
+
+fn reference_ranges(question: &EvaluationQuestion) -> Vec<(u32, u32)> {
+    question
+        .references
+        .iter()
+        .filter(|r| r.char_end > r.char_start)
+        .map(|r| (r.char_start, r.char_end))
+        .collect()
 }
 
 fn non_overlapping_len(ranges: &[(u32, u32)]) -> u32 {
@@ -586,4 +578,93 @@ fn std_dev(values: &[f32]) -> f32 {
     let m = mean(values);
     let variance = values.iter().map(|v| (v - m).powi(2)).sum::<f32>() / values.len() as f32;
     variance.sqrt()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::domain::evaluation::question::{EvaluationQuestion, EvaluationReference};
+
+    fn chunk(start: u32, end: u32) -> Chunk {
+        Chunk {
+            chunk_id: Uuid::new_v4(),
+            chunk_set_id: Uuid::nil(),
+            sequence: 0,
+            heading: String::new(),
+            text: String::new(),
+            char_start: start,
+            char_end: end,
+        }
+    }
+
+    fn question(refs: &[(u32, u32)]) -> EvaluationQuestion {
+        EvaluationQuestion {
+            sequence: 0,
+            question: "q".into(),
+            references: refs
+                .iter()
+                .map(|&(s, e)| EvaluationReference {
+                    content: String::new(),
+                    char_start: s,
+                    char_end: e,
+                    embedding: None,
+                })
+                .collect(),
+            embedding: None,
+        }
+    }
+
+    fn close(actual: f32, expected: f32, label: &str) {
+        assert!(
+            (actual - expected).abs() < 1e-4,
+            "{label}: actual={actual} expected={expected}"
+        );
+    }
+
+    #[test]
+    fn score_question_perfect_overlap() {
+        let q = question(&[(10, 20)]);
+        let retrieved = vec![chunk(10, 20)];
+        let refs: Vec<&Chunk> = retrieved.iter().collect();
+        let (r, p, iou) = score_question(&q, &refs);
+        close(r, 1.0, "recall");
+        close(p, 1.0, "precision");
+        close(iou, 1.0, "iou");
+    }
+
+    #[test]
+    fn score_question_partial_recall_extra_content() {
+        // Reference is 10..20 (10 chars). Retrieved chunk is 0..30 (30 chars).
+        // Intersection = 10, recall = 1.0, precision = 10/30, iou = 10/30.
+        let q = question(&[(10, 20)]);
+        let retrieved = vec![chunk(0, 30)];
+        let refs: Vec<&Chunk> = retrieved.iter().collect();
+        let (r, p, iou) = score_question(&q, &refs);
+        close(r, 1.0, "recall");
+        close(p, 10.0 / 30.0, "precision");
+        close(iou, 10.0 / 30.0, "iou");
+    }
+
+    #[test]
+    fn score_question_no_references_returns_zero() {
+        let q = question(&[]);
+        let retrieved = vec![chunk(0, 10)];
+        let refs: Vec<&Chunk> = retrieved.iter().collect();
+        assert_eq!(score_question(&q, &refs), (0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn precision_omega_isolates_chunking_quality() {
+        // Reference span = 10 chars. The only chunk that touches the reference
+        // is 30 chars wide, so the best precision achievable by retrieving the
+        // touching chunks is 10/30.
+        let q = question(&[(10, 20)]);
+        let chunks = vec![chunk(0, 30), chunk(100, 200)];
+        close(precision_omega(&q, &chunks), 10.0 / 30.0, "Pω");
+    }
+
+    #[test]
+    fn non_overlapping_len_merges_overlaps() {
+        assert_eq!(non_overlapping_len(&[(0, 10), (5, 15), (20, 25)]), 20);
+    }
 }

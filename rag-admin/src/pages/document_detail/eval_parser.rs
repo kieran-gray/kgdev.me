@@ -1,7 +1,6 @@
 //! Parsing helpers for the evaluation launcher's range/step text inputs.
 //!
-//! Mirrors the syntax the legacy `post_detail/evaluation_dialog.rs` supported,
-//! which power users have already trained their hands on:
+//! Accepted syntax:
 //!
 //! - `"2,3,5,8"`     — explicit values, comma-separated
 //! - `"4-10"`        — inclusive range, default step
@@ -33,27 +32,6 @@ pub fn parse_u32_values(
         }
     }
     values.sort_unstable();
-    values.dedup();
-    if values.is_empty() {
-        Err("no values supplied".into())
-    } else {
-        Ok(values)
-    }
-}
-
-/// Parse a free-text booleans list into a deduped `Vec<bool>`.
-///
-/// Accepted tokens: `true`/`false`/`t`/`f`/`1`/`0`/`yes`/`no`. Case-insensitive.
-pub fn parse_bool_values(input: &str) -> Result<Vec<bool>, String> {
-    let mut values = Vec::new();
-    for token in input.split(',').map(str::trim).filter(|t| !t.is_empty()) {
-        let value = match token.to_ascii_lowercase().as_str() {
-            "true" | "t" | "1" | "yes" => true,
-            "false" | "f" | "0" | "no" => false,
-            _ => return Err(format!("invalid boolean '{token}'")),
-        };
-        values.push(value);
-    }
     values.dedup();
     if values.is_empty() {
         Err("no values supplied".into())
@@ -141,16 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn bool_values_dedup() {
-        assert_eq!(
-            parse_bool_values("true, false, 1, no").unwrap(),
-            vec![true, false, true, false]
-        );
-    }
-
-    #[test]
     fn empty_input_rejected() {
         assert!(parse_u32_values("", 0, 100, 1).is_err());
-        assert!(parse_bool_values("").is_err());
     }
 }

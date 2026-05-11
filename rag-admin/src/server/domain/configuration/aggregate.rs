@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::{domain::configuration::{
+use crate::server::{
+    domain::configuration::{
         chunking_configuration::{
-            ChunkingConfiguration, events::{
+            events::{
                 ChunkingConfigurationCreated, ChunkingConfigurationDeleted,
                 ChunkingConfigurationUpdated,
-            }
+            },
+            ChunkingConfiguration,
         },
         commands::ConfigurationCommand,
         embedding_model::{
@@ -19,13 +21,16 @@ use crate::server::{domain::configuration::{
         },
         kinds::AiProviderKind,
         pipeline_configuration::{
-            PipelineConfiguration, PipelineConfigurationValidator, events::{
+            events::{
                 PipelineConfigurationCreated, PipelineConfigurationDeleted,
                 PipelineConfigurationUpdated,
-            }
+            },
+            PipelineConfiguration, PipelineConfigurationValidator,
         },
         vector_index::{VectorIndex, VectorIndexAdded, VectorIndexRemoved, VectorIndexUpdated},
-    }, event_sourcing::Aggregate};
+    },
+    event_sourcing::Aggregate,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Configuration {
@@ -481,12 +486,13 @@ impl Configuration {
         config: &crate::shared::ChunkingConfig,
     ) -> Result<(), ConfigurationError> {
         if let crate::shared::ChunkingConfig::Llm(llm) = config {
-            self.find_generation_model(llm.generation_model_id).map_err(|_| {
-                ConfigurationError::ValidationError(format!(
-                    "LLM chunking generation model {} not found in registry",
-                    llm.generation_model_id
-                ))
-            })?;
+            self.find_generation_model(llm.generation_model_id)
+                .map_err(|_| {
+                    ConfigurationError::ValidationError(format!(
+                        "LLM chunking generation model {} not found in registry",
+                        llm.generation_model_id
+                    ))
+                })?;
         }
         Ok(())
     }
@@ -635,15 +641,14 @@ mod tests {
 
     #[test]
     fn replay_requires_configuration_created_as_first_event() {
-        let configuration =
-            Configuration::from_events(&[ConfigurationEvent::EmbeddingModelAdded(
-                EmbeddingModelAdded {
-                    model_id: Uuid::new_v4(),
-                    kind: AiProviderKind::Cloudflare,
-                    model: "@cf/baai/bge-base-en-v1.5".into(),
-                    dimensions: 768,
-                },
-            )]);
+        let configuration = Configuration::from_events(&[ConfigurationEvent::EmbeddingModelAdded(
+            EmbeddingModelAdded {
+                model_id: Uuid::new_v4(),
+                kind: AiProviderKind::Cloudflare,
+                model: "@cf/baai/bge-base-en-v1.5".into(),
+                dimensions: 768,
+            },
+        )]);
 
         assert!(configuration.is_none());
     }

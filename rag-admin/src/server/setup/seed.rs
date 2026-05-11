@@ -207,12 +207,11 @@ async fn seed_chunking_configurations_if_empty(
         .map(|m| m.generation_model_id);
 
     for seed in seed_definitions(llm_generation_model_id) {
-        let cmd = ConfigurationCommandDto::CreateChunkingConfiguration(
-            CreateChunkingConfigurationDto {
+        let cmd =
+            ConfigurationCommandDto::CreateChunkingConfiguration(CreateChunkingConfigurationDto {
                 name: seed.name.to_string(),
                 config: seed.config,
-            },
-        );
+            });
         command_handler
             .handle_dto(cmd)
             .await

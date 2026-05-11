@@ -32,7 +32,8 @@ use crate::server_functions::source_document::{
     get_document_detail_by_source_ref, import_source_document,
 };
 use crate::shared::{
-    ChunkingConfigurationDto, PipelineConfigurationDto, SourceDocumentDetailDto, SourceDocumentDto,
+    aggregate_type, ChunkingConfigurationDto, PipelineConfigurationDto, SourceDocumentDetailDto,
+    SourceDocumentDto,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,8 +58,9 @@ pub fn DocumentDetailPage() -> impl IntoView {
         Memo::new(move |_| params.with(|p| p.get("source_ref").unwrap_or_default().to_string()));
 
     // Live-refetch the document detail whenever a relevant event arrives.
-    let doc_invalidator =
-        use_invalidator(|e| e.from_any(&["SourceDocument", "Indexing"]));
+    let doc_invalidator = use_invalidator(|e| {
+        e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
+    });
     let detail = Resource::new(
         move || (source_ref.get(), doc_invalidator.get()),
         move |(slug, _)| async move {
@@ -73,7 +75,7 @@ pub fn DocumentDetailPage() -> impl IntoView {
 
     // Pipelines are slow-moving config but still eventful — refetch when the
     // Configuration aggregate or any of its sub-aggregates emits an event.
-    let pipeline_invalidator = use_invalidator(|e| e.from_any(&["Configuration"]));
+    let pipeline_invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION]));
     let pipelines = Resource::new(
         move || pipeline_invalidator.get(),
         |_| async move { get_pipeline_configurations().await.unwrap_or_default() },

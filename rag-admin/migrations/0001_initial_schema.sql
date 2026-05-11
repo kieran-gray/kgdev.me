@@ -1,4 +1,10 @@
 -- ───────────────────────────────────────────────────────────────────────────
+-- Extensions
+-- ───────────────────────────────────────────────────────────────────────────
+
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- ───────────────────────────────────────────────────────────────────────────
 -- Event sourcing core
 -- ───────────────────────────────────────────────────────────────────────────
 
@@ -172,9 +178,10 @@ CREATE TABLE embedding_sets (
 CREATE TABLE chunk_embeddings (
     chunk_id UUID NOT NULL REFERENCES chunks (chunk_id) ON DELETE CASCADE,
     embedding_set_id UUID NOT NULL REFERENCES embedding_sets (embedding_set_id) ON DELETE CASCADE,
-    vector JSONB NOT NULL,
+    vec VECTOR NOT NULL,
     PRIMARY KEY (chunk_id, embedding_set_id)
 );
+CREATE INDEX chunk_embeddings_embedding_set_id_idx ON chunk_embeddings (embedding_set_id);
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- Evaluation

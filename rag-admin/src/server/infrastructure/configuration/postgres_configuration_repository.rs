@@ -51,9 +51,10 @@ impl ConfigurationRepository for PostgresConfigurationRepository {
         let embedding_models = serde_json::to_value(&read_model.embedding_models).map_err(|e| {
             ConfigurationRepositoryError::Internal(format!("serialize embedding_models: {e}"))
         })?;
-        let generation_models = serde_json::to_value(&read_model.generation_models).map_err(|e| {
-            ConfigurationRepositoryError::Internal(format!("serialize generation_models: {e}"))
-        })?;
+        let generation_models =
+            serde_json::to_value(&read_model.generation_models).map_err(|e| {
+                ConfigurationRepositoryError::Internal(format!("serialize generation_models: {e}"))
+            })?;
         let vector_indexes = serde_json::to_value(&read_model.vector_indexes).map_err(|e| {
             ConfigurationRepositoryError::Internal(format!("serialize vector_indexes: {e}"))
         })?;
@@ -113,10 +114,8 @@ impl TryFrom<ConfigurationRow> for ConfigurationReadModel {
             configuration_id: row.id,
             embedding_models: serde_json::from_value::<Vec<EmbeddingModel>>(row.embedding_models)
                 .map_err(|e| {
-                    ConfigurationRepositoryError::Internal(format!(
-                        "deserialize embedding_models: {e}"
-                    ))
-                })?,
+                ConfigurationRepositoryError::Internal(format!("deserialize embedding_models: {e}"))
+            })?,
             generation_models: serde_json::from_value::<Vec<GenerationModel>>(
                 row.generation_models,
             )

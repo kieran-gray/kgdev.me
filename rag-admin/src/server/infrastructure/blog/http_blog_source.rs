@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::server::application::blog::ports::BlogSource;
 use crate::server::application::AppError;
-use crate::server::domain::{BlogPost, BlogPostSummary, GlossarySource, GlossaryTerm, PostVersion};
+use crate::server::domain::{BlogPost, BlogPostSummary};
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
 
 pub struct HttpBlogSource {
@@ -54,32 +54,14 @@ struct PostSummaryWire {
     slug: String,
     title: String,
     published_at: String,
-    content_hash: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PostDetailWire {
-    slug: String,
     title: String,
     published_at: String,
     source_markdown: String,
-    markdown_body: String,
-    glossary_terms: Vec<GlossaryTermWire>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GlossaryTermWire {
-    slug: String,
-    term: String,
-    definition: String,
-    sources: Vec<GlossarySourceWire>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GlossarySourceWire {
-    title: String,
-    url: String,
 }
 
 #[async_trait]
@@ -95,7 +77,6 @@ impl BlogSource for HttpBlogSource {
                 slug: p.slug,
                 title: p.title,
                 published_at: p.published_at,
-                post_version: PostVersion::from_hex(p.content_hash),
             })
             .collect())
     }
@@ -104,30 +85,10 @@ impl BlogSource for HttpBlogSource {
         let base = self.base_url()?;
         let url = format!("{base}/api/posts/{slug}.json");
         let detail: PostDetailWire = self.get_json(&url).await?;
-        let glossary_terms = detail
-            .glossary_terms
-            .into_iter()
-            .map(|g| GlossaryTerm {
-                slug: g.slug,
-                term: g.term,
-                definition: g.definition,
-                sources: g
-                    .sources
-                    .into_iter()
-                    .map(|s| GlossarySource {
-                        title: s.title,
-                        url: s.url,
-                    })
-                    .collect(),
-            })
-            .collect();
         Ok(BlogPost {
-            slug: detail.slug,
             title: detail.title,
             published_at: detail.published_at,
             source_markdown: detail.source_markdown,
-            markdown_body: detail.markdown_body,
-            glossary_terms,
         })
     }
 }

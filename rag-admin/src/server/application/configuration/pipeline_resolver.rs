@@ -50,9 +50,13 @@ impl PipelineResolver {
         &self,
         pipeline_configuration_id: Uuid,
     ) -> Result<ResolvedPipeline, AppError> {
-        let pipelines = self.pipeline_repository.load_all().await.map_err(|e| match e {
-            PipelineConfigurationRepositoryError::Internal(m) => AppError::Internal(m),
-        })?;
+        let pipelines = self
+            .pipeline_repository
+            .load_all()
+            .await
+            .map_err(|e| match e {
+                PipelineConfigurationRepositoryError::Internal(m) => AppError::Internal(m),
+            })?;
         let pc = pipelines
             .iter()
             .find(|p| p.pipeline_configuration_id == pipeline_configuration_id)

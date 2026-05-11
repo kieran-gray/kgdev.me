@@ -45,7 +45,8 @@ impl Projector<EvaluationDatasetEvent> for EvaluationDatasetProjector {
                             target_question_count: e.target_question_count,
                             generation_model_id: e.generation_model_id,
                             generation_model: e.generation_model.clone(),
-                            excerpt_similarity_threshold_milli: e.excerpt_similarity_threshold_milli,
+                            excerpt_similarity_threshold_milli: e
+                                .excerpt_similarity_threshold_milli,
                             duplicate_similarity_threshold_milli: e
                                 .duplicate_similarity_threshold_milli,
                             embedding_model_id: e.embedding_model_id,
@@ -67,7 +68,9 @@ impl Projector<EvaluationDatasetEvent> for EvaluationDatasetProjector {
                         .await?;
                 }
                 EvaluationDatasetEvent::QuestionRejected(e) => {
-                    self.repository.increment_rejection_count(e.dataset_id).await?;
+                    self.repository
+                        .increment_rejection_count(e.dataset_id)
+                        .await?;
                 }
                 EvaluationDatasetEvent::DatasetGenerationCompleted(e) => {
                     self.repository.mark_completed(e.dataset_id).await?;

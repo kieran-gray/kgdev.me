@@ -8,7 +8,9 @@ use uuid::Uuid;
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, Kv, PageHeader, Status, StatusPill, Surface};
 use crate::server_functions::evaluation::{delete_dataset, get_dataset, rename_dataset};
-use crate::shared::{EvaluationDatasetDto, EvaluationQuestionDto, EvaluationReferenceDto};
+use crate::shared::{
+    aggregate_type, EvaluationDatasetDto, EvaluationQuestionDto, EvaluationReferenceDto,
+};
 
 use super::utils::short_hash;
 
@@ -27,7 +29,7 @@ pub fn DatasetDetailPage() -> impl IntoView {
             .ok()
     });
 
-    let invalidator = use_invalidator(|e| e.from_any(&["EvaluationDataset"]));
+    let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::EVALUATION_DATASET]));
     let dataset = Resource::new(
         move || (dataset_id.get(), invalidator.get()),
         move |(id, _)| async move {

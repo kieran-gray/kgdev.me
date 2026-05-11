@@ -206,7 +206,10 @@ impl SourceDocumentIngestService {
             })?;
 
         // Validate pipeline exists upfront so the operator gets a clear error.
-        let _ = self.pipeline_resolver.resolve(pipeline_configuration_id).await?;
+        let _ = self
+            .pipeline_resolver
+            .resolve(pipeline_configuration_id)
+            .await?;
 
         // Document-type sanity: the adapter call below would fail anyway, but
         // catch it early.
@@ -214,8 +217,7 @@ impl SourceDocumentIngestService {
 
         let occurred_at = self.clock.now();
         let request_id = self.id_generator.new_uuid();
-        let indexing_id =
-            Indexing::compute_id(document.document_id, pipeline_configuration_id);
+        let indexing_id = Indexing::compute_id(document.document_id, pipeline_configuration_id);
 
         self.indexing_command_handler
             .handle(IndexingCommand::RequestIngest(RequestIngest {
@@ -269,7 +271,11 @@ impl SourceDocumentIngestService {
         pipeline_configuration_id: Uuid,
         chunking_config: ChunkingConfig,
     ) -> Result<IngestJobInfo, AppError> {
-        let run_key = format!("full:{}:{}", source_ref.natural_key(), pipeline_configuration_id);
+        let run_key = format!(
+            "full:{}:{}",
+            source_ref.natural_key(),
+            pipeline_configuration_id
+        );
         {
             let mut guard = self.running.lock().await;
             if guard.contains(&run_key) {
@@ -375,7 +381,10 @@ impl SourceDocumentIngestService {
         // version we chunk for is the one we recorded at import.
         let bytes = self.blob_store.get(&document.latest_content_hash).await?;
         let markdown = String::from_utf8(bytes).map_err(|e| {
-            AppError::Internal(format!("content for {} is not utf-8: {e}", document.document_id))
+            AppError::Internal(format!(
+                "content for {} is not utf-8: {e}",
+                document.document_id
+            ))
         })?;
         self.chunk_and_record(&indexing, &markdown, &job).await?;
         Ok(())
@@ -433,8 +442,15 @@ impl SourceDocumentIngestService {
             .resolve(indexing.pipeline_configuration_id)
             .await?;
         let chunks = self.chunk_set_repository.load_chunks(chunk_set_id).await?;
-        self.upsert_and_record(&indexing, chunk_set_id, embedding_set_id, &chunks, &pipeline, &job)
-            .await?;
+        self.upsert_and_record(
+            &indexing,
+            chunk_set_id,
+            embedding_set_id,
+            &chunks,
+            &pipeline,
+            &job,
+        )
+        .await?;
         Ok(())
     }
 
@@ -523,7 +539,10 @@ impl SourceDocumentIngestService {
             }
         };
 
-        let pipeline = self.pipeline_resolver.resolve(pipeline_configuration_id).await?;
+        let pipeline = self
+            .pipeline_resolver
+            .resolve(pipeline_configuration_id)
+            .await?;
         job.emit(IngestLogEvent::info(format!(
             "pipeline: embedding={} ({} dims) → index={}",
             pipeline.embedding_model.model,
@@ -562,19 +581,13 @@ impl SourceDocumentIngestService {
             removed: false,
         };
 
-        let markdown = String::from_utf8(fetched.content.clone()).map_err(|e| {
-            AppError::Internal(format!("fetched content is not utf-8: {e}"))
-        })?;
-        let chunk_set_id = self
-            .chunk_and_record(&indexing_rm, &markdown, &job)
-            .await?;
+        let markdown = String::from_utf8(fetched.content.clone())
+            .map_err(|e| AppError::Internal(format!("fetched content is not utf-8: {e}")))?;
+        let chunk_set_id = self.chunk_and_record(&indexing_rm, &markdown, &job).await?;
         let embedding_set_id = self
             .embed_and_record(&indexing_rm, chunk_set_id, &pipeline, &job)
             .await?;
-        let chunks = self
-            .chunk_set_repository
-            .load_chunks(chunk_set_id)
-            .await?;
+        let chunks = self.chunk_set_repository.load_chunks(chunk_set_id).await?;
         self.upsert_and_record(
             &indexing_rm,
             chunk_set_id,
@@ -845,5 +858,4 @@ impl SourceDocumentIngestService {
             .map_err(|e| AppError::Internal(format!("load indexing: {e}")))?
             .ok_or_else(|| AppError::NotFound(format!("indexing {indexing_id} not found")))
     }
-
 }

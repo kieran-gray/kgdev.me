@@ -71,8 +71,9 @@ pub fn use_event_bus() -> EventBus {
 /// the source of a `Resource::new` to make that resource eventful.
 ///
 /// ```ignore
+/// use crate::shared::aggregate_type;
 /// let invalidator = use_invalidator(|e| {
-///     e.from_any(&["SourceDocument", "Indexing"])
+///     e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
 /// });
 /// let docs = Resource::new(
 ///     move || invalidator.get(),

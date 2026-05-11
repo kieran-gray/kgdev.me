@@ -44,8 +44,7 @@ impl ProjectionCheckpoint {
 
 #[async_trait]
 pub trait CheckpointRepository: Send + Sync {
-    async fn load(&self, projector_name: &str)
-        -> Result<Option<ProjectionCheckpoint>, AppError>;
+    async fn load(&self, projector_name: &str) -> Result<Option<ProjectionCheckpoint>, AppError>;
 
     async fn upsert(&self, checkpoint: &ProjectionCheckpoint) -> Result<(), AppError>;
 }

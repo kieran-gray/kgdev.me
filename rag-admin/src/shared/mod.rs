@@ -5,7 +5,6 @@ mod embedding;
 mod evaluation;
 mod events;
 mod ingest;
-mod post;
 pub(crate) mod serde_compat;
 mod settings;
 mod source_document;
@@ -21,28 +20,26 @@ pub use configuration::{
 };
 pub use configuration_commands::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto, ConfigurationCommandDto,
-    CreateChunkingConfigurationDto, CreatePipelineConfigurationDto,
-    DeleteChunkingConfigurationDto, DeletePipelineConfigurationDto, RemoveEmbeddingModelDto,
-    RemoveGenerationModelDto, RemoveVectorIndexDto, UpdateChunkingConfigurationDto,
-    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdatePipelineConfigurationDto,
-    UpdateVectorIndexDto,
+    CreateChunkingConfigurationDto, CreatePipelineConfigurationDto, DeleteChunkingConfigurationDto,
+    DeletePipelineConfigurationDto, RemoveEmbeddingModelDto, RemoveGenerationModelDto,
+    RemoveVectorIndexDto, UpdateChunkingConfigurationDto, UpdateEmbeddingModelDto,
+    UpdateGenerationModelDto, UpdatePipelineConfigurationDto, UpdateVectorIndexDto,
 };
-pub use events::PublishedEvent;
 pub use embedding::{
     catalog_for_backend, CatalogEntry, EmbedResult, EmbedderBackend, EmbeddingModel,
     CLOUDFLARE_EMBEDDING_MODELS, OLLAMA_EMBEDDING_MODELS,
 };
 pub use evaluation::{
     evaluation_score, ordered_f32_vec, plain_f32_vec, ChunkingVariant, EvaluationAutotuneRequest,
-    EvaluationAutotuneSummary, EvaluationDatasetDto, EvaluationDatasetStatus,
-    EvaluationDatasetSummaryDto, EvaluationGenerationBackend, EvaluationJobInfo, EvaluationMetrics,
-    EvaluationQuestionDto, EvaluationQuestionResult, EvaluationReferenceDto,
-    EvaluationReferenceResult, EvaluationResultSplit, EvaluationRunDto, EvaluationRunOptions,
-    EvaluationRunResult, EvaluationRunSummary, EvaluationRunSummaryDto, EvaluationScorePolicy,
-    EvaluationScoreWeights, EvaluationSettings, EvaluationVariantResult, RunEvaluationRequestDto,
+    EvaluationAutotuneSummary, EvaluationDatasetDto, EvaluationDatasetSummaryDto,
+    EvaluationGenerationBackend, EvaluationJobInfo, EvaluationMetrics, EvaluationQuestionDto,
+    EvaluationQuestionResult, EvaluationReferenceDto, EvaluationReferenceResult,
+    EvaluationResultSplit, EvaluationRunDto, EvaluationRunOptions, EvaluationRunResult,
+    EvaluationRunSummary, EvaluationRunSummaryDto, EvaluationScorePolicy, EvaluationScoreWeights,
+    EvaluationSettings, EvaluationVariantResult, RunEvaluationRequestDto,
 };
+pub use events::{aggregate as aggregate_type, PublishedEvent};
 pub use ingest::{IngestJobInfo, IngestOptions, LogEvent, LogLevel};
-pub use post::{ChunkPreview, GlossaryTermDto, PostDetailDto, PostSummary};
 pub use settings::SettingsDto;
 pub use source_document::{
     ChunkDto, DocumentListItemDto, IndexingDto, SourceDocumentDetailDto, SourceDocumentDto,

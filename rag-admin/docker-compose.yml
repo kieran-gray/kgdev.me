@@ -27,7 +27,7 @@ services:
       retries: 5
 
   db:
-    image: postgres:18.2
+    image: pgvector/pgvector:pg18-trixie
     restart: "no"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]

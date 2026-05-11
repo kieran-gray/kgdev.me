@@ -1,6 +1,5 @@
 use serde::{de::DeserializeOwned, Serialize};
 
-
 pub trait Aggregate: Sized + Clone + Serialize + DeserializeOwned + Send + Sync {
     type Event: Clone + Serialize + DeserializeOwned + Send + Sync + 'static;
     type Command: Send + Sync + 'static;

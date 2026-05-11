@@ -297,10 +297,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         Ok(())
     }
 
-    async fn mark_deleted(
-        &self,
-        dataset_id: Uuid,
-    ) -> Result<(), EvaluationDatasetRepositoryError> {
+    async fn mark_deleted(&self, dataset_id: Uuid) -> Result<(), EvaluationDatasetRepositoryError> {
         sqlx::query(
             "UPDATE evaluation_datasets SET deleted_at = NOW(), updated_at = NOW() WHERE dataset_id = $1 AND deleted_at IS NULL",
         )

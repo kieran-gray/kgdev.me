@@ -12,11 +12,11 @@ use crate::server::application::evaluation::question_filter::{
 use crate::server::application::evaluation::reference_locator::ReferenceLocator;
 use crate::server::application::source_document::ports::BlobStore;
 use crate::server::application::AppError;
+use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::dataset::commands::{
     AcceptQuestion, CompleteDatasetGeneration, EvaluationDatasetCommand, FailDatasetGeneration,
     RejectQuestion,
 };
-use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::question::EvaluationReference;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::event_sourcing::command_processor::CommandProcessor;
@@ -190,7 +190,10 @@ impl EvaluationDatasetEffectExecutor {
                             EvaluationDatasetCommand::RejectQuestion(RejectQuestion {
                                 dataset_id: effect.dataset_id,
                                 attempt: rejection_attempt,
-                                reason: format!("low excerpt similarity {:.1}%", similarity * 100.0),
+                                reason: format!(
+                                    "low excerpt similarity {:.1}%",
+                                    similarity * 100.0
+                                ),
                                 occurred_at: self.clock.now(),
                             }),
                         )

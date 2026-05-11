@@ -3,7 +3,7 @@ use leptos_router::components::A;
 use leptos_router::hooks::use_location;
 
 use crate::components::event_bus::{use_event_bus, ConnectionState};
-use crate::shared::PublishedEvent;
+use crate::shared::{aggregate_type, PublishedEvent};
 
 /// Top navigation bar. One row, six destinations, an activity dot on the right.
 ///
@@ -120,12 +120,17 @@ pub fn AppNav() -> impl IntoView {
 /// authoritative state.
 fn apply_event_to_counter(event: &PublishedEvent, set_count: WriteSignal<u32>) {
     let delta: i32 = match (event.aggregate_type.as_str(), event.event_type.as_str()) {
-        ("Indexing", "IngestRequested") => 1,
-        ("Indexing", "IndexingCompleted" | "IngestionFailed" | "IndexingRemoved") => -1,
-        ("EvaluationRun", "RunRequested") => 1,
-        ("EvaluationRun", "RunCompleted" | "RunFailed") => -1,
-        ("EvaluationDataset", "DatasetRequested") => 1,
-        ("EvaluationDataset", "Completed" | "Failed") => -1,
+        (aggregate_type::INDEXING, "IngestRequested") => 1,
+        (aggregate_type::INDEXING, "IndexingCompleted" | "IngestionFailed" | "IndexingRemoved") => {
+            -1
+        }
+        (aggregate_type::EVALUATION_RUN, "RunRequested") => 1,
+        (aggregate_type::EVALUATION_RUN, "RunCompleted" | "RunFailed") => -1,
+        (aggregate_type::EVALUATION_DATASET, "DatasetGenerationRequested") => 1,
+        (
+            aggregate_type::EVALUATION_DATASET,
+            "DatasetGenerationCompleted" | "DatasetGenerationFailed",
+        ) => -1,
         _ => 0,
     };
 

@@ -19,8 +19,7 @@ impl<'a, A, E> PolicyContext<'a, A, E> {
 ///
 /// Functions are `fn` pointers so policies can be declared as `static` slices,
 /// kept next to their event in the domain layer, and unit-tested without mocks.
-pub type PolicyFn<E, A, EnvE, R> =
-    fn(&E, &PolicyContext<'_, A, EnvE>) -> Vec<PendingEffect<R>>;
+pub type PolicyFn<E, A, EnvE, R> = fn(&E, &PolicyContext<'_, A, EnvE>) -> Vec<PendingEffect<R>>;
 
 /// Attach a static list of policies to an event variant struct.
 ///
@@ -29,10 +28,7 @@ pub type PolicyFn<E, A, EnvE, R> =
 pub trait HasPolicies<A: 'static, EnvE: 'static, R: 'static>: Sized + 'static {
     fn policies() -> &'static [PolicyFn<Self, A, EnvE, R>];
 
-    fn apply_policies(
-        &self,
-        ctx: &PolicyContext<'_, A, EnvE>,
-    ) -> Vec<PendingEffect<R>> {
+    fn apply_policies(&self, ctx: &PolicyContext<'_, A, EnvE>) -> Vec<PendingEffect<R>> {
         Self::policies().iter().flat_map(|f| f(self, ctx)).collect()
     }
 }

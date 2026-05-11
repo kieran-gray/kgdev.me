@@ -4,5 +4,3 @@ pub mod ports;
 pub mod query_service;
 pub mod question_filter;
 pub mod reference_locator;
-pub mod retrieval;
-pub mod scoring;

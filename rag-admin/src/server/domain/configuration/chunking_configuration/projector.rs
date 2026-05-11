@@ -28,10 +28,7 @@ impl Projector<ConfigurationEvent> for ChunkingConfigurationProjector {
         Self::NAME
     }
 
-    async fn project(
-        &self,
-        events: &[EventEnvelope<ConfigurationEvent>],
-    ) -> Result<(), AppError> {
+    async fn project(&self, events: &[EventEnvelope<ConfigurationEvent>]) -> Result<(), AppError> {
         for envelope in events {
             match &envelope.event {
                 ConfigurationEvent::ChunkingConfigurationCreated(e) => {
@@ -53,9 +50,7 @@ impl Projector<ConfigurationEvent> for ChunkingConfigurationProjector {
                         .await?;
                 }
                 ConfigurationEvent::ChunkingConfigurationDeleted(e) => {
-                    self.repository
-                        .delete(e.chunking_configuration_id)
-                        .await?;
+                    self.repository.delete(e.chunking_configuration_id).await?;
                 }
                 _ => {}
             }

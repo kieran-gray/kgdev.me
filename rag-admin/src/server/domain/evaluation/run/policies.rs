@@ -5,9 +5,7 @@ use crate::server::event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn
 use super::aggregate::EvaluationRun;
 use super::events::{EvaluationRunEvent, RunRequested};
 
-use crate::server::application::evaluation::effects::run::{
-    EvaluationRunEffect, ExecuteRunEffect,
-};
+use crate::server::application::evaluation::effects::run::{EvaluationRunEffect, ExecuteRunEffect};
 
 fn for_run_requested(
     event: &RunRequested,

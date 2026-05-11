@@ -18,6 +18,20 @@ pub struct PublishedEvent {
     pub occurred_at: String,
 }
 
+/// Aggregate-type discriminator strings as published by the server.
+///
+/// These must match the values returned by each aggregate's
+/// `Aggregate::aggregate_type()` impl. They are part of the wire contract for
+/// the event-bus websocket — bumping them is a coordinated server+client
+/// change.
+pub mod aggregate {
+    pub const SOURCE_DOCUMENT: &str = "source_document";
+    pub const INDEXING: &str = "indexing";
+    pub const CONFIGURATION: &str = "configuration";
+    pub const EVALUATION_DATASET: &str = "evaluation_dataset";
+    pub const EVALUATION_RUN: &str = "evaluation_run";
+}
+
 impl PublishedEvent {
     /// Convenience: did this event come from one of the named aggregate types?
     pub fn from_any(&self, aggregate_types: &[&str]) -> bool {

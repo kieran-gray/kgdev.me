@@ -79,7 +79,9 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
                     self.repository.mark_completed(e.run_id).await?;
                 }
                 EvaluationRunEvent::RunFailed(e) => {
-                    self.repository.mark_failed(e.run_id, e.reason.clone()).await?;
+                    self.repository
+                        .mark_failed(e.run_id, e.reason.clone())
+                        .await?;
                 }
             }
         }

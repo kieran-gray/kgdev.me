@@ -121,9 +121,7 @@ pub async fn request_indexing(
     prefix = "/api",
     endpoint = "start_chunking_stage"
 )]
-pub async fn start_chunking_stage(
-    indexing_id: uuid::Uuid,
-) -> Result<IngestJobInfo, ServerFnError> {
+pub async fn start_chunking_stage(indexing_id: uuid::Uuid) -> Result<IngestJobInfo, ServerFnError> {
     use crate::server::setup::AppState;
     use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
@@ -165,9 +163,7 @@ pub async fn start_embedding_stage(
     prefix = "/api",
     endpoint = "start_upsert_stage"
 )]
-pub async fn start_upsert_stage(
-    indexing_id: uuid::Uuid,
-) -> Result<IngestJobInfo, ServerFnError> {
+pub async fn start_upsert_stage(indexing_id: uuid::Uuid) -> Result<IngestJobInfo, ServerFnError> {
     use crate::server::setup::AppState;
     use crate::server_functions::error::map_app_error;
     use std::sync::Arc;

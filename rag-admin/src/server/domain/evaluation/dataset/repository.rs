@@ -72,8 +72,5 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         label: String,
     ) -> Result<(), EvaluationDatasetRepositoryError>;
 
-    async fn mark_deleted(
-        &self,
-        dataset_id: Uuid,
-    ) -> Result<(), EvaluationDatasetRepositoryError>;
+    async fn mark_deleted(&self, dataset_id: Uuid) -> Result<(), EvaluationDatasetRepositoryError>;
 }
