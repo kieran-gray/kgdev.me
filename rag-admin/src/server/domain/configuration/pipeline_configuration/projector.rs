@@ -1,127 +1,67 @@
-use std::collections::HashMap;
+use std::sync::Arc;
 
-use uuid::Uuid;
+use async_trait::async_trait;
 
+use crate::server::application::AppError;
 use crate::server::domain::configuration::events::ConfigurationEvent;
+use crate::server::event_sourcing::envelope::EventEnvelope;
+use crate::server::event_sourcing::projector::Projector;
 
 use super::read_model::PipelineConfigurationReadModel;
+use super::repository::PipelineConfigurationRepository;
 
-pub struct PipelineConfigurationProjector;
+pub struct PipelineConfigurationProjector {
+    repository: Arc<dyn PipelineConfigurationRepository>,
+}
 
 impl PipelineConfigurationProjector {
-    pub fn from_events(events: &[ConfigurationEvent]) -> Vec<PipelineConfigurationReadModel> {
-        let mut map: HashMap<Uuid, PipelineConfigurationReadModel> = HashMap::new();
+    pub const NAME: &'static str = "pipeline_configuration_projector";
 
-        for event in events {
-            match event {
+    pub fn new(repository: Arc<dyn PipelineConfigurationRepository>) -> Self {
+        Self { repository }
+    }
+}
+
+#[async_trait]
+impl Projector<ConfigurationEvent> for PipelineConfigurationProjector {
+    fn name(&self) -> &str {
+        Self::NAME
+    }
+
+    async fn project(
+        &self,
+        events: &[EventEnvelope<ConfigurationEvent>],
+    ) -> Result<(), AppError> {
+        for envelope in events {
+            match &envelope.event {
                 ConfigurationEvent::PipelineConfigurationCreated(e) => {
-                    map.insert(
-                        e.pipeline_configuration_id,
-                        PipelineConfigurationReadModel {
+                    self.repository
+                        .save(PipelineConfigurationReadModel {
                             pipeline_configuration_id: e.pipeline_configuration_id,
                             name: e.name.clone(),
                             embedding_model_id: e.embedding_model_id,
                             generation_model_id: e.generation_model_id,
                             vector_index_id: e.vector_index_id,
-                        },
-                    );
+                        })
+                        .await?;
                 }
                 ConfigurationEvent::PipelineConfigurationUpdated(e) => {
-                    map.insert(
-                        e.pipeline_configuration_id,
-                        PipelineConfigurationReadModel {
+                    self.repository
+                        .save(PipelineConfigurationReadModel {
                             pipeline_configuration_id: e.pipeline_configuration_id,
                             name: e.name.clone(),
                             embedding_model_id: e.embedding_model_id,
                             generation_model_id: e.generation_model_id,
                             vector_index_id: e.vector_index_id,
-                        },
-                    );
+                        })
+                        .await?;
                 }
                 ConfigurationEvent::PipelineConfigurationDeleted(e) => {
-                    map.remove(&e.pipeline_configuration_id);
+                    self.repository.delete(e.pipeline_configuration_id).await?;
                 }
                 _ => {}
             }
         }
-
-        map.into_values().collect()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::server::domain::configuration::{
-        events::ConfigurationCreated,
-        pipeline_configuration::events::{
-            PipelineConfigurationCreated, PipelineConfigurationDeleted,
-            PipelineConfigurationUpdated,
-        },
-    };
-    use uuid::Uuid;
-
-    #[test]
-    fn projects_created_configurations() {
-        let id = Uuid::new_v4();
-        let result = PipelineConfigurationProjector::from_events(&[
-            ConfigurationEvent::ConfigurationCreated(ConfigurationCreated {
-                configuration_id: Uuid::nil(),
-            }),
-            ConfigurationEvent::PipelineConfigurationCreated(PipelineConfigurationCreated {
-                pipeline_configuration_id: id,
-                name: "production".into(),
-                embedding_model_id: Uuid::new_v4(),
-                generation_model_id: Uuid::new_v4(),
-                vector_index_id: Uuid::new_v4(),
-            }),
-        ]);
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].name, "production");
-    }
-
-    #[test]
-    fn projects_updated_configuration() {
-        let id = Uuid::new_v4();
-        let new_index_id = Uuid::new_v4();
-        let result = PipelineConfigurationProjector::from_events(&[
-            ConfigurationEvent::PipelineConfigurationCreated(PipelineConfigurationCreated {
-                pipeline_configuration_id: id,
-                name: "production".into(),
-                embedding_model_id: Uuid::new_v4(),
-                generation_model_id: Uuid::new_v4(),
-                vector_index_id: Uuid::new_v4(),
-            }),
-            ConfigurationEvent::PipelineConfigurationUpdated(PipelineConfigurationUpdated {
-                pipeline_configuration_id: id,
-                name: "production".into(),
-                embedding_model_id: Uuid::new_v4(),
-                generation_model_id: Uuid::new_v4(),
-                vector_index_id: new_index_id,
-            }),
-        ]);
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].vector_index_id, new_index_id);
-    }
-
-    #[test]
-    fn projects_deleted_configuration() {
-        let id = Uuid::new_v4();
-        let result = PipelineConfigurationProjector::from_events(&[
-            ConfigurationEvent::PipelineConfigurationCreated(PipelineConfigurationCreated {
-                pipeline_configuration_id: id,
-                name: "production".into(),
-                embedding_model_id: Uuid::new_v4(),
-                generation_model_id: Uuid::new_v4(),
-                vector_index_id: Uuid::new_v4(),
-            }),
-            ConfigurationEvent::PipelineConfigurationDeleted(PipelineConfigurationDeleted {
-                pipeline_configuration_id: id,
-            }),
-        ]);
-
-        assert!(result.is_empty());
+        Ok(())
     }
 }

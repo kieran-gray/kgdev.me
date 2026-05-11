@@ -6,8 +6,9 @@ use uuid::Uuid;
 use crate::server::application::ingest::ports::VectorIndex;
 use crate::server::application::source_document::ports::VectorIndexProvider;
 use crate::server::application::AppError;
+use crate::server::domain::configuration::aggregate::Configuration;
 use crate::server::domain::configuration::kinds::VectorStoreKind;
-use crate::server::domain::configuration::{ConfigurationRepository, ConfigurationRepositoryError};
+use crate::server::event_sourcing::{Aggregate, AggregateRepository};
 
 #[derive(Debug, Clone)]
 pub struct ResolvedVectorIndex {
@@ -19,13 +20,13 @@ pub struct ResolvedVectorIndex {
 
 pub struct VectorIndexResolver {
     providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>>,
-    configuration_repository: Arc<dyn ConfigurationRepository>,
+    configuration_repository: Arc<AggregateRepository<Configuration>>,
 }
 
 impl VectorIndexResolver {
     pub fn new(
         providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>>,
-        configuration_repository: Arc<dyn ConfigurationRepository>,
+        configuration_repository: Arc<AggregateRepository<Configuration>>,
     ) -> Arc<Self> {
         Arc::new(Self {
             providers,
@@ -49,14 +50,18 @@ impl VectorIndexResolver {
     }
 
     pub async fn resolve(&self, index_id: Uuid) -> Result<ResolvedVectorIndex, AppError> {
-        let config = self
+        let Some(loaded) = self
             .configuration_repository
-            .load()
-            .await
-            .map_err(|e| match e {
-                ConfigurationRepositoryError::Internal(m) => AppError::Internal(m),
-            })?;
-        let index = config
+            .load(Configuration::singleton_id())
+            .await?
+        else {
+            return Err(AppError::NotFound(
+                Configuration::aggregate_type().to_string(),
+            ));
+        };
+
+        let index = loaded
+            .aggregate
             .vector_indexes
             .iter()
             .find(|i| i.index_id == index_id)

@@ -6,7 +6,8 @@ use crate::server::application::chunking::{ChunkOutput, DocumentChunker, TokenBu
 use crate::server::application::markdown::{Document, TextUnit};
 use crate::server::application::ports::{ChatClient, ChatRequest, ChatResponseFormat, Tokenizer};
 use crate::server::application::AppError;
-use crate::server::domain::configuration::ConfigurationRepository;
+use crate::server::domain::configuration::aggregate::Configuration;
+use crate::server::event_sourcing::{Aggregate, AggregateRepository};
 use crate::shared::{ChunkStrategy, ChunkingConfig};
 
 const SYSTEM_PROMPT: &str = "You split blog text into compact, self-contained retrieval chunks. \
@@ -34,13 +35,13 @@ struct MicroChunk {
 
 pub struct LlmChunker {
     chat_client: Arc<dyn ChatClient>,
-    configuration_repository: Arc<dyn ConfigurationRepository>,
+    configuration_repository: Arc<AggregateRepository<Configuration>>,
 }
 
 impl LlmChunker {
     pub fn create(
         chat_client: Arc<dyn ChatClient>,
-        configuration_repository: Arc<dyn ConfigurationRepository>,
+        configuration_repository: Arc<AggregateRepository<Configuration>>,
     ) -> Self {
         Self {
             chat_client,
@@ -96,8 +97,17 @@ impl DocumentChunker for LlmChunker {
 
 impl LlmChunker {
     async fn resolve_generation_model(&self, model_id: uuid::Uuid) -> Result<String, AppError> {
-        let catalog = self.configuration_repository.load().await?;
-        catalog
+        let Some(loaded) = self
+            .configuration_repository
+            .load(Configuration::singleton_id())
+            .await?
+        else {
+            return Err(AppError::NotFound(
+                Configuration::aggregate_type().to_string(),
+            ));
+        };
+        loaded
+            .aggregate
             .generation_models
             .iter()
             .find(|m| m.generation_model_id == model_id)

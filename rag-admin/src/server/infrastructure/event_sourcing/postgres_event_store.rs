@@ -11,12 +11,6 @@ use crate::server::domain::shared::Timestamp;
 use crate::server::event_sourcing::envelope::{EventEnvelope, EventMetadata};
 use crate::server::event_sourcing::event_store::{AppendedEvent, EventStore};
 
-/// Postgres-backed event store, generic over the event payload type.
-///
-/// Persists into a single shared `events` table; rows are filtered by
-/// `aggregate_type` so each aggregate effectively has its own log. The table's
-/// `id BIGSERIAL` column doubles as the global `log_position` for projection
-/// drivers.
 pub struct PostgresEventStore<E> {
     pool: PgPool,
     aggregate_type: &'static str,

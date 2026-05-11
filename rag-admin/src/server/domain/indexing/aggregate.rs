@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::Aggregate;
-use crate::shared::ChunkingConfig;
+use crate::{server::event_sourcing::Aggregate, shared::ChunkingConfig};
 
 use super::{
     commands::IndexingCommand,
@@ -14,7 +13,6 @@ use super::{
     status::{IndexingStatus, IngestStage},
 };
 
-/// Namespace UUID for computing deterministic indexing IDs via UUIDv5.
 const INDEXING_NAMESPACE: Uuid = uuid::uuid!("e3b0a3d2-f1c4-4b8a-9e7d-2a6c5f891034");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,7 +31,6 @@ pub struct Indexing {
 }
 
 impl Indexing {
-    /// Deterministic aggregate ID: UUIDv5 of (document_id, pipeline_configuration_id).
     pub fn compute_id(document_id: Uuid, pipeline_configuration_id: Uuid) -> Uuid {
         let name = format!("{document_id}:{pipeline_configuration_id}");
         Uuid::new_v5(&INDEXING_NAMESPACE, name.as_bytes())
@@ -68,7 +65,6 @@ impl Aggregate for Indexing {
     fn apply(&mut self, event: &Self::Event) {
         match event {
             Self::Event::IngestRequested(e) => {
-                // Re-ingest: update version, config, reset state for new run.
                 self.document_version = e.document_version;
                 self.chunking_config = e.chunking_config.clone();
                 self.chunk_set_id = None;

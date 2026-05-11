@@ -3,10 +3,13 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::server::application::ports::{ChatClient, ChatRequest, ChatResponse, ChatResponseFormat};
+use crate::server::application::ports::{
+    ChatClient, ChatRequest, ChatResponse, ChatResponseFormat,
+};
 use crate::server::application::AppError;
+use crate::server::domain::configuration::aggregate::Configuration;
 use crate::server::domain::configuration::kinds::AiProviderKind;
-use crate::server::domain::configuration::{ConfigurationRepository, ConfigurationRepositoryError};
+use crate::server::event_sourcing::{Aggregate, AggregateRepository};
 
 #[derive(Debug, Clone)]
 pub struct ResolvedGenerationModel {
@@ -15,8 +18,6 @@ pub struct ResolvedGenerationModel {
     pub model: String,
 }
 
-/// What a caller hands to `ChatService::chat`: everything except the model
-/// name (which the service fills in from the id).
 #[derive(Debug, Clone)]
 pub struct ChatPrompt {
     pub system: String,
@@ -27,13 +28,13 @@ pub struct ChatPrompt {
 
 pub struct ChatService {
     clients: HashMap<AiProviderKind, Arc<dyn ChatClient>>,
-    configuration_repository: Arc<dyn ConfigurationRepository>,
+    configuration_repository: Arc<AggregateRepository<Configuration>>,
 }
 
 impl ChatService {
     pub fn new(
         clients: HashMap<AiProviderKind, Arc<dyn ChatClient>>,
-        configuration_repository: Arc<dyn ConfigurationRepository>,
+        configuration_repository: Arc<AggregateRepository<Configuration>>,
     ) -> Arc<Self> {
         Arc::new(Self {
             clients,
@@ -68,14 +69,17 @@ impl ChatService {
         &self,
         generation_model_id: Uuid,
     ) -> Result<ResolvedGenerationModel, AppError> {
-        let config = self
+        let Some(loaded_aggregate) = self
             .configuration_repository
-            .load()
-            .await
-            .map_err(|e| match e {
-                ConfigurationRepositoryError::Internal(m) => AppError::Internal(m),
-            })?;
-        let model = config
+            .load(Configuration::singleton_id())
+            .await?
+        else {
+            return Err(AppError::NotFound(
+                Configuration::aggregate_type().to_string(),
+            ));
+        };
+        let model = loaded_aggregate
+            .aggregate
             .generation_models
             .iter()
             .find(|m| m.generation_model_id == generation_model_id)

@@ -22,9 +22,4 @@ pub trait PipelineConfigurationRepository: Send + Sync {
     ) -> Result<(), PipelineConfigurationRepositoryError>;
 
     async fn delete(&self, id: Uuid) -> Result<(), PipelineConfigurationRepositoryError>;
-
-    async fn rebuild(
-        &self,
-        configurations: &[PipelineConfigurationReadModel],
-    ) -> Result<(), PipelineConfigurationRepositoryError>;
 }

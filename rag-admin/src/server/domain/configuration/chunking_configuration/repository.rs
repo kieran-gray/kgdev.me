@@ -22,9 +22,4 @@ pub trait ChunkingConfigurationRepository: Send + Sync {
     ) -> Result<(), ChunkingConfigurationRepositoryError>;
 
     async fn delete(&self, id: Uuid) -> Result<(), ChunkingConfigurationRepositoryError>;
-
-    async fn rebuild(
-        &self,
-        configurations: &[ChunkingConfigurationReadModel],
-    ) -> Result<(), ChunkingConfigurationRepositoryError>;
 }

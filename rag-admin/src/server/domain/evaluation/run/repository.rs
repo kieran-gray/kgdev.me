@@ -10,11 +10,8 @@ pub enum EvaluationRunRepositoryError {
     Internal(String),
 }
 
-/// Read + projection-write port for the `evaluation_runs`,
-/// `evaluation_variant_results`, `retrieval_traces` tables.
 #[async_trait]
 pub trait EvaluationRunRepository: Send + Sync {
-    // -- queries --
 
     async fn load(
         &self,
@@ -35,8 +32,6 @@ pub trait EvaluationRunRepository: Send + Sync {
         &self,
         run_id: Uuid,
     ) -> Result<Vec<EvaluationVariantResultDto>, EvaluationRunRepositoryError>;
-
-    // -- projection writes --
 
     async fn insert_summary(
         &self,

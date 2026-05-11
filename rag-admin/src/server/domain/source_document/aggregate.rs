@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::Aggregate;
+use crate::server::event_sourcing::Aggregate;
 
 use super::{
     commands::SourceDocumentCommand,
@@ -144,7 +144,6 @@ impl Aggregate for SourceDocument {
     }
 }
 
-// helper to build a CreateDocument command with a dummy occurred_at for tests
 impl SourceDocument {
     #[cfg(test)]
     pub fn test_create(document_id: Uuid, slug: &str) -> SourceDocumentCommand {

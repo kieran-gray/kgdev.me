@@ -1,116 +1,65 @@
-use std::collections::HashMap;
+use std::sync::Arc;
 
-use uuid::Uuid;
+use async_trait::async_trait;
 
+use crate::server::application::AppError;
 use crate::server::domain::configuration::events::ConfigurationEvent;
+use crate::server::event_sourcing::envelope::EventEnvelope;
+use crate::server::event_sourcing::projector::Projector;
 
 use super::read_model::ChunkingConfigurationReadModel;
+use super::repository::ChunkingConfigurationRepository;
 
-pub struct ChunkingConfigurationProjector;
+pub struct ChunkingConfigurationProjector {
+    repository: Arc<dyn ChunkingConfigurationRepository>,
+}
 
 impl ChunkingConfigurationProjector {
-    pub fn from_events(events: &[ConfigurationEvent]) -> Vec<ChunkingConfigurationReadModel> {
-        let mut map: HashMap<Uuid, ChunkingConfigurationReadModel> = HashMap::new();
+    pub const NAME: &'static str = "chunking_configuration_projector";
 
-        for event in events {
-            match event {
+    pub fn new(repository: Arc<dyn ChunkingConfigurationRepository>) -> Self {
+        Self { repository }
+    }
+}
+
+#[async_trait]
+impl Projector<ConfigurationEvent> for ChunkingConfigurationProjector {
+    fn name(&self) -> &str {
+        Self::NAME
+    }
+
+    async fn project(
+        &self,
+        events: &[EventEnvelope<ConfigurationEvent>],
+    ) -> Result<(), AppError> {
+        for envelope in events {
+            match &envelope.event {
                 ConfigurationEvent::ChunkingConfigurationCreated(e) => {
-                    map.insert(
-                        e.chunking_configuration_id,
-                        ChunkingConfigurationReadModel {
+                    self.repository
+                        .save(ChunkingConfigurationReadModel {
                             chunking_configuration_id: e.chunking_configuration_id,
                             name: e.name.clone(),
                             config: e.config.clone(),
-                        },
-                    );
+                        })
+                        .await?;
                 }
                 ConfigurationEvent::ChunkingConfigurationUpdated(e) => {
-                    map.insert(
-                        e.chunking_configuration_id,
-                        ChunkingConfigurationReadModel {
+                    self.repository
+                        .save(ChunkingConfigurationReadModel {
                             chunking_configuration_id: e.chunking_configuration_id,
                             name: e.name.clone(),
                             config: e.config.clone(),
-                        },
-                    );
+                        })
+                        .await?;
                 }
                 ConfigurationEvent::ChunkingConfigurationDeleted(e) => {
-                    map.remove(&e.chunking_configuration_id);
+                    self.repository
+                        .delete(e.chunking_configuration_id)
+                        .await?;
                 }
                 _ => {}
             }
         }
-
-        map.into_values().collect()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::server::domain::configuration::chunking_configuration::events::{
-        ChunkingConfigurationCreated, ChunkingConfigurationDeleted, ChunkingConfigurationUpdated,
-    };
-    use crate::shared::{ChunkingConfig, SectionChunkingConfig};
-    use uuid::Uuid;
-
-    #[test]
-    fn projects_created_configurations() {
-        let id = Uuid::new_v4();
-        let result = ChunkingConfigurationProjector::from_events(&[
-            ConfigurationEvent::ChunkingConfigurationCreated(ChunkingConfigurationCreated {
-                chunking_configuration_id: id,
-                name: "default".into(),
-                config: ChunkingConfig::Section(SectionChunkingConfig::default()),
-            }),
-        ]);
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].name, "default");
-    }
-
-    #[test]
-    fn projects_updated_configuration() {
-        let id = Uuid::new_v4();
-        let result = ChunkingConfigurationProjector::from_events(&[
-            ConfigurationEvent::ChunkingConfigurationCreated(ChunkingConfigurationCreated {
-                chunking_configuration_id: id,
-                name: "default".into(),
-                config: ChunkingConfig::Section(SectionChunkingConfig {
-                    max_section_tokens: 256,
-                }),
-            }),
-            ConfigurationEvent::ChunkingConfigurationUpdated(ChunkingConfigurationUpdated {
-                chunking_configuration_id: id,
-                name: "default".into(),
-                config: ChunkingConfig::Section(SectionChunkingConfig {
-                    max_section_tokens: 512,
-                }),
-            }),
-        ]);
-
-        assert_eq!(result.len(), 1);
-        if let ChunkingConfig::Section(c) = &result[0].config {
-            assert_eq!(c.max_section_tokens, 512);
-        } else {
-            panic!("expected section");
-        }
-    }
-
-    #[test]
-    fn projects_deleted_configuration() {
-        let id = Uuid::new_v4();
-        let result = ChunkingConfigurationProjector::from_events(&[
-            ConfigurationEvent::ChunkingConfigurationCreated(ChunkingConfigurationCreated {
-                chunking_configuration_id: id,
-                name: "default".into(),
-                config: ChunkingConfig::Section(SectionChunkingConfig::default()),
-            }),
-            ConfigurationEvent::ChunkingConfigurationDeleted(ChunkingConfigurationDeleted {
-                chunking_configuration_id: id,
-            }),
-        ]);
-
-        assert!(result.is_empty());
+        Ok(())
     }
 }

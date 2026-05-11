@@ -5,11 +5,11 @@ use uuid::Uuid;
 
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::AppError;
+use crate::server::domain::configuration::aggregate::Configuration;
 use crate::server::domain::configuration::kinds::AiProviderKind;
-use crate::server::domain::configuration::{ConfigurationRepository, ConfigurationRepositoryError};
+use crate::server::event_sourcing::{Aggregate, AggregateRepository};
 use crate::shared::EmbedResult;
 
-/// What an embedding-model id resolves to before dispatch.
 #[derive(Debug, Clone)]
 pub struct ResolvedEmbeddingModel {
     pub embedding_model_id: Uuid,
@@ -20,13 +20,13 @@ pub struct ResolvedEmbeddingModel {
 
 pub struct EmbeddingService {
     embedders: HashMap<AiProviderKind, Arc<dyn Embedder>>,
-    configuration_repository: Arc<dyn ConfigurationRepository>,
+    configuration_repository: Arc<AggregateRepository<Configuration>>,
 }
 
 impl EmbeddingService {
     pub fn new(
         embedders: HashMap<AiProviderKind, Arc<dyn Embedder>>,
-        configuration_repository: Arc<dyn ConfigurationRepository>,
+        configuration_repository: Arc<AggregateRepository<Configuration>>,
     ) -> Arc<Self> {
         Arc::new(Self {
             embedders,
@@ -34,9 +34,6 @@ impl EmbeddingService {
         })
     }
 
-    /// Embed a batch using the model identified by `embedding_model_id`. The
-    /// configuration is loaded fresh so renames/dimension changes pick up
-    /// without restart.
     pub async fn embed_batch(
         &self,
         embedding_model_id: Uuid,
@@ -46,8 +43,6 @@ impl EmbeddingService {
         self.embed_with_resolved(&resolved, texts).await
     }
 
-    /// Embed using a pre-resolved model record. Useful for hot loops that
-    /// resolved once up front and don't want to re-hit the repository.
     pub async fn embed_with_resolved(
         &self,
         model: &ResolvedEmbeddingModel,
@@ -66,26 +61,29 @@ impl EmbeddingService {
         Ok(vecs)
     }
 
-    /// Resolve an embedding-model id to its provider kind + model id + dims.
-    /// Exposed so other application services (e.g. PipelineResolver) can avoid
-    /// duplicating the lookup.
     pub async fn resolve(
         &self,
         embedding_model_id: Uuid,
     ) -> Result<ResolvedEmbeddingModel, AppError> {
-        let config = self
+        let Some(loaded_aggregate) = self
             .configuration_repository
-            .load()
-            .await
-            .map_err(|e| match e {
-                ConfigurationRepositoryError::Internal(m) => AppError::Internal(m),
-            })?;
-        let model = config
+            .load(Configuration::singleton_id())
+            .await?
+        else {
+            return Err(AppError::NotFound(
+                Configuration::aggregate_type().to_string(),
+            ));
+        };
+
+        let model = loaded_aggregate
+            .aggregate
             .embedding_models
             .iter()
             .find(|m| m.embedding_model_id == embedding_model_id)
             .ok_or_else(|| {
-                AppError::NotFound(format!("embedding model {embedding_model_id} not registered"))
+                AppError::NotFound(format!(
+                    "embedding model {embedding_model_id} not registered"
+                ))
             })?;
         Ok(ResolvedEmbeddingModel {
             embedding_model_id: model.embedding_model_id,
@@ -95,7 +93,6 @@ impl EmbeddingService {
         })
     }
 
-    /// Embed two texts and report cosine similarity. Used by the eval gate.
     pub async fn embed_texts(
         &self,
         embedding_model_id: Uuid,

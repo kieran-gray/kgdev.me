@@ -3,8 +3,7 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::shared::Timestamp;
-use crate::server::domain::Aggregate;
+use crate::server::{domain::shared::Timestamp, event_sourcing::Aggregate};
 
 use super::{
     commands::EvaluationDatasetCommand,
@@ -15,8 +14,6 @@ use super::{
     },
     exceptions::EvaluationDatasetError,
 };
-
-pub const AGGREGATE_TYPE: &str = "evaluation_dataset";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DatasetGenerationStatus {
@@ -46,17 +43,6 @@ impl DatasetGenerationStatus {
     }
 }
 
-/// Write-side state for an evaluation dataset.
-///
-/// Holds only what `handle_command` needs to enforce invariants:
-///   - `status` to gate further commands once Generating finishes,
-///   - `accepted_sequences` to detect duplicate `AcceptQuestion` requests,
-///   - `target_question_count` so `CompleteDatasetGeneration` can reject empty
-///     datasets.
-///
-/// Question content, references, embeddings, rejection details, and the rest
-/// of the metadata live in the read model and are derived by projectors —
-/// they are not invariants.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationDataset {
     pub dataset_id: Uuid,
@@ -91,7 +77,7 @@ impl Aggregate for EvaluationDataset {
     type Error = EvaluationDatasetError;
 
     fn aggregate_type() -> &'static str {
-        AGGREGATE_TYPE
+        "evaluation_dataset"
     }
 
     fn apply(&mut self, event: &Self::Event) {

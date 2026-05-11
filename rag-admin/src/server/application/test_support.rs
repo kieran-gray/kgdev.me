@@ -2,16 +2,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
-use crate::server::application::configuration::ports::ConfigurationEventStore;
 use crate::server::domain::configuration::pipeline_configuration::{
     PipelineConfigurationReadModel, PipelineConfigurationRepository,
     PipelineConfigurationRepositoryError,
 };
 use crate::server::domain::configuration::{
-    events::ConfigurationEvent, ConfigurationReadModel, ConfigurationRepository,
-    ConfigurationRepositoryError,
+    ConfigurationReadModel, ConfigurationRepository, ConfigurationRepositoryError,
 };
 
 use async_trait::async_trait;
@@ -389,42 +386,6 @@ impl ChatClient for NullChatClient {
     }
 }
 
-#[derive(Default)]
-pub struct InMemoryConfigurationEventStore {
-    events: RwLock<HashMap<Uuid, Vec<ConfigurationEvent>>>,
-}
-
-#[async_trait]
-impl ConfigurationEventStore for InMemoryConfigurationEventStore {
-    async fn load(&self, aggregate_id: Uuid) -> Result<Vec<ConfigurationEvent>, AppError> {
-        Ok(self
-            .events
-            .read()
-            .await
-            .get(&aggregate_id)
-            .cloned()
-            .unwrap_or_default())
-    }
-
-    async fn append(
-        &self,
-        aggregate_id: Uuid,
-        expected_version: usize,
-        events: &[ConfigurationEvent],
-    ) -> Result<(), AppError> {
-        let mut guard = self.events.write().await;
-        let stream = guard.entry(aggregate_id).or_default();
-        if stream.len() != expected_version {
-            return Err(AppError::Validation(format!(
-                "configuration stream version conflict: expected {expected_version}, actual {}",
-                stream.len()
-            )));
-        }
-        stream.extend(events.iter().cloned());
-        Ok(())
-    }
-}
-
 pub struct InMemoryConfigurationRepository {
     read_model: RwLock<ConfigurationReadModel>,
 }
@@ -487,14 +448,6 @@ impl PipelineConfigurationRepository for InMemoryPipelineConfigurationRepository
             .write()
             .await
             .retain(|c| c.pipeline_configuration_id != id);
-        Ok(())
-    }
-
-    async fn rebuild(
-        &self,
-        configurations: &[PipelineConfigurationReadModel],
-    ) -> Result<(), PipelineConfigurationRepositoryError> {
-        *self.configurations.write().await = configurations.to_vec();
         Ok(())
     }
 }

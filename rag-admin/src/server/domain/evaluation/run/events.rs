@@ -42,9 +42,6 @@ pub struct VariantPrepared {
     pub occurred_at: Timestamp,
 }
 
-/// Variant scored event. Carries the variant config, options, and chunk/embedding
-/// set IDs the score was computed against — projectors persist these into the
-/// `evaluation_variant_results` row directly without re-loading the run aggregate.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VariantScored {
     pub run_id: Uuid,

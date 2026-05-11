@@ -67,7 +67,6 @@ pub struct EvaluationRunReadModel {
     pub variant_results: Vec<EvaluationVariantResultDto>,
 }
 
-/// Initial run row written when `RunRequested` is projected.
 #[derive(Debug, Clone)]
 pub struct NewRunSummary {
     pub run_id: Uuid,

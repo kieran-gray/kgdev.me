@@ -76,48 +76,6 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
         Ok(())
     }
 
-    async fn rebuild(
-        &self,
-        configurations: &[PipelineConfigurationReadModel],
-    ) -> Result<(), PipelineConfigurationRepositoryError> {
-        let mut tx = self.pool.begin().await.map_err(|e| {
-            PipelineConfigurationRepositoryError::Internal(format!("begin transaction: {e}"))
-        })?;
-
-        sqlx::query("DELETE FROM pipeline_configurations")
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| {
-                PipelineConfigurationRepositoryError::Internal(format!("rebuild delete: {e}"))
-            })?;
-
-        for config in configurations {
-            sqlx::query(
-                r#"
-                INSERT INTO pipeline_configurations (
-                    id, name, embedding_model_id, generation_model_id, vector_index_id
-                )
-                VALUES ($1, $2, $3, $4, $5)
-                "#,
-            )
-            .bind(config.pipeline_configuration_id)
-            .bind(&config.name)
-            .bind(config.embedding_model_id)
-            .bind(config.generation_model_id)
-            .bind(config.vector_index_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| {
-                PipelineConfigurationRepositoryError::Internal(format!("rebuild insert: {e}"))
-            })?;
-        }
-
-        tx.commit().await.map_err(|e| {
-            PipelineConfigurationRepositoryError::Internal(format!("commit transaction: {e}"))
-        })?;
-
-        Ok(())
-    }
 }
 
 struct PipelineConfigurationRow {

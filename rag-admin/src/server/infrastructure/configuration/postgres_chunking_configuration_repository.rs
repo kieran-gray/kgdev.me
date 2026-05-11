@@ -75,50 +75,6 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         Ok(())
     }
 
-    async fn rebuild(
-        &self,
-        configurations: &[ChunkingConfigurationReadModel],
-    ) -> Result<(), ChunkingConfigurationRepositoryError> {
-        let mut tx = self.pool.begin().await.map_err(|e| {
-            ChunkingConfigurationRepositoryError::Internal(format!("begin transaction: {e}"))
-        })?;
-
-        sqlx::query("DELETE FROM chunking_configurations")
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| {
-                ChunkingConfigurationRepositoryError::Internal(format!("rebuild delete: {e}"))
-            })?;
-
-        for config in configurations {
-            let config_json = serde_json::to_value(&config.config).map_err(|e| {
-                ChunkingConfigurationRepositoryError::Internal(format!(
-                    "rebuild serialize: {e}"
-                ))
-            })?;
-
-            sqlx::query(
-                r#"
-                INSERT INTO chunking_configurations (id, name, config)
-                VALUES ($1, $2, $3)
-                "#,
-            )
-            .bind(config.chunking_configuration_id)
-            .bind(&config.name)
-            .bind(&config_json)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| {
-                ChunkingConfigurationRepositoryError::Internal(format!("rebuild insert: {e}"))
-            })?;
-        }
-
-        tx.commit().await.map_err(|e| {
-            ChunkingConfigurationRepositoryError::Internal(format!("commit transaction: {e}"))
-        })?;
-
-        Ok(())
-    }
 }
 
 struct ChunkingConfigurationRow {

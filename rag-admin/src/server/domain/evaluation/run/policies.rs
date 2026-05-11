@@ -9,8 +9,6 @@ use crate::server::application::evaluation::effects::run::{
     EvaluationRunEffect, ExecuteRunEffect,
 };
 
-/// On `RunRequested`, kick off the (single) `ExecuteRun` effect that runs the
-/// chunking → embedding → scoring → completion pipeline for the entire run.
 fn for_run_requested(
     event: &RunRequested,
     ctx: &PolicyContext<'_, EvaluationRun, EvaluationRunEvent>,

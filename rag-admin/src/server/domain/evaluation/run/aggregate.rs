@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::domain::shared::Timestamp;
-use crate::server::domain::Aggregate;
+use crate::server::event_sourcing::Aggregate;
 use crate::shared::{
     ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
 };
@@ -17,8 +17,6 @@ use super::{
     exceptions::EvaluationRunError,
     scoring_policy::ScoringPolicy,
 };
-
-pub const AGGREGATE_TYPE: &str = "evaluation_run";
 
 const EVAL_RUN_NAMESPACE: Uuid = uuid::uuid!("b2e4f6a8-c0d2-4e6f-8012-3456789abcde");
 
@@ -67,17 +65,6 @@ pub struct ScoredVariantKey {
     pub split: EvaluationResultSplit,
 }
 
-/// Write-side state for an evaluation run.
-///
-/// Holds only what `handle_command` needs to enforce invariants:
-///   - `status` to gate further commands once a terminal state is reached,
-///   - `variants` / `options` / `autotune_request` because `expected_score_count`
-///     gates `CompleteRun`,
-///   - `prepared_labels` to detect duplicate `MarkVariantPrepared` requests,
-///   - `scored_keys` to detect duplicate `ScoreVariant` requests and gate completion.
-///
-/// Variant configurations, chunk_set/embedding_set ids, metrics, retrieval
-/// traces — everything else lives in the read model and projectors.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationRun {
     pub run_id: Uuid,
@@ -96,9 +83,6 @@ pub struct EvaluationRun {
 }
 
 impl EvaluationRun {
-    // IMPORTANT: all types in the tuple below must produce stable, canonical JSON.
-    // HashMap fields or unordered containers in any nested type will silently fork
-    // run IDs across process restarts. The locked-output test below catches regressions.
     pub fn compute_id(
         dataset_id: Uuid,
         pipeline_configuration_id: Uuid,
@@ -151,7 +135,7 @@ impl Aggregate for EvaluationRun {
     type Error = EvaluationRunError;
 
     fn aggregate_type() -> &'static str {
-        AGGREGATE_TYPE
+        "evaluation_run"
     }
 
     fn apply(&mut self, event: &Self::Event) {

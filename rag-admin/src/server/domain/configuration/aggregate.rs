@@ -1,14 +1,12 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::{
-    configuration::{
+use crate::server::{domain::configuration::{
         chunking_configuration::{
-            events::{
+            ChunkingConfiguration, events::{
                 ChunkingConfigurationCreated, ChunkingConfigurationDeleted,
                 ChunkingConfigurationUpdated,
-            },
-            ChunkingConfiguration,
+            }
         },
         commands::ConfigurationCommand,
         embedding_model::{
@@ -21,16 +19,13 @@ use crate::server::domain::{
         },
         kinds::AiProviderKind,
         pipeline_configuration::{
-            events::{
+            PipelineConfiguration, PipelineConfigurationValidator, events::{
                 PipelineConfigurationCreated, PipelineConfigurationDeleted,
                 PipelineConfigurationUpdated,
-            },
-            PipelineConfiguration, PipelineConfigurationValidator,
+            }
         },
         vector_index::{VectorIndex, VectorIndexAdded, VectorIndexRemoved, VectorIndexUpdated},
-    },
-    Aggregate,
-};
+    }, event_sourcing::Aggregate};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Configuration {

@@ -10,8 +10,6 @@ use crate::shared::SettingsDto;
 
 pub struct FileEvaluationDefaultsStore {
     path: PathBuf,
-    // Serialises concurrent reads/writes to the file. The store is rarely
-    // touched (operator-driven saves) so a single mutex is plenty.
     lock: Mutex<()>,
 }
 

@@ -19,13 +19,6 @@ impl std::fmt::Display for IngestStage {
     }
 }
 
-/// Represents the last successfully completed stage of an indexing run.
-///
-/// - Pending: IngestRequested received, no chunks yet
-/// - Chunking: ChunkingCompleted received (chunks exist, embedding next)
-/// - Embedding: EmbeddingCompleted received (embeddings exist, vector upsert next)
-/// - Indexed: IndexingCompleted received (done)
-/// - Failed: IngestionFailed received; retry required to resume
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum IndexingStatus {
     Pending,
@@ -36,7 +29,6 @@ pub enum IndexingStatus {
 }
 
 impl IndexingStatus {
-    /// True if this status is at or beyond the given stage.
     pub fn is_at_least_chunking(&self) -> bool {
         matches!(
             self,
