@@ -1,563 +1,1016 @@
+//! Settings page — registry sections + evaluation defaults.
+//!
+//! ## What lives here
+//!
+//! - **Registry**: Embedding models, Generation models, Vector indexes — the
+//!   shared catalogue that `PipelineConfiguration`s draw from. Each entry
+//!   carries its `kind` (AiProviderKind / VectorStoreKind) directly; there
+//!   are no separate Provider entities to manage anymore.
+//! - **Evaluation defaults**: persisted `EvaluationSettings` used by the
+//!   synthetic-dataset generator.
+
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
+use crate::components::event_bus::use_invalidator;
+use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
+use crate::pages::configuration::commands::{run_configuration_command, short_uuid};
+use crate::server_functions::configuration::get_configuration;
 use crate::server_functions::settings::{load_settings, save_settings};
 use crate::shared::{
-    catalog_for_backend, CatalogEntry, ChunkStrategy, ChunkingConfig, EmbedderBackend,
-    EmbeddingModel, EvaluationGenerationBackend, EvaluationSettings, SettingsDto,
-    VectorIndexConfig,
+    AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto, AiProviderKindDto,
+    ConfigurationCommandDto, ConfigurationDto, EmbeddingModelDto, EvaluationGenerationBackend,
+    GenerationModelDto, RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto,
+    SettingsDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
+    VectorIndexDto, VectorStoreKindDto,
 };
 
 #[component]
 pub fn SettingsPage() -> impl IntoView {
-    let initial = Resource::new(|| (), |_| async move { load_settings().await });
+    let invalidator = use_invalidator(|e| e.from_any(&["Configuration"]));
+    let (refresh, set_refresh) = signal(0u32);
+
+    let configuration = Resource::new(
+        move || (invalidator.get(), refresh.get()),
+        |_| async move { get_configuration().await.map_err(|e| e.to_string()) },
+    );
+    let settings = Resource::new(
+        || (),
+        |_| async move { load_settings().await.map_err(|e| e.to_string()) },
+    );
+
+    let (busy, set_busy) = signal(false);
+    let (status, set_status) = signal::<Option<(bool, String)>>(None);
 
     view! {
-        <div class="space-y-8">
-            <div class="px-6 flex flex-col gap-1">
-                <span class="tech-label opacity-40">"SYSTEM_VIEW / LEGACY_SETTINGS"</span>
-                <h1 class="text-3xl font-bold tracking-tight uppercase">"SETTINGS_PANEL"</h1>
-            </div>
+        <div>
+            <PageHeader
+                title="Settings"
+                subtitle="Catalogue of models and indexes that pipelines compose. Plus defaults for the evaluation generator.".to_string()
+            />
 
-            <Suspense fallback=|| view! { <div class="px-6"><p class="tech-label animate-pulse">"FETCHING_CONFIG..."</p></div> }>
-                {move || {
-                    initial
-                        .get()
-                        .map(|res| match res {
-                            Ok(s) => view! { <SettingsForm initial=s /> }.into_any(),
-                            Err(e) => {
-                                view! {
-                                    <div class="px-6">
-                                        <div class="card-outer p-4 log-line-error font-mono text-sm">
-                                            {format!("CONFIG_LOAD_FAULT: {e}")}
-                                        </div>
-                                    </div>
-                                }
-                                    .into_any()
-                            }
-                        })
-                }}
-            </Suspense>
+            <StatusBanner status=status />
+
+            <Transition fallback=|| view! { <p class="muted">"Loading settings…"</p> }>
+                {move || configuration.get().map(|res| match res {
+                    Err(e) => view! {
+                        <Surface>
+                            <div class="log-line-error">{format!("Failed to load registry: {e}")}</div>
+                        </Surface>
+                    }.into_any(),
+                    Ok(cfg) => view! {
+                        <Registry
+                            config=cfg
+                            busy=busy
+                            set_busy=set_busy
+                            set_status=set_status
+                            set_refresh=set_refresh
+                        />
+                    }.into_any(),
+                })}
+            </Transition>
+
+            <div class="mt-8">
+                <Transition fallback=|| view! { <p class="muted">"Loading defaults…"</p> }>
+                    {move || settings.get().map(|res| match res {
+                        Err(e) => view! {
+                            <Surface>
+                                <div class="log-line-error">{format!("Failed to load settings: {e}")}</div>
+                            </Surface>
+                        }.into_any(),
+                        Ok(s) => view! { <EvaluationDefaults initial=s /> }.into_any(),
+                    })}
+                </Transition>
+            </div>
         </div>
     }
 }
 
 #[component]
-fn SettingsForm(initial: SettingsDto) -> impl IntoView {
-    let (vector_index, set_vector_index) = signal(initial.vector_index);
-    let (model, set_model) = signal(initial.embedding_model);
-    let (default_chunking, set_default_chunking) = signal(initial.default_chunking);
-    let (evaluation, set_evaluation) = signal(initial.evaluation);
+fn StatusBanner(status: ReadSignal<Option<(bool, String)>>) -> impl IntoView {
+    view! {
+        {move || status.get().map(|(ok, msg)| {
+            let cls = if ok {
+                "surface mb-4 px-4 py-2"
+            } else {
+                "surface mb-4 px-4 py-2 log-line-error"
+            };
+            view! { <div class=cls>{msg}</div> }
+        })}
+    }
+}
 
+// ── Registry orchestrator ──────────────────────────────────────────────────
+
+#[derive(Clone)]
+enum RegistryForm {
+    AddEmbeddingModel,
+    EditEmbeddingModel(EmbeddingModelDto),
+    AddGenerationModel,
+    EditGenerationModel(GenerationModelDto),
+    AddVectorIndex,
+    EditVectorIndex(VectorIndexDto),
+}
+
+#[derive(Clone)]
+enum DeleteTarget {
+    EmbeddingModel(EmbeddingModelDto),
+    GenerationModel(GenerationModelDto),
+    VectorIndex(VectorIndexDto),
+}
+
+impl DeleteTarget {
+    fn label(&self) -> String {
+        match self {
+            Self::EmbeddingModel(m) => format!("Embedding model · {}", m.model),
+            Self::GenerationModel(m) => format!("Generation model · {}", m.model),
+            Self::VectorIndex(i) => format!("Vector index · {}", i.name),
+        }
+    }
+}
+
+#[component]
+fn Registry(
+    config: ConfigurationDto,
+    busy: ReadSignal<bool>,
+    set_busy: WriteSignal<bool>,
+    set_status: WriteSignal<Option<(bool, String)>>,
+    set_refresh: WriteSignal<u32>,
+) -> impl IntoView {
+    let config = StoredValue::new(config);
+    let (form, set_form) = signal::<Option<RegistryForm>>(None);
+    let (delete_target, set_delete_target) = signal::<Option<DeleteTarget>>(None);
+
+    let open_form = Callback::new(move |f: RegistryForm| set_form.set(Some(f)));
+    let open_delete = Callback::new(move |t: DeleteTarget| set_delete_target.set(Some(t)));
+
+    view! {
+        <div class="space-y-6">
+            <EmbeddingModelsSection config=config busy=busy open_form=open_form open_delete=open_delete />
+            <GenerationModelsSection config=config busy=busy open_form=open_form open_delete=open_delete />
+            <VectorIndexesSection config=config busy=busy open_form=open_form open_delete=open_delete />
+        </div>
+
+        <RegistryFormDialog
+            form=form
+            set_form=set_form
+            busy=busy
+            set_busy=set_busy
+            set_status=set_status
+            set_refresh=set_refresh
+        />
+
+        <RegistryDeleteDialog
+            target=delete_target
+            set_target=set_delete_target
+            busy=busy
+            set_busy=set_busy
+            set_status=set_status
+            set_refresh=set_refresh
+        />
+    }
+}
+
+// ── Section components ─────────────────────────────────────────────────────
+
+#[component]
+fn EmbeddingModelsSection(
+    config: StoredValue<ConfigurationDto>,
+    busy: ReadSignal<bool>,
+    open_form: Callback<RegistryForm>,
+    open_delete: Callback<DeleteTarget>,
+) -> impl IntoView {
+    view! {
+        <Surface
+            title="Embedding models".to_string()
+            actions=Box::new(move || view! {
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    disabled=busy
+                    on:click=move |_| open_form.run(RegistryForm::AddEmbeddingModel)
+                >
+                    "+ Add embedding model"
+                </button>
+            }.into_any())
+        >
+            {move || {
+                let cfg = config.get_value();
+                if cfg.embedding_models.is_empty() {
+                    view! {
+                        <EmptyState
+                            title="No embedding models yet"
+                            body="Register the embedding models you want pipelines to use.".to_string()
+                        />
+                    }.into_any()
+                } else {
+                    view! {
+                        <div class="space-y-2">
+                            {cfg.embedding_models.iter().map(|m| {
+                                let edit_target = m.clone();
+                                let delete_target = m.clone();
+                                view! {
+                                    <RegistryRow
+                                        title=m.model.clone()
+                                        subtitle=format!("{} · {}d · {}", m.kind.display_label(), m.dimensions, short_uuid(m.embedding_model_id))
+                                        on_edit=move || open_form.run(RegistryForm::EditEmbeddingModel(edit_target.clone()))
+                                        on_delete=move || open_delete.run(DeleteTarget::EmbeddingModel(delete_target.clone()))
+                                        busy=busy
+                                    />
+                                }
+                            }).collect_view()}
+                        </div>
+                    }.into_any()
+                }
+            }}
+        </Surface>
+    }
+}
+
+#[component]
+fn GenerationModelsSection(
+    config: StoredValue<ConfigurationDto>,
+    busy: ReadSignal<bool>,
+    open_form: Callback<RegistryForm>,
+    open_delete: Callback<DeleteTarget>,
+) -> impl IntoView {
+    view! {
+        <Surface
+            title="Generation models".to_string()
+            actions=Box::new(move || view! {
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    disabled=busy
+                    on:click=move |_| open_form.run(RegistryForm::AddGenerationModel)
+                >
+                    "+ Add generation model"
+                </button>
+            }.into_any())
+        >
+            {move || {
+                let cfg = config.get_value();
+                if cfg.generation_models.is_empty() {
+                    view! {
+                        <EmptyState
+                            title="No generation models yet"
+                            body="Generation models power LLM-driven chunking and synthetic dataset generation.".to_string()
+                        />
+                    }.into_any()
+                } else {
+                    view! {
+                        <div class="space-y-2">
+                            {cfg.generation_models.iter().map(|m| {
+                                let edit_target = m.clone();
+                                let delete_target = m.clone();
+                                view! {
+                                    <RegistryRow
+                                        title=m.model.clone()
+                                        subtitle=format!("{} · {}", m.kind.display_label(), short_uuid(m.generation_model_id))
+                                        on_edit=move || open_form.run(RegistryForm::EditGenerationModel(edit_target.clone()))
+                                        on_delete=move || open_delete.run(DeleteTarget::GenerationModel(delete_target.clone()))
+                                        busy=busy
+                                    />
+                                }
+                            }).collect_view()}
+                        </div>
+                    }.into_any()
+                }
+            }}
+        </Surface>
+    }
+}
+
+#[component]
+fn VectorIndexesSection(
+    config: StoredValue<ConfigurationDto>,
+    busy: ReadSignal<bool>,
+    open_form: Callback<RegistryForm>,
+    open_delete: Callback<DeleteTarget>,
+) -> impl IntoView {
+    view! {
+        <Surface
+            title="Vector indexes".to_string()
+            actions=Box::new(move || view! {
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    disabled=busy
+                    on:click=move |_| open_form.run(RegistryForm::AddVectorIndex)
+                >
+                    "+ Add vector index"
+                </button>
+            }.into_any())
+        >
+            {move || {
+                let cfg = config.get_value();
+                if cfg.vector_indexes.is_empty() {
+                    view! {
+                        <EmptyState
+                            title="No vector indexes yet"
+                            body="Register the vector indexes embeddings should write to.".to_string()
+                        />
+                    }.into_any()
+                } else {
+                    view! {
+                        <div class="space-y-2">
+                            {cfg.vector_indexes.iter().map(|i| {
+                                let edit_target = i.clone();
+                                let delete_target = i.clone();
+                                view! {
+                                    <RegistryRow
+                                        title=i.name.clone()
+                                        subtitle=format!("{} · {}d · {}", i.kind.display_label(), i.dimensions, short_uuid(i.index_id))
+                                        on_edit=move || open_form.run(RegistryForm::EditVectorIndex(edit_target.clone()))
+                                        on_delete=move || open_delete.run(DeleteTarget::VectorIndex(delete_target.clone()))
+                                        busy=busy
+                                    />
+                                }
+                            }).collect_view()}
+                        </div>
+                    }.into_any()
+                }
+            }}
+        </Surface>
+    }
+}
+
+#[component]
+fn RegistryRow(
+    title: String,
+    subtitle: String,
+    on_edit: impl Fn() + Send + Sync + 'static,
+    on_delete: impl Fn() + Send + Sync + 'static,
+    busy: ReadSignal<bool>,
+) -> impl IntoView {
+    let on_edit = StoredValue::new(on_edit);
+    let on_delete = StoredValue::new(on_delete);
+    view! {
+        <div class="surface-raised rounded p-3 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+                <div class="text-text font-medium truncate">{title}</div>
+                <div class="text-xs muted truncate">{subtitle}</div>
+            </div>
+            <div class="flex gap-2 shrink-0">
+                <button
+                    type="button"
+                    class="btn"
+                    disabled=busy
+                    on:click=move |_| on_edit.with_value(|f| f())
+                >"Edit"</button>
+                <button
+                    type="button"
+                    class="btn"
+                    disabled=busy
+                    on:click=move |_| on_delete.with_value(|f| f())
+                >"Delete"</button>
+            </div>
+        </div>
+    }
+}
+
+// ── Form dialog ────────────────────────────────────────────────────────────
+
+#[component]
+fn RegistryFormDialog(
+    form: ReadSignal<Option<RegistryForm>>,
+    set_form: WriteSignal<Option<RegistryForm>>,
+    busy: ReadSignal<bool>,
+    set_busy: WriteSignal<bool>,
+    set_status: WriteSignal<Option<(bool, String)>>,
+    set_refresh: WriteSignal<u32>,
+) -> impl IntoView {
+    let (dialog_error, set_dialog_error) = signal::<Option<String>>(None);
+
+    // Form fields, shared across forms; the dialog body picks which ones to show.
+    let (name, set_name) = signal(String::new());
+    let (ai_kind, set_ai_kind) = signal(AiProviderKindDto::Cloudflare);
+    let (vector_kind, set_vector_kind) = signal(VectorStoreKindDto::CloudflareVectorize);
+    let (model_id, set_model_id) = signal(String::new());
+    let (dims, set_dims) = signal(1024u32);
+
+    // Sync field values whenever the form changes.
+    Effect::new(move |_| {
+        set_dialog_error.set(None);
+        match form.get() {
+            None => {}
+            Some(RegistryForm::AddEmbeddingModel) => {
+                set_ai_kind.set(AiProviderKindDto::Cloudflare);
+                set_model_id.set(String::new());
+                set_dims.set(1024);
+            }
+            Some(RegistryForm::EditEmbeddingModel(m)) => {
+                set_ai_kind.set(m.kind);
+                set_model_id.set(m.model);
+                set_dims.set(m.dimensions);
+            }
+            Some(RegistryForm::AddGenerationModel) => {
+                set_ai_kind.set(AiProviderKindDto::Cloudflare);
+                set_model_id.set(String::new());
+            }
+            Some(RegistryForm::EditGenerationModel(m)) => {
+                set_ai_kind.set(m.kind);
+                set_model_id.set(m.model);
+            }
+            Some(RegistryForm::AddVectorIndex) => {
+                set_vector_kind.set(VectorStoreKindDto::CloudflareVectorize);
+                set_name.set(String::new());
+                set_dims.set(1024);
+            }
+            Some(RegistryForm::EditVectorIndex(i)) => {
+                set_vector_kind.set(i.kind);
+                set_name.set(i.name);
+                set_dims.set(i.dimensions);
+            }
+        }
+    });
+
+    let close = Callback::new(move |_| {
+        set_form.set(None);
+        set_dialog_error.set(None);
+    });
+
+    let submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let Some(active) = form.get_untracked() else { return; };
+        let command = match build_command(
+            active,
+            name.get_untracked(),
+            ai_kind.get_untracked(),
+            vector_kind.get_untracked(),
+            model_id.get_untracked(),
+            dims.get_untracked(),
+        ) {
+            Ok(c) => c,
+            Err(msg) => {
+                set_dialog_error.set(Some(msg));
+                return;
+            }
+        };
+        run_configuration_command(
+            command,
+            "Saved",
+            set_busy,
+            set_status,
+            Some(set_dialog_error),
+            set_refresh,
+            move || set_form.set(None),
+        );
+    };
+
+    view! {
+        <Dialog
+            open=Signal::derive(move || form.get().is_some())
+            title=Signal::derive(move || form_title(form.get())).get()
+            subtitle=Signal::derive(move || form_subtitle(form.get())).get()
+            on_close=close
+        >
+            <form on:submit=submit class="space-y-4">
+                {move || dialog_error.get().map(|m| view! {
+                    <div class="log-line-error text-sm">{m}</div>
+                })}
+
+                {move || match form.get() {
+                    None => ().into_any(),
+                    Some(RegistryForm::AddEmbeddingModel) | Some(RegistryForm::EditEmbeddingModel(_)) => view! {
+                        <AiKindSelect value=ai_kind set_value=set_ai_kind />
+                        <LabelledInput
+                            label="Model ID".to_string()
+                            hint="Provider-specific model identifier (e.g. @cf/baai/bge-base-en-v1.5)".to_string()
+                            value=model_id
+                            set_value=set_model_id
+                        />
+                        <LabelledNum
+                            label="Dimensions".to_string()
+                            hint="Must match the target vector index".to_string()
+                            value=dims
+                            set_value=set_dims
+                            min=1
+                        />
+                    }.into_any(),
+                    Some(RegistryForm::AddGenerationModel) | Some(RegistryForm::EditGenerationModel(_)) => view! {
+                        <AiKindSelect value=ai_kind set_value=set_ai_kind />
+                        <LabelledInput
+                            label="Model ID".to_string()
+                            hint="Chat/completion model identifier".to_string()
+                            value=model_id
+                            set_value=set_model_id
+                        />
+                    }.into_any(),
+                    Some(RegistryForm::AddVectorIndex) | Some(RegistryForm::EditVectorIndex(_)) => view! {
+                        <VectorKindSelect value=vector_kind set_value=set_vector_kind />
+                        <LabelledInput
+                            label="Index name".to_string()
+                            hint="External vector store identifier".to_string()
+                            value=name
+                            set_value=set_name
+                        />
+                        <LabelledNum
+                            label="Dimensions".to_string()
+                            hint="Must match the embedding model output".to_string()
+                            value=dims
+                            set_value=set_dims
+                            min=1
+                        />
+                    }.into_any(),
+                }}
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" class="btn" disabled=busy on:click=move |_| close.run(())>
+                        "Cancel"
+                    </button>
+                    <button type="submit" class="btn btn-primary" disabled=busy>
+                        {move || if busy.get() { "Saving…" } else { "Save" }}
+                    </button>
+                </div>
+            </form>
+        </Dialog>
+    }
+}
+
+#[component]
+fn AiKindSelect(
+    value: ReadSignal<AiProviderKindDto>,
+    set_value: WriteSignal<AiProviderKindDto>,
+) -> impl IntoView {
+    view! {
+        <label class="block space-y-1.5">
+            <span class="eyebrow">"Provider"</span>
+            <select
+                class="input"
+                on:change=move |e| {
+                    let v = event_target_value(&e);
+                    let kind = AiProviderKindDto::all()
+                        .iter()
+                        .copied()
+                        .find(|k| k.as_str() == v)
+                        .unwrap_or(AiProviderKindDto::Cloudflare);
+                    set_value.set(kind);
+                }
+            >
+                {AiProviderKindDto::all().iter().copied().map(|k| {
+                    let key = k.as_str();
+                    let label = k.display_label();
+                    view! {
+                        <option value=key selected=move || value.get() == k>{label}</option>
+                    }
+                }).collect_view()}
+            </select>
+        </label>
+    }
+}
+
+#[component]
+fn VectorKindSelect(
+    value: ReadSignal<VectorStoreKindDto>,
+    set_value: WriteSignal<VectorStoreKindDto>,
+) -> impl IntoView {
+    view! {
+        <label class="block space-y-1.5">
+            <span class="eyebrow">"Vector store"</span>
+            <select
+                class="input"
+                on:change=move |e| {
+                    let v = event_target_value(&e);
+                    let kind = VectorStoreKindDto::all()
+                        .iter()
+                        .copied()
+                        .find(|k| k.as_str() == v)
+                        .unwrap_or(VectorStoreKindDto::CloudflareVectorize);
+                    set_value.set(kind);
+                }
+            >
+                {VectorStoreKindDto::all().iter().copied().map(|k| {
+                    let key = k.as_str();
+                    let label = k.display_label();
+                    view! {
+                        <option value=key selected=move || value.get() == k>{label}</option>
+                    }
+                }).collect_view()}
+            </select>
+        </label>
+    }
+}
+
+#[component]
+fn RegistryDeleteDialog(
+    target: ReadSignal<Option<DeleteTarget>>,
+    set_target: WriteSignal<Option<DeleteTarget>>,
+    busy: ReadSignal<bool>,
+    set_busy: WriteSignal<bool>,
+    set_status: WriteSignal<Option<(bool, String)>>,
+    set_refresh: WriteSignal<u32>,
+) -> impl IntoView {
+    let close = Callback::new(move |_| set_target.set(None));
+
+    let confirm = move |_| {
+        let Some(t) = target.get_untracked() else { return; };
+        let command = match t {
+            DeleteTarget::EmbeddingModel(m) => {
+                ConfigurationCommandDto::RemoveEmbeddingModel(RemoveEmbeddingModelDto {
+                    model_id: m.embedding_model_id,
+                })
+            }
+            DeleteTarget::GenerationModel(m) => {
+                ConfigurationCommandDto::RemoveGenerationModel(RemoveGenerationModelDto {
+                    model_id: m.generation_model_id,
+                })
+            }
+            DeleteTarget::VectorIndex(i) => {
+                ConfigurationCommandDto::RemoveVectorIndex(RemoveVectorIndexDto {
+                    index_id: i.index_id,
+                })
+            }
+        };
+        run_configuration_command(
+            command,
+            "Deleted",
+            set_busy,
+            set_status,
+            None,
+            set_refresh,
+            move || set_target.set(None),
+        );
+    };
+
+    view! {
+        <Dialog
+            open=Signal::derive(move || target.get().is_some())
+            title="Confirm delete".to_string()
+            subtitle="Downstream pipelines referencing this entry must be removed first.".to_string()
+            on_close=close
+        >
+            <div class="space-y-4">
+                <div class="surface-raised rounded p-3">
+                    <span class="text-text">{move || target.get().map(|t| t.label()).unwrap_or_default()}</span>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn" disabled=busy on:click=move |_| close.run(())>
+                        "Cancel"
+                    </button>
+                    <button type="button" class="btn btn-primary" disabled=busy on:click=confirm>
+                        {move || if busy.get() { "Deleting…" } else { "Delete" }}
+                    </button>
+                </div>
+            </div>
+        </Dialog>
+    }
+}
+
+// ── Evaluation defaults (legacy SettingsDto.evaluation — kept) ─────────────
+
+#[component]
+fn EvaluationDefaults(initial: SettingsDto) -> impl IntoView {
+    let (eval, set_eval) = signal(initial.evaluation.clone());
     let (status, set_status) = signal::<Option<(bool, String)>>(None);
+    let (saving, set_saving) = signal(false);
+
+    let initial_stored = StoredValue::new(initial);
 
     let on_save = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
+        let mut payload = initial_stored.get_value();
+        payload.evaluation = eval.get();
+        set_saving.set(true);
         set_status.set(None);
-        let payload = SettingsDto {
-            vector_index: vector_index.get(),
-            embedding_model: model.get(),
-            default_chunking: default_chunking.get(),
-            evaluation: evaluation.get(),
-        };
         spawn_local(async move {
-            match save_settings(payload).await {
-                Ok(()) => set_status.set(Some((true, "STATE_SYNC_COMPLETE".to_string()))),
-                Err(e) => set_status.set(Some((false, format!("SYNC_FAULT: {e}")))),
+            let result = save_settings(payload).await;
+            set_saving.set(false);
+            match result {
+                Ok(()) => set_status.set(Some((true, "Saved".into()))),
+                Err(e) => set_status.set(Some((false, format!("Save failed: {e}")))),
             }
         });
     };
 
     view! {
-        <form on:submit=on_save class="space-y-10">
-            <VectorIndexCard
-                vector_index=vector_index
-                set_vector_index=set_vector_index
-            />
+        <Surface
+            title="Evaluation defaults".to_string()
+            actions=Box::new(move || view! {
+                <span class="text-xs faint">"Used by the synthetic dataset generator."</span>
+            }.into_any())
+        >
+            <form on:submit=on_save class="space-y-4">
+                <p class="muted text-sm">
+                    "These tune the question-generation pipeline that builds evaluation datasets. \
+                     They are intentionally separate from a pipeline's embedding/generation model selection."
+                </p>
 
-            <ModelCard
-                vector_index=vector_index
-                model=model
-                set_model=set_model
-            />
-
-            <ChunkingDefaultsSection
-                config=default_chunking
-                set_config=set_default_chunking
-            />
-
-            <EvaluationDefaultsSection
-                config=evaluation
-                set_config=set_evaluation
-            />
-
-            <div class="px-6 flex items-center gap-4 pb-8">
-                <button class="btn btn-primary px-8" type="submit">"SAVE_CHANGES"</button>
-                {move || {
-                    status
-                        .get()
-                        .map(|(ok, msg)| {
-                            let cls = if ok { "text-emerald-500" } else { "text-red-500" };
-                            view! { <span class=format!("tech-label {}", cls)>{msg}</span> }
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <LabelledSelectStatic
+                        label="Generation backend".to_string()
+                        value=Signal::derive(move || eval.get().generation_backend.as_str().to_string())
+                        on_change=move |v: String| set_eval.update(|c| {
+                            c.generation_backend = match v.as_str() {
+                                "workers_ai" => EvaluationGenerationBackend::WorkersAi,
+                                _ => EvaluationGenerationBackend::Ollama,
+                            };
                         })
-                }}
-            </div>
-        </form>
+                        options=vec![
+                            ("ollama".to_string(), "Ollama".to_string()),
+                            ("workers_ai".to_string(), "Workers AI".to_string()),
+                        ]
+                    />
+                    <LabelledInputDirect
+                        label="Generation model".to_string()
+                        hint="Chat model used to generate questions".to_string()
+                        value=Signal::derive(move || eval.get().generation_model.clone())
+                        on_change=move |v: String| set_eval.update(|c| c.generation_model = v)
+                    />
+                    <LabelledNumDirect
+                        label="Question count".to_string()
+                        hint="Target questions per document".to_string()
+                        value=Signal::derive(move || eval.get().question_count)
+                        on_change=move |v| set_eval.update(|c| c.question_count = v)
+                        min=1
+                    />
+                    <LabelledNumDirect
+                        label="Top-k".to_string()
+                        hint="Default chunks retrieved per question".to_string()
+                        value=Signal::derive(move || eval.get().top_k)
+                        on_change=move |v| set_eval.update(|c| c.top_k = v)
+                        min=1
+                    />
+                    <LabelledNumDirect
+                        label="Min score (milli)".to_string()
+                        hint="0–1000 cosine threshold".to_string()
+                        value=Signal::derive(move || eval.get().min_score_milli)
+                        on_change=move |v| set_eval.update(|c| c.min_score_milli = v.min(1000))
+                        min=0
+                    />
+                    <LabelledNumDirect
+                        label="Excerpt threshold (milli)".to_string()
+                        hint="Filters weak query/reference pairs".to_string()
+                        value=Signal::derive(move || eval.get().excerpt_similarity_threshold_milli)
+                        on_change=move |v| set_eval.update(|c| c.excerpt_similarity_threshold_milli = v.min(1000))
+                        min=0
+                    />
+                    <LabelledNumDirect
+                        label="Duplicate threshold (milli)".to_string()
+                        hint="Filters near-duplicate questions".to_string()
+                        value=Signal::derive(move || eval.get().duplicate_similarity_threshold_milli)
+                        on_change=move |v| set_eval.update(|c| c.duplicate_similarity_threshold_milli = v.min(1000))
+                        min=0
+                    />
+                    <LabelledSelectStatic
+                        label="Include glossary".to_string()
+                        value=Signal::derive(move || if eval.get().include_glossary { "true".to_string() } else { "false".to_string() })
+                        on_change=move |v: String| set_eval.update(|c| c.include_glossary = v == "true")
+                        options=vec![
+                            ("true".to_string(), "Include glossary".to_string()),
+                            ("false".to_string(), "Exclude glossary".to_string()),
+                        ]
+                    />
+                </div>
+
+                <div class="flex items-center gap-3 pt-2">
+                    <button type="submit" class="btn btn-primary" disabled=saving>
+                        {move || if saving.get() { "Saving…" } else { "Save defaults" }}
+                    </button>
+                    {move || status.get().map(|(ok, msg)| {
+                        let cls = if ok { "text-sm" } else { "text-sm log-line-error" };
+                        view! { <span class=cls>{msg}</span> }
+                    })}
+                </div>
+            </form>
+        </Surface>
     }
 }
 
+// ── Form helpers ───────────────────────────────────────────────────────────
+
 #[component]
-fn EvaluationDefaultsSection(
-    config: ReadSignal<EvaluationSettings>,
-    set_config: WriteSignal<EvaluationSettings>,
+fn LabelledInput(
+    label: String,
+    hint: String,
+    value: ReadSignal<String>,
+    set_value: WriteSignal<String>,
 ) -> impl IntoView {
-    view! {
-        <div class="border-y border-[var(--color-border)] py-8 px-6 space-y-6 bg-black/5">
-            <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
-                <span class="tech-label">"chunking.evaluation"</span>
-                <p class="tech-label opacity-50 mt-2 max-w-2xl">
-                    "Defaults for synthetic chunking evaluation. Generation is Ollama-first so local runs do not spend Workers AI credits."
-                </p>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Field label="GENERATION_BACKEND" hint="ollama is the supported local default">
-                    <select
-                        class="input font-mono text-sm"
-                        prop:value=move || config.get().generation_backend.as_str().to_string()
-                        on:change=move |e| {
-                            let v = event_target_value(&e);
-                            set_config.update(|c| {
-                                c.generation_backend = match v.as_str() {
-                                    "workers_ai" => EvaluationGenerationBackend::WorkersAi,
-                                    _ => EvaluationGenerationBackend::Ollama,
-                                };
-                            });
-                        }
-                    >
-                        <option value="ollama">"ollama"</option>
-                        <option value="workers_ai" disabled=true>"workers_ai (later)"</option>
-                    </select>
-                </Field>
-                <Field label="GENERATION_MODEL" hint="chat model used to create questions">
-                    <input
-                        class="input font-mono text-sm"
-                        prop:value=move || config.get().generation_model
-                        on:input=move |e| {
-                            let v = event_target_value(&e);
-                            set_config.update(|c| c.generation_model = v);
-                        }
-                    />
-                </Field>
-                <Field label="QUESTION_COUNT" hint="target generated questions per post">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="1"
-                        prop:value=move || config.get().question_count.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.question_count = v);
-                        }
-                    />
-                </Field>
-                <Field label="TOP_K" hint="chunks retrieved per synthetic question">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="1"
-                        prop:value=move || config.get().top_k.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.top_k = v);
-                        }
-                    />
-                </Field>
-                <Field label="MIN_SCORE_MILLI" hint="0-1000 cosine threshold for retrieved chunks">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="0"
-                        max="1000"
-                        prop:value=move || config.get().min_score_milli.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.min_score_milli = v);
-                        }
-                    />
-                </Field>
-                <Field label="EXCERPT_THRESHOLD" hint="0-1000; filters weak query/reference pairs">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="0"
-                        max="1000"
-                        prop:value=move || config.get().excerpt_similarity_threshold_milli.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.excerpt_similarity_threshold_milli = v);
-                        }
-                    />
-                </Field>
-                <Field label="DUPLICATE_THRESHOLD" hint="0-1000; filters near-duplicate questions">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="0"
-                        max="1000"
-                        prop:value=move || config.get().duplicate_similarity_threshold_milli.to_string()
-                        on:input=move |e| {
-                            let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-                            set_config.update(|c| c.duplicate_similarity_threshold_milli = v);
-                        }
-                    />
-                </Field>
-                <Field label="INCLUDE_GLOSSARY" hint="include glossary chunks as retrieval distractors">
-                    <select
-                        class="input font-mono text-sm"
-                        prop:value=move || if config.get().include_glossary { "true" } else { "false" }
-                        on:change=move |e| {
-                            let v = event_target_value(&e);
-                            set_config.update(|c| c.include_glossary = v == "true");
-                        }
-                    >
-                        <option value="true">"true"</option>
-                        <option value="false">"false"</option>
-                    </select>
-                </Field>
-            </div>
-        </div>
-    }
-}
-
-#[component]
-fn VectorIndexCard(
-    vector_index: ReadSignal<VectorIndexConfig>,
-    set_vector_index: WriteSignal<VectorIndexConfig>,
-) -> impl IntoView {
-    let provider_str = move || vector_index.get().provider().as_str().to_string();
-    let name_value = move || vector_index.get().name().to_string();
-    let dims_value = move || vector_index.get().dimensions();
-
-    let on_name_input = move |e: leptos::ev::Event| {
-        let v = event_target_value(&e);
-        set_vector_index.update(|vi| *vi = vi.clone().with_name(v));
-    };
-
-    let on_dims_input = move |e: leptos::ev::Event| {
-        let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-        set_vector_index.update(|vi| *vi = vi.clone().with_dimensions(v));
-    };
-
-    view! {
-        <div class="border-y border-[var(--color-border)] py-8 px-6 space-y-6 bg-black/5">
-            <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
-                <span class="tech-label">"vector_index"</span>
-                <p class="tech-label opacity-50 mt-2 max-w-2xl">
-                    "Where ingested vectors are written and where the Q&A backend reads from. \
-                     The index dimensions are immutable on the provider."
-                </p>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Field label="PROVIDER" hint="local provider TODO">
-                    <select
-                        class="input font-mono text-sm"
-                        prop:value=provider_str
-                    >
-                        <option value="cloudflare">"cloudflare"</option>
-                    </select>
-                </Field>
-                <Field label="INDEX_NAME" hint="Cloudflare Vectorize index id">
-                    <input
-                        class="input font-mono text-sm"
-                        prop:value=name_value
-                        on:input=on_name_input
-                    />
-                </Field>
-                <Field label="DIMENSIONS" hint="must match the index — click VERIFY to read the live value">
-                    <input
-                        class="input font-mono text-sm"
-                        type="number"
-                        min="1"
-                        prop:value=move || dims_value().to_string()
-                        on:input=on_dims_input
-                    />
-                </Field>
-            </div>
-        </div>
-    }
-}
-
-#[component]
-fn ModelCard(
-    vector_index: ReadSignal<VectorIndexConfig>,
-    model: ReadSignal<EmbeddingModel>,
-    set_model: WriteSignal<EmbeddingModel>,
-) -> impl IntoView {
-    let target_dims = move || vector_index.get().dimensions();
-    let backend = move || model.get().backend;
-    let catalog = move || catalog_for_backend(backend());
-
-    let suggested_models = move || -> Vec<CatalogEntry> {
-        let dims = target_dims();
-        match backend() {
-            EmbedderBackend::Cloudflare => catalog()
-                .iter()
-                .filter(|e| e.dims == dims)
-                .copied()
-                .collect(),
-            EmbedderBackend::Ollama => catalog().to_vec(),
-        }
-    };
-
-    let cloudflare_incompatible = move || -> Vec<CatalogEntry> {
-        let dims = target_dims();
-        match backend() {
-            EmbedderBackend::Cloudflare => catalog()
-                .iter()
-                .filter(|e| e.dims != dims)
-                .copied()
-                .collect(),
-            EmbedderBackend::Ollama => Vec::new(),
-        }
-    };
-
-    let current_id = move || model.get().id;
-    let current_dims = move || model.get().dims;
-
-    let in_catalog = move || {
-        let id = current_id();
-        catalog().iter().any(|e| e.id == id)
-    };
-
-    let dims_locked = move || matches!(backend(), EmbedderBackend::Cloudflare) && in_catalog();
-
-    let select_value = move || {
-        if in_catalog() {
-            current_id()
-        } else {
-            "__custom__".into()
-        }
-    };
-
-    let on_backend_change = move |e: leptos::ev::Event| {
-        let v = event_target_value(&e);
-        let next_backend = match v.as_str() {
-            "ollama" => EmbedderBackend::Ollama,
-            _ => EmbedderBackend::Cloudflare,
-        };
-
-        let dims = target_dims();
-        let new_catalog = catalog_for_backend(next_backend);
-        let suggested = match next_backend {
-            EmbedderBackend::Cloudflare => new_catalog.iter().find(|e| e.dims == dims).copied(),
-            EmbedderBackend::Ollama => new_catalog.first().copied(),
-        };
-        match suggested {
-            Some(entry) => set_model.set(EmbeddingModel {
-                backend: next_backend,
-                id: entry.id.into(),
-                dims: if matches!(next_backend, EmbedderBackend::Ollama) {
-                    dims
-                } else {
-                    entry.dims
-                },
-            }),
-            None => set_model.update(|m| {
-                m.backend = next_backend;
-                m.id = String::new();
-            }),
-        }
-    };
-
-    let on_select = move |e: leptos::ev::Event| {
-        let v = event_target_value(&e);
-        if v == "__custom__" {
-            set_model.update(|m| {
-                if catalog().iter().any(|e| e.id == m.id) {
-                    m.id = String::new();
-                }
-            });
-        } else if let Some(entry) = catalog().iter().find(|e| e.id == v).copied() {
-            set_model.update(|m| {
-                m.id = entry.id.into();
-                if matches!(m.backend, EmbedderBackend::Cloudflare) {
-                    m.dims = entry.dims;
-                }
-            });
-        }
-    };
-
-    let on_dims_input = move |e: leptos::ev::Event| {
-        let v: u32 = event_target_value(&e).parse().unwrap_or(0);
-        set_model.update(|m| m.dims = v);
-    };
-
-    view! {
-        <div class="border-y border-[var(--color-border)] py-8 px-6 space-y-6 bg-black/5">
-            <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
-                <span class="tech-label">"embedding_model"</span>
-                <p class="tech-label opacity-50 mt-2 max-w-2xl">
-                    "Pick a backend (Cloudflare Workers AI or local Ollama) and a model. \
-                     The vector index dimensions and the model output dimensions must match. \
-                     Note: production Q&A expects ingest vectors to come from the same model the Q&A worker uses."
-                </p>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Field label="BACKEND" hint="cloudflare = Workers AI, ollama = local daemon">
-                    <select
-                        class="input font-mono text-sm"
-                        prop:value=move || backend().as_str().to_string()
-                        on:change=on_backend_change
-                    >
-                        <option value="cloudflare">"cloudflare"</option>
-                        <option value="ollama">"ollama"</option>
-                    </select>
-                </Field>
-                <Field label="MODEL" hint="cloudflare: filtered to dim-compatible · ollama: suggestions only">
-                    <select
-                        class="input font-mono text-sm"
-                        prop:value=select_value
-                        on:change=on_select
-                    >
-                        {move || {
-                            suggested_models()
-                                .into_iter()
-                                .map(|e| view! { <option value=e.id>{format!("{} ({} dims)", e.id, e.dims)}</option> })
-                                .collect_view()
-                        }}
-                        {move || {
-                            let inc = cloudflare_incompatible();
-                            if inc.is_empty() {
-                                ().into_any()
-                            } else {
-                                view! {
-                                    <optgroup label="incompatible (dims mismatch)">
-                                        {inc
-                                            .into_iter()
-                                            .map(|e| view! {
-                                                <option value=e.id disabled=true>
-                                                    {format!("{} ({} dims)", e.id, e.dims)}
-                                                </option>
-                                            })
-                                            .collect_view()}
-                                    </optgroup>
-                                }.into_any()
-                            }
-                        }}
-                    </select>
-                </Field>
-                <Field label="OUTPUT_DIMS" hint="must match the vector index dimensions">
-                    <input
-                        class=move || {
-                            if dims_locked() {
-                                "input font-mono text-sm opacity-60"
-                            } else {
-                                "input font-mono text-sm"
-                            }
-                        }
-                        type="number"
-                        min="1"
-                        prop:value=move || current_dims().to_string()
-                        disabled=dims_locked
-                        on:input=on_dims_input
-                    />
-                </Field>
-            </div>
-            {move || {
-                if matches!(backend(), EmbedderBackend::Cloudflare) && suggested_models().is_empty() {
-                    view! {
-                        <div class="px-6">
-                            <div class="tech-label log-line-error">
-                                {format!(
-                                    "NO COMPATIBLE CLOUDFLARE MODELS at {} dims — adjust index dimensions or switch backend.",
-                                    target_dims()
-                                )}
-                            </div>
-                        </div>
-                    }.into_any()
-                } else {
-                    ().into_any()
-                }
-            }}
-        </div>
-    }
-}
-
-#[component]
-fn ChunkingDefaultsSection(
-    config: ReadSignal<ChunkingConfig>,
-    set_config: WriteSignal<ChunkingConfig>,
-) -> impl IntoView {
-    view! {
-        <div class="border-y border-[var(--color-border)] py-8 px-6 space-y-6 bg-black/5">
-            <div class="flex flex-col border-b border-[var(--color-border)] pb-3">
-                <span class="tech-label">"chunking.defaults"</span>
-                <p class="tech-label opacity-50 mt-2 max-w-2xl">
-                    "Default chunking parameters for ingest. \
-                     Per-post overrides can be previewed and saved from the post detail page."
-                </p>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Field label="STRATEGY" hint="bert = sliding window w/ overlap, section = one chunk per H2/H3, llm = semantic boundaries over micro chunks">
-                    <select
-                        class="input font-mono text-sm"
-                        prop:value=move || config.get().strategy().as_str()
-                        on:change=move |e| {
-                            let v = event_target_value(&e);
-                            set_config.update(|c| {
-                                let strategy = ChunkStrategy::from_id(&v).unwrap_or_default();
-                                *c = ChunkingConfig::for_strategy(strategy);
-                            });
-                        }
-                    >
-                        {ChunkStrategy::all()
-                            .iter()
-                            .map(|definition| view! {
-                                <option value=definition.id>{definition.label}</option>
-                            })
-                            .collect_view()}
-                    </select>
-                </Field>
-                {move || {
-                    let params = config.get().strategy().definition().params;
-                    params
-                        .iter()
-                        .map(|param| {
-                            let key = param.key;
-                            let min = param.min;
-                            view! {
-                                <Field label=param.label hint=param.hint>
-                                    <input
-                                        class="input font-mono text-sm"
-                                        type="number"
-                                        min=min.to_string()
-                                        prop:value=move || config.get().param_value(key).to_string()
-                                        on:input=move |e| {
-                                            let v: u32 = event_target_value(&e).parse().unwrap_or(min);
-                                            set_config.update(|c| c.set_param_value(key, v.max(min)));
-                                        }
-                                    />
-                                </Field>
-                            }
-                        })
-                        .collect_view()
-                }}
-            </div>
-        </div>
-    }
-}
-
-#[component]
-fn Field(label: &'static str, hint: &'static str, children: Children) -> impl IntoView {
     view! {
         <label class="block space-y-1.5">
-            <div class="tech-label opacity-70">
-                {label}
-            </div>
-            {children()}
-            <div class="tech-label text-[9px] opacity-40">
-                {format!("> {}", hint)}
-            </div>
+            <span class="eyebrow">{label}</span>
+            <input
+                class="input"
+                prop:value=move || value.get()
+                on:input=move |e| set_value.set(event_target_value(&e))
+            />
+            <span class="text-xs faint">{hint}</span>
         </label>
+    }
+}
+
+#[component]
+fn LabelledNum(
+    label: String,
+    hint: String,
+    value: ReadSignal<u32>,
+    set_value: WriteSignal<u32>,
+    #[prop(default = 0)] min: u32,
+) -> impl IntoView {
+    view! {
+        <label class="block space-y-1.5">
+            <span class="eyebrow">{label}</span>
+            <input
+                class="input"
+                type="number"
+                min=min
+                prop:value=move || value.get().to_string()
+                on:input=move |e| {
+                    let v: u32 = event_target_value(&e).parse().unwrap_or(min);
+                    set_value.set(v.max(min));
+                }
+            />
+            <span class="text-xs faint">{hint}</span>
+        </label>
+    }
+}
+
+#[component]
+fn LabelledSelectStatic(
+    label: String,
+    value: Signal<String>,
+    on_change: impl Fn(String) + Send + Sync + 'static,
+    options: Vec<(String, String)>,
+) -> impl IntoView {
+    let on_change = StoredValue::new(on_change);
+    view! {
+        <label class="block space-y-1.5">
+            <span class="eyebrow">{label}</span>
+            <select
+                class="input"
+                on:change=move |e| on_change.with_value(|f| f(event_target_value(&e)))
+            >
+                {options.into_iter().map(|(v, lab)| {
+                    let v_clone = v.clone();
+                    view! {
+                        <option value=v.clone() selected=move || value.get() == v_clone>
+                            {lab}
+                        </option>
+                    }
+                }).collect_view()}
+            </select>
+        </label>
+    }
+}
+
+#[component]
+fn LabelledInputDirect(
+    label: String,
+    hint: String,
+    value: Signal<String>,
+    on_change: impl Fn(String) + Send + Sync + 'static,
+) -> impl IntoView {
+    let on_change = StoredValue::new(on_change);
+    view! {
+        <label class="block space-y-1.5">
+            <span class="eyebrow">{label}</span>
+            <input
+                class="input"
+                prop:value=move || value.get()
+                on:input=move |e| on_change.with_value(|f| f(event_target_value(&e)))
+            />
+            <span class="text-xs faint">{hint}</span>
+        </label>
+    }
+}
+
+#[component]
+fn LabelledNumDirect(
+    label: String,
+    hint: String,
+    value: Signal<u32>,
+    on_change: impl Fn(u32) + Send + Sync + 'static,
+    #[prop(default = 0)] min: u32,
+) -> impl IntoView {
+    let on_change = StoredValue::new(on_change);
+    view! {
+        <label class="block space-y-1.5">
+            <span class="eyebrow">{label}</span>
+            <input
+                class="input"
+                type="number"
+                min=min
+                prop:value=move || value.get().to_string()
+                on:input=move |e| {
+                    let v: u32 = event_target_value(&e).parse().unwrap_or(min);
+                    on_change.with_value(|f| f(v.max(min)));
+                }
+            />
+            <span class="text-xs faint">{hint}</span>
+        </label>
+    }
+}
+
+// ── Command builders ───────────────────────────────────────────────────────
+
+fn build_command(
+    form: RegistryForm,
+    name: String,
+    ai_kind: AiProviderKindDto,
+    vector_kind: VectorStoreKindDto,
+    model_id: String,
+    dims: u32,
+) -> Result<ConfigurationCommandDto, String> {
+    let name = name.trim().to_string();
+    let model_id = model_id.trim().to_string();
+    match form {
+        RegistryForm::AddEmbeddingModel => {
+            if model_id.is_empty() {
+                return Err("Model id is required.".into());
+            }
+            Ok(ConfigurationCommandDto::AddEmbeddingModel(
+                AddEmbeddingModelDto {
+                    kind: ai_kind,
+                    model: model_id,
+                    dimensions: dims,
+                },
+            ))
+        }
+        RegistryForm::EditEmbeddingModel(m) => {
+            if model_id.is_empty() {
+                return Err("Model id is required.".into());
+            }
+            Ok(ConfigurationCommandDto::UpdateEmbeddingModel(
+                UpdateEmbeddingModelDto {
+                    model_id: m.embedding_model_id,
+                    kind: ai_kind,
+                    model: model_id,
+                    dimensions: dims,
+                },
+            ))
+        }
+        RegistryForm::AddGenerationModel => {
+            if model_id.is_empty() {
+                return Err("Model id is required.".into());
+            }
+            Ok(ConfigurationCommandDto::AddGenerationModel(
+                AddGenerationModelDto {
+                    kind: ai_kind,
+                    model: model_id,
+                },
+            ))
+        }
+        RegistryForm::EditGenerationModel(m) => {
+            if model_id.is_empty() {
+                return Err("Model id is required.".into());
+            }
+            Ok(ConfigurationCommandDto::UpdateGenerationModel(
+                UpdateGenerationModelDto {
+                    model_id: m.generation_model_id,
+                    kind: ai_kind,
+                    model: model_id,
+                },
+            ))
+        }
+        RegistryForm::AddVectorIndex => {
+            if name.is_empty() {
+                return Err("Index name is required.".into());
+            }
+            Ok(ConfigurationCommandDto::AddVectorIndex(AddVectorIndexDto {
+                kind: vector_kind,
+                name,
+                dimensions: dims,
+            }))
+        }
+        RegistryForm::EditVectorIndex(i) => {
+            if name.is_empty() {
+                return Err("Index name is required.".into());
+            }
+            Ok(ConfigurationCommandDto::UpdateVectorIndex(
+                UpdateVectorIndexDto {
+                    index_id: i.index_id,
+                    kind: vector_kind,
+                    name,
+                    dimensions: dims,
+                },
+            ))
+        }
+    }
+}
+
+fn form_title(form: Option<RegistryForm>) -> String {
+    match form {
+        None => String::new(),
+        Some(RegistryForm::AddEmbeddingModel) => "Add embedding model".into(),
+        Some(RegistryForm::EditEmbeddingModel(_)) => "Edit embedding model".into(),
+        Some(RegistryForm::AddGenerationModel) => "Add generation model".into(),
+        Some(RegistryForm::EditGenerationModel(_)) => "Edit generation model".into(),
+        Some(RegistryForm::AddVectorIndex) => "Add vector index".into(),
+        Some(RegistryForm::EditVectorIndex(_)) => "Edit vector index".into(),
+    }
+}
+
+fn form_subtitle(form: Option<RegistryForm>) -> String {
+    match form {
+        None => String::new(),
+        Some(RegistryForm::AddEmbeddingModel) | Some(RegistryForm::EditEmbeddingModel(_)) => {
+            "Dimensions must match the target vector index.".into()
+        }
+        Some(RegistryForm::AddGenerationModel) | Some(RegistryForm::EditGenerationModel(_)) => {
+            "Used by LLM-driven chunking and synthetic dataset generation.".into()
+        }
+        Some(RegistryForm::AddVectorIndex) | Some(RegistryForm::EditVectorIndex(_)) => {
+            "Dimensions must match the embedding model that writes into it.".into()
+        }
     }
 }

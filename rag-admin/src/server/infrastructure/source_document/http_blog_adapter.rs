@@ -48,7 +48,6 @@ impl SourceAdapter for HttpBlogAdapter {
         let blog_post = self.blog_source.fetch(slug).await?;
 
         let content = blog_post.source_markdown.as_bytes().to_vec();
-        let plain_text = blog_post.plain_text.clone();
         let metadata = DocumentMetadata::BlogPost(BlogPostMetadata {
             title: blog_post.title.clone(),
             published_at: blog_post.published_at.clone(),
@@ -57,7 +56,6 @@ impl SourceAdapter for HttpBlogAdapter {
         Ok(FetchedDocument {
             source_ref: source_ref.clone(),
             content,
-            plain_text,
             metadata,
         })
     }

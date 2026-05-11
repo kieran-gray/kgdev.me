@@ -65,7 +65,6 @@ struct PostDetailWire {
     published_at: String,
     source_markdown: String,
     markdown_body: String,
-    plain_text: String,
     glossary_terms: Vec<GlossaryTermWire>,
 }
 
@@ -128,7 +127,6 @@ impl BlogSource for HttpBlogSource {
             published_at: detail.published_at,
             source_markdown: detail.source_markdown,
             markdown_body: detail.markdown_body,
-            plain_text: detail.plain_text,
             glossary_terms,
         })
     }

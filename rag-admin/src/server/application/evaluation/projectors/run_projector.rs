@@ -11,8 +11,6 @@ use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
 use crate::server::event_sourcing::envelope::EventEnvelope;
 use crate::server::event_sourcing::projector::Projector;
 
-/// Projects `EvaluationRunEvent`s into the evaluation_runs / variant_results /
-/// retrieval_traces tables.
 pub struct EvaluationRunProjector {
     repository: Arc<dyn EvaluationRunRepository>,
 }

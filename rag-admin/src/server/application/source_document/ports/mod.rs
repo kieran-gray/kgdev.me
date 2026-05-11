@@ -12,4 +12,4 @@ pub use embedding_set_repository::EmbeddingSetRepository;
 pub use event_store::SourceDocumentEventStore;
 pub use source_adapter::{DocumentSummary, FetchedDocument, SourceAdapter};
 pub use source_adapter_registry::SourceAdapterRegistry;
-pub use vector_index_factory::VectorIndexFactory;
+pub use vector_index_factory::VectorIndexProvider;

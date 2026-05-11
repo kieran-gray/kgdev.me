@@ -11,8 +11,8 @@ pub struct RequestDatasetGeneration {
     pub content_hash: String,
     pub label: String,
     pub target_question_count: u32,
+    pub generation_model_id: Uuid,
     pub generation_model: String,
-    pub generation_backend: String,
     pub excerpt_similarity_threshold_milli: u32,
     pub duplicate_similarity_threshold_milli: u32,
     pub embedding_model_id: Uuid,
@@ -46,12 +46,25 @@ pub struct FailDatasetGeneration {
     pub occurred_at: Timestamp,
 }
 
+pub struct RenameDataset {
+    pub dataset_id: Uuid,
+    pub label: String,
+    pub occurred_at: Timestamp,
+}
+
+pub struct DeleteDataset {
+    pub dataset_id: Uuid,
+    pub occurred_at: Timestamp,
+}
+
 pub enum EvaluationDatasetCommand {
     RequestDatasetGeneration(RequestDatasetGeneration),
     AcceptQuestion(AcceptQuestion),
     RejectQuestion(RejectQuestion),
     CompleteDatasetGeneration(CompleteDatasetGeneration),
     FailDatasetGeneration(FailDatasetGeneration),
+    RenameDataset(RenameDataset),
+    DeleteDataset(DeleteDataset),
 }
 
 impl EvaluationDatasetCommand {
@@ -62,6 +75,8 @@ impl EvaluationDatasetCommand {
             Self::RejectQuestion(c) => c.dataset_id,
             Self::CompleteDatasetGeneration(c) => c.dataset_id,
             Self::FailDatasetGeneration(c) => c.dataset_id,
+            Self::RenameDataset(c) => c.dataset_id,
+            Self::DeleteDataset(c) => c.dataset_id,
         }
     }
 
@@ -72,6 +87,8 @@ impl EvaluationDatasetCommand {
             Self::RejectQuestion(_) => "reject_question",
             Self::CompleteDatasetGeneration(_) => "complete_dataset_generation",
             Self::FailDatasetGeneration(_) => "fail_dataset_generation",
+            Self::RenameDataset(_) => "rename_dataset",
+            Self::DeleteDataset(_) => "delete_dataset",
         }
     }
 }

@@ -13,8 +13,8 @@ pub struct DatasetGenerationRequested {
     pub content_hash: String,
     pub label: String,
     pub target_question_count: u32,
+    pub generation_model_id: Uuid,
     pub generation_model: String,
-    pub generation_backend: String,
     pub excerpt_similarity_threshold_milli: u32,
     pub duplicate_similarity_threshold_milli: u32,
     pub embedding_model_id: Uuid,
@@ -53,6 +53,19 @@ pub struct DatasetGenerationFailed {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DatasetRenamed {
+    pub dataset_id: Uuid,
+    pub label: String,
+    pub occurred_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DatasetDeleted {
+    pub dataset_id: Uuid,
+    pub occurred_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "data")]
 pub enum EvaluationDatasetEvent {
     DatasetGenerationRequested(DatasetGenerationRequested),
@@ -60,4 +73,6 @@ pub enum EvaluationDatasetEvent {
     QuestionRejected(QuestionRejected),
     DatasetGenerationCompleted(DatasetGenerationCompleted),
     DatasetGenerationFailed(DatasetGenerationFailed),
+    DatasetRenamed(DatasetRenamed),
+    DatasetDeleted(DatasetDeleted),
 }

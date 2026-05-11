@@ -36,7 +36,12 @@ struct AiResult {
 
 #[async_trait]
 impl Embedder for WorkersAiEmbedder {
-    async fn embed_batch(&self, model: &str, texts: &[String]) -> Result<Vec<Vec<f32>>, AppError> {
+    async fn embed_batch(
+        &self,
+        model: &str,
+        _dimensions: u32,
+        texts: &[String],
+    ) -> Result<Vec<Vec<f32>>, AppError> {
         let url = format!(
             "{}/accounts/{}/ai/run/{}",
             CLOUDFLARE_API_BASE,

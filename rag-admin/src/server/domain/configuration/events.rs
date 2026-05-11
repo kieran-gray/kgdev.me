@@ -1,9 +1,8 @@
-pub use crate::server::domain::configuration::ai_provider::events::*;
+use crate::server::domain::configuration::chunking_configuration::events::*;
 pub use crate::server::domain::configuration::embedding_model::events::*;
 pub use crate::server::domain::configuration::generation_model::events::*;
 use crate::server::domain::configuration::pipeline_configuration::events::*;
 pub use crate::server::domain::configuration::vector_index::events::*;
-pub use crate::server::domain::configuration::vector_store_provider::events::*;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -17,9 +16,6 @@ pub struct ConfigurationCreated {
 #[serde(tag = "type", content = "data")]
 pub enum ConfigurationEvent {
     ConfigurationCreated(ConfigurationCreated),
-    AiProviderAdded(AiProviderAdded),
-    AiProviderUpdated(AiProviderUpdated),
-    AiProviderRemoved(AiProviderRemoved),
 
     EmbeddingModelAdded(EmbeddingModelAdded),
     EmbeddingModelUpdated(EmbeddingModelUpdated),
@@ -29,10 +25,6 @@ pub enum ConfigurationEvent {
     GenerationModelUpdated(GenerationModelUpdated),
     GenerationModelRemoved(GenerationModelRemoved),
 
-    VectorStoreProviderAdded(VectorStoreProviderAdded),
-    VectorStoreProviderUpdated(VectorStoreProviderUpdated),
-    VectorStoreProviderRemoved(VectorStoreProviderRemoved),
-
     VectorIndexAdded(VectorIndexAdded),
     VectorIndexUpdated(VectorIndexUpdated),
     VectorIndexRemoved(VectorIndexRemoved),
@@ -40,4 +32,8 @@ pub enum ConfigurationEvent {
     PipelineConfigurationCreated(PipelineConfigurationCreated),
     PipelineConfigurationUpdated(PipelineConfigurationUpdated),
     PipelineConfigurationDeleted(PipelineConfigurationDeleted),
+
+    ChunkingConfigurationCreated(ChunkingConfigurationCreated),
+    ChunkingConfigurationUpdated(ChunkingConfigurationUpdated),
+    ChunkingConfigurationDeleted(ChunkingConfigurationDeleted),
 }

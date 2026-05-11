@@ -65,4 +65,15 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         dataset_id: Uuid,
         reason: String,
     ) -> Result<(), EvaluationDatasetRepositoryError>;
+
+    async fn rename(
+        &self,
+        dataset_id: Uuid,
+        label: String,
+    ) -> Result<(), EvaluationDatasetRepositoryError>;
+
+    async fn mark_deleted(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<(), EvaluationDatasetRepositoryError>;
 }

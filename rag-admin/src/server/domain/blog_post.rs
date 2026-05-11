@@ -17,7 +17,6 @@ pub struct BlogPost {
     pub published_at: String,
     pub source_markdown: String,
     pub markdown_body: String,
-    pub plain_text: String,
     pub glossary_terms: Vec<GlossaryTerm>,
 }
 

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use crate::server::application::embedding::EmbeddingService;
@@ -22,7 +21,7 @@ use crate::server::domain::evaluation::question::EvaluationReference;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::event_sourcing::command_processor::CommandProcessor;
 use crate::server::event_sourcing::process_manager::EffectExecutor;
-use crate::shared::{plain_f32_vec, SettingsDto};
+use crate::shared::plain_f32_vec;
 
 use crate::server::application::ports::Clock;
 
@@ -37,7 +36,6 @@ pub struct EvaluationDatasetEffectExecutor {
     generator: Arc<dyn EvaluationGenerator>,
     embedding_service: Arc<EmbeddingService>,
     command_processor: Arc<CommandProcessor<EvaluationDataset>>,
-    settings: Arc<RwLock<SettingsDto>>,
     clock: Arc<dyn Clock>,
 }
 
@@ -48,7 +46,6 @@ impl EvaluationDatasetEffectExecutor {
         generator: Arc<dyn EvaluationGenerator>,
         embedding_service: Arc<EmbeddingService>,
         command_processor: Arc<CommandProcessor<EvaluationDataset>>,
-        settings: Arc<RwLock<SettingsDto>>,
         clock: Arc<dyn Clock>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -57,7 +54,6 @@ impl EvaluationDatasetEffectExecutor {
             generator,
             embedding_service,
             command_processor,
-            settings,
             clock,
         })
     }
@@ -73,8 +69,10 @@ impl EvaluationDatasetEffectExecutor {
         let plain_text = String::from_utf8(bytes)
             .map_err(|e| AppError::Internal(format!("document content is not valid UTF-8: {e}")))?;
 
-        let settings = self.settings.read().await.clone();
-        let embedding_model = settings.embedding_model;
+        let embedding_model = self
+            .embedding_service
+            .resolve(effect.embedding_model_id)
+            .await?;
         let target = effect.target_question_count as usize;
         let max_attempts = (target * ATTEMPT_MULTIPLIER).max(target + 12);
         let excerpt_threshold = effect.excerpt_similarity_threshold_milli as f32 / 1000.0;
@@ -95,7 +93,7 @@ impl EvaluationDatasetEffectExecutor {
             document_id = %effect.document_id,
             target,
             max_attempts,
-            generation_model = %effect.generation_model,
+            generation_model_id = %effect.generation_model_id,
             "starting dataset generation"
         );
 
@@ -108,7 +106,7 @@ impl EvaluationDatasetEffectExecutor {
                 build_question_prompt(&plain_text, recent_previous_coverage(&previous_coverage));
             let generated_result = self
                 .generator
-                .generate_question(&effect.generation_model, prompt)
+                .generate_question(effect.generation_model_id, prompt)
                 .await;
 
             let generated = match generated_result {

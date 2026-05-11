@@ -3,7 +3,13 @@ use uuid::Uuid;
 
 use crate::server::domain::{
     configuration::{
-        ai_provider::{AiProvdier, AiProviderAdded, AiProviderRemoved, AiProviderUpdated},
+        chunking_configuration::{
+            events::{
+                ChunkingConfigurationCreated, ChunkingConfigurationDeleted,
+                ChunkingConfigurationUpdated,
+            },
+            ChunkingConfiguration,
+        },
         commands::ConfigurationCommand,
         embedding_model::{
             EmbeddingModel, EmbeddingModelAdded, EmbeddingModelRemoved, EmbeddingModelUpdated,
@@ -13,6 +19,7 @@ use crate::server::domain::{
         generation_model::{
             GenerationModel, GenerationModelAdded, GenerationModelRemoved, GenerationModelUpdated,
         },
+        kinds::AiProviderKind,
         pipeline_configuration::{
             events::{
                 PipelineConfigurationCreated, PipelineConfigurationDeleted,
@@ -21,10 +28,6 @@ use crate::server::domain::{
             PipelineConfiguration, PipelineConfigurationValidator,
         },
         vector_index::{VectorIndex, VectorIndexAdded, VectorIndexRemoved, VectorIndexUpdated},
-        vector_store_provider::{
-            VectorStoreProvider, VectorStoreProviderAdded, VectorStoreProviderRemoved,
-            VectorStoreProviderUpdated,
-        },
     },
     Aggregate,
 };
@@ -32,12 +35,11 @@ use crate::server::domain::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Configuration {
     pub configuration_id: Uuid,
-    pub ai_providers: Vec<AiProvdier>,
-    pub vector_store_providers: Vec<VectorStoreProvider>,
     pub embedding_models: Vec<EmbeddingModel>,
     pub generation_models: Vec<GenerationModel>,
     pub vector_indexes: Vec<VectorIndex>,
     pub pipeline_configurations: Vec<PipelineConfiguration>,
+    pub chunking_configurations: Vec<ChunkingConfiguration>,
 }
 
 impl Aggregate for Configuration {
@@ -54,47 +56,10 @@ impl Aggregate for Configuration {
             Self::Event::ConfigurationCreated(e) => {
                 *self = Self::from_created(e.configuration_id);
             }
-            Self::Event::AiProviderAdded(e) => {
-                self.ai_providers.push(AiProvdier {
-                    provider_id: e.provider_id,
-                    name: e.name.clone(),
-                });
-            }
-            Self::Event::AiProviderUpdated(e) => {
-                if let Some(provider) = self
-                    .ai_providers
-                    .iter_mut()
-                    .find(|p| p.provider_id == e.provider_id)
-                {
-                    provider.name = e.name.clone();
-                }
-            }
-            Self::Event::AiProviderRemoved(e) => {
-                self.ai_providers.retain(|p| p.provider_id != e.provider_id);
-            }
-            Self::Event::VectorStoreProviderAdded(e) => {
-                self.vector_store_providers.push(VectorStoreProvider {
-                    provider_id: e.provider_id,
-                    name: e.name.clone(),
-                });
-            }
-            Self::Event::VectorStoreProviderUpdated(e) => {
-                if let Some(provider) = self
-                    .vector_store_providers
-                    .iter_mut()
-                    .find(|p| p.provider_id == e.provider_id)
-                {
-                    provider.name = e.name.clone();
-                }
-            }
-            Self::Event::VectorStoreProviderRemoved(e) => {
-                self.vector_store_providers
-                    .retain(|p| p.provider_id != e.provider_id);
-            }
             Self::Event::EmbeddingModelAdded(e) => {
                 self.embedding_models.push(EmbeddingModel {
                     embedding_model_id: e.model_id,
-                    provider_id: e.provider_id,
+                    kind: e.kind,
                     model: e.model.clone(),
                     dimensions: e.dimensions,
                 });
@@ -105,7 +70,7 @@ impl Aggregate for Configuration {
                     .iter_mut()
                     .find(|m| m.embedding_model_id == e.model_id)
                 {
-                    embedding_model.provider_id = e.provider_id;
+                    embedding_model.kind = e.kind;
                     embedding_model.model = e.model.clone();
                     embedding_model.dimensions = e.dimensions;
                 }
@@ -117,7 +82,7 @@ impl Aggregate for Configuration {
             Self::Event::GenerationModelAdded(e) => {
                 self.generation_models.push(GenerationModel {
                     generation_model_id: e.model_id,
-                    provider_id: e.provider_id,
+                    kind: e.kind,
                     model: e.model.clone(),
                 });
             }
@@ -127,7 +92,7 @@ impl Aggregate for Configuration {
                     .iter_mut()
                     .find(|m| m.generation_model_id == e.model_id)
                 {
-                    generation_model.provider_id = e.provider_id;
+                    generation_model.kind = e.kind;
                     generation_model.model = e.model.clone();
                 }
             }
@@ -138,7 +103,7 @@ impl Aggregate for Configuration {
             Self::Event::VectorIndexAdded(e) => {
                 self.vector_indexes.push(VectorIndex {
                     index_id: e.index_id,
-                    vector_store_provider_id: e.vector_store_provider_id,
+                    kind: e.kind,
                     name: e.name.clone(),
                     dimensions: e.dimensions,
                 });
@@ -149,7 +114,7 @@ impl Aggregate for Configuration {
                     .iter_mut()
                     .find(|v| v.index_id == e.index_id)
                 {
-                    vector_index.vector_store_provider_id = e.vector_store_provider_id;
+                    vector_index.kind = e.kind;
                     vector_index.name = e.name.clone();
                     vector_index.dimensions = e.dimensions;
                 }
@@ -182,6 +147,27 @@ impl Aggregate for Configuration {
                 self.pipeline_configurations
                     .retain(|pc| pc.pipeline_configuration_id != e.pipeline_configuration_id);
             }
+            Self::Event::ChunkingConfigurationCreated(e) => {
+                self.chunking_configurations.push(ChunkingConfiguration {
+                    chunking_configuration_id: e.chunking_configuration_id,
+                    name: e.name.clone(),
+                    config: e.config.clone(),
+                });
+            }
+            Self::Event::ChunkingConfigurationUpdated(e) => {
+                if let Some(cc) = self
+                    .chunking_configurations
+                    .iter_mut()
+                    .find(|cc| cc.chunking_configuration_id == e.chunking_configuration_id)
+                {
+                    cc.name = e.name.clone();
+                    cc.config = e.config.clone();
+                }
+            }
+            Self::Event::ChunkingConfigurationDeleted(e) => {
+                self.chunking_configurations
+                    .retain(|cc| cc.chunking_configuration_id != e.chunking_configuration_id);
+            }
         }
     }
 
@@ -203,76 +189,32 @@ impl Aggregate for Configuration {
         let state = &owned_state;
 
         let mut events = match command {
-            Self::Command::AddAiProvider(cmd) => {
-                Self::validate_non_empty("AI provider name", &cmd.name)?;
-                Self::ensure_unique_provider_name(state, &cmd.name, None)?;
-                vec![Self::Event::AiProviderAdded(AiProviderAdded {
-                    provider_id: Uuid::new_v4(),
-                    name: cmd.name,
-                })]
-            }
-            Self::Command::UpdateAiProvider(cmd) => {
-                let provider = Self::find_provider(state, cmd.provider_id)?;
-                Self::validate_non_empty("AI provider name", &cmd.name)?;
-                Self::ensure_unique_provider_name(state, &cmd.name, Some(provider.provider_id))?;
-                vec![Self::Event::AiProviderUpdated(AiProviderUpdated {
-                    provider_id: provider.provider_id,
-                    name: cmd.name,
-                })]
-            }
-            Self::Command::RemoveAiProvider(cmd) => {
-                let provider = Self::find_provider(state, cmd.provider_id)?;
-                if state
-                    .embedding_models
-                    .iter()
-                    .any(|model| model.provider_id == provider.provider_id)
-                {
-                    return Err(Self::Error::ValidationError(format!(
-                        "AI provider {} cannot be removed while embedding models reference it",
-                        provider.name
-                    )));
-                }
-                if state
-                    .generation_models
-                    .iter()
-                    .any(|model| model.provider_id == provider.provider_id)
-                {
-                    return Err(Self::Error::ValidationError(format!(
-                        "AI provider {} cannot be removed while generation models reference it",
-                        provider.name
-                    )));
-                }
-                vec![Self::Event::AiProviderRemoved(AiProviderRemoved {
-                    provider_id: provider.provider_id,
-                })]
-            }
-
             Self::Command::AddEmbeddingModel(cmd) => {
-                Self::find_provider(state, cmd.provider_id)?;
                 Self::validate_non_empty("embedding model", &cmd.model)?;
                 Self::validate_positive("embedding dimensions", cmd.dimensions)?;
-                Self::ensure_unique_embedding_model(state, cmd.provider_id, &cmd.model, None)?;
+                Self::validate_model_id_format(cmd.kind, &cmd.model)?;
+                Self::ensure_unique_embedding_model(state, cmd.kind, &cmd.model, None)?;
                 vec![Self::Event::EmbeddingModelAdded(EmbeddingModelAdded {
                     model_id: Uuid::new_v4(),
-                    provider_id: cmd.provider_id,
+                    kind: cmd.kind,
                     model: cmd.model,
                     dimensions: cmd.dimensions,
                 })]
             }
             Self::Command::UpdateEmbeddingModel(cmd) => {
                 let model = Self::find_embedding_model(state, cmd.model_id)?;
-                Self::find_provider(state, cmd.provider_id)?;
                 Self::validate_non_empty("embedding model", &cmd.model)?;
                 Self::validate_positive("embedding dimensions", cmd.dimensions)?;
+                Self::validate_model_id_format(cmd.kind, &cmd.model)?;
                 Self::ensure_unique_embedding_model(
                     state,
-                    cmd.provider_id,
+                    cmd.kind,
                     &cmd.model,
                     Some(model.embedding_model_id),
                 )?;
                 vec![Self::Event::EmbeddingModelUpdated(EmbeddingModelUpdated {
                     model_id: model.embedding_model_id,
-                    provider_id: cmd.provider_id,
+                    kind: cmd.kind,
                     model: cmd.model,
                     dimensions: cmd.dimensions,
                 })]
@@ -285,29 +227,29 @@ impl Aggregate for Configuration {
             }
 
             Self::Command::AddGenerationModel(cmd) => {
-                Self::find_provider(state, cmd.provider_id)?;
                 Self::validate_non_empty("generation model", &cmd.model)?;
-                Self::ensure_unique_generation_model(state, cmd.provider_id, &cmd.model, None)?;
+                Self::validate_model_id_format(cmd.kind, &cmd.model)?;
+                Self::ensure_unique_generation_model(state, cmd.kind, &cmd.model, None)?;
                 vec![Self::Event::GenerationModelAdded(GenerationModelAdded {
                     model_id: Uuid::new_v4(),
-                    provider_id: cmd.provider_id,
+                    kind: cmd.kind,
                     model: cmd.model,
                 })]
             }
             Self::Command::UpdateGenerationModel(cmd) => {
                 let model = Self::find_generation_model(state, cmd.model_id)?;
-                Self::find_provider(state, cmd.provider_id)?;
                 Self::validate_non_empty("generation model", &cmd.model)?;
+                Self::validate_model_id_format(cmd.kind, &cmd.model)?;
                 Self::ensure_unique_generation_model(
                     state,
-                    cmd.provider_id,
+                    cmd.kind,
                     &cmd.model,
                     Some(model.generation_model_id),
                 )?;
                 vec![Self::Event::GenerationModelUpdated(
                     GenerationModelUpdated {
                         model_id: model.generation_model_id,
-                        provider_id: cmd.provider_id,
+                        kind: cmd.kind,
                         model: cmd.model,
                     },
                 )]
@@ -321,70 +263,25 @@ impl Aggregate for Configuration {
                 )]
             }
 
-            Self::Command::AddVectorStoreProvider(cmd) => {
-                Self::validate_non_empty("vector store provider name", &cmd.name)?;
-                Self::ensure_unique_vector_store_provider_name(state, &cmd.name, None)?;
-                vec![Self::Event::VectorStoreProviderAdded(
-                    VectorStoreProviderAdded {
-                        provider_id: Uuid::new_v4(),
-                        name: cmd.name,
-                    },
-                )]
-            }
-            Self::Command::UpdateVectorStoreProvider(cmd) => {
-                let provider = Self::find_vector_store_provider(state, cmd.provider_id)?;
-                Self::validate_non_empty("vector store provider name", &cmd.name)?;
-                Self::ensure_unique_vector_store_provider_name(
-                    state,
-                    &cmd.name,
-                    Some(provider.provider_id),
-                )?;
-                vec![Self::Event::VectorStoreProviderUpdated(
-                    VectorStoreProviderUpdated {
-                        provider_id: provider.provider_id,
-                        name: cmd.name,
-                    },
-                )]
-            }
-            Self::Command::RemoveVectorStoreProvider(cmd) => {
-                let provider = Self::find_vector_store_provider(state, cmd.provider_id)?;
-                if state
-                    .vector_indexes
-                    .iter()
-                    .any(|index| index.vector_store_provider_id == provider.provider_id)
-                {
-                    return Err(Self::Error::ValidationError(format!(
-                        "Vector store provider {} cannot be removed while indexes reference it",
-                        provider.name
-                    )));
-                }
-                vec![Self::Event::VectorStoreProviderRemoved(
-                    VectorStoreProviderRemoved {
-                        provider_id: provider.provider_id,
-                    },
-                )]
-            }
             Self::Command::AddVectorIndex(cmd) => {
-                Self::find_vector_store_provider(state, cmd.vector_store_provider_id)?;
                 Self::validate_non_empty("vector index name", &cmd.name)?;
                 Self::validate_positive("vector index dimensions", cmd.dimensions)?;
                 Self::ensure_unique_vector_index_name(state, &cmd.name, None)?;
                 vec![Self::Event::VectorIndexAdded(VectorIndexAdded {
                     index_id: Uuid::new_v4(),
-                    vector_store_provider_id: cmd.vector_store_provider_id,
+                    kind: cmd.kind,
                     name: cmd.name,
                     dimensions: cmd.dimensions,
                 })]
             }
             Self::Command::UpdateVectorIndex(cmd) => {
                 let index = Self::find_vector_index(state, cmd.index_id)?;
-                Self::find_vector_store_provider(state, cmd.vector_store_provider_id)?;
                 Self::validate_non_empty("vector index name", &cmd.name)?;
                 Self::validate_positive("vector index dimensions", cmd.dimensions)?;
                 Self::ensure_unique_vector_index_name(state, &cmd.name, Some(index.index_id))?;
                 vec![Self::Event::VectorIndexUpdated(VectorIndexUpdated {
                     index_id: index.index_id,
-                    vector_store_provider_id: cmd.vector_store_provider_id,
+                    kind: cmd.kind,
                     name: cmd.name,
                     dimensions: cmd.dimensions,
                 })]
@@ -445,6 +342,44 @@ impl Aggregate for Configuration {
                     },
                 )]
             }
+
+            Self::Command::CreateChunkingConfiguration(cmd) => {
+                Self::validate_non_empty("chunking configuration name", &cmd.name)?;
+                Self::ensure_unique_chunking_configuration_name(state, &cmd.name, None)?;
+                Self::validate_chunking_config_refs(state, &cmd.config)?;
+                vec![Self::Event::ChunkingConfigurationCreated(
+                    ChunkingConfigurationCreated {
+                        chunking_configuration_id: Uuid::new_v4(),
+                        name: cmd.name,
+                        config: cmd.config,
+                    },
+                )]
+            }
+            Self::Command::UpdateChunkingConfiguration(cmd) => {
+                Self::find_chunking_configuration(state, cmd.chunking_configuration_id)?;
+                Self::validate_non_empty("chunking configuration name", &cmd.name)?;
+                Self::ensure_unique_chunking_configuration_name(
+                    state,
+                    &cmd.name,
+                    Some(cmd.chunking_configuration_id),
+                )?;
+                Self::validate_chunking_config_refs(state, &cmd.config)?;
+                vec![Self::Event::ChunkingConfigurationUpdated(
+                    ChunkingConfigurationUpdated {
+                        chunking_configuration_id: cmd.chunking_configuration_id,
+                        name: cmd.name,
+                        config: cmd.config,
+                    },
+                )]
+            }
+            Self::Command::DeleteChunkingConfiguration(cmd) => {
+                Self::find_chunking_configuration(state, cmd.chunking_configuration_id)?;
+                vec![Self::Event::ChunkingConfigurationDeleted(
+                    ChunkingConfigurationDeleted {
+                        chunking_configuration_id: cmd.chunking_configuration_id,
+                    },
+                )]
+            }
         };
         bootstrap_events.append(&mut events);
         Ok(bootstrap_events)
@@ -476,12 +411,11 @@ impl Configuration {
     fn from_created(configuration_id: Uuid) -> Self {
         Self {
             configuration_id,
-            ai_providers: Vec::new(),
-            vector_store_providers: Vec::new(),
             embedding_models: Vec::new(),
             generation_models: Vec::new(),
             vector_indexes: Vec::new(),
             pipeline_configurations: Vec::new(),
+            chunking_configurations: Vec::new(),
         }
     }
 
@@ -501,23 +435,6 @@ impl Configuration {
             )));
         }
         Ok(())
-    }
-
-    fn find_vector_store_provider(
-        &self,
-        provider_id: Uuid,
-    ) -> Result<&VectorStoreProvider, ConfigurationError> {
-        self.vector_store_providers
-            .iter()
-            .find(|p| p.provider_id == provider_id)
-            .ok_or(ConfigurationError::NotFound)
-    }
-
-    fn find_provider(&self, provider_id: Uuid) -> Result<&AiProvdier, ConfigurationError> {
-        self.ai_providers
-            .iter()
-            .find(|provider| provider.provider_id == provider_id)
-            .ok_or(ConfigurationError::NotFound)
     }
 
     fn find_embedding_model(&self, model_id: Uuid) -> Result<&EmbeddingModel, ConfigurationError> {
@@ -554,35 +471,54 @@ impl Configuration {
             .ok_or(ConfigurationError::NotFound)
     }
 
-    fn ensure_unique_vector_store_provider_name(
+    fn find_chunking_configuration(
         &self,
-        name: &str,
-        provider_id: Option<Uuid>,
-    ) -> Result<(), ConfigurationError> {
-        if self
-            .vector_store_providers
+        id: Uuid,
+    ) -> Result<&ChunkingConfiguration, ConfigurationError> {
+        self.chunking_configurations
             .iter()
-            .any(|p| p.name == name && Some(p.provider_id) != provider_id)
-        {
+            .find(|cc| cc.chunking_configuration_id == id)
+            .ok_or(ConfigurationError::NotFound)
+    }
+
+    fn validate_chunking_config_refs(
+        &self,
+        config: &crate::shared::ChunkingConfig,
+    ) -> Result<(), ConfigurationError> {
+        if let crate::shared::ChunkingConfig::Llm(llm) = config {
+            self.find_generation_model(llm.generation_model_id).map_err(|_| {
+                ConfigurationError::ValidationError(format!(
+                    "LLM chunking generation model {} not found in registry",
+                    llm.generation_model_id
+                ))
+            })?;
+        }
+        Ok(())
+    }
+
+    fn validate_model_id_format(
+        kind: AiProviderKind,
+        model_id: &str,
+    ) -> Result<(), ConfigurationError> {
+        if !kind.model_id_well_formed(model_id) {
             return Err(ConfigurationError::ValidationError(format!(
-                "Vector store provider with name {name} already exists"
+                "model id '{model_id}' is not well-formed for provider kind {}",
+                kind.as_str()
             )));
         }
         Ok(())
     }
 
-    fn ensure_unique_provider_name(
+    fn ensure_unique_chunking_configuration_name(
         &self,
         name: &str,
-        provider_id: Option<Uuid>,
+        chunking_configuration_id: Option<Uuid>,
     ) -> Result<(), ConfigurationError> {
-        if self
-            .ai_providers
-            .iter()
-            .any(|provider| provider.name == name && Some(provider.provider_id) != provider_id)
-        {
+        if self.chunking_configurations.iter().any(|cc| {
+            cc.name == name && Some(cc.chunking_configuration_id) != chunking_configuration_id
+        }) {
             return Err(ConfigurationError::ValidationError(format!(
-                "AI provider with name {name} already exists"
+                "Chunking configuration with name {name} already exists"
             )));
         }
         Ok(())
@@ -590,17 +526,18 @@ impl Configuration {
 
     fn ensure_unique_embedding_model(
         &self,
-        provider_id: Uuid,
+        kind: AiProviderKind,
         model_name: &str,
         model_id: Option<Uuid>,
     ) -> Result<(), ConfigurationError> {
         if self.embedding_models.iter().any(|model| {
-            model.provider_id == provider_id
+            model.kind == kind
                 && model.model == model_name
                 && Some(model.embedding_model_id) != model_id
         }) {
             return Err(ConfigurationError::ValidationError(format!(
-                "Embedding model {model_name} already exists for provider {provider_id}"
+                "Embedding model {model_name} already exists for {}",
+                kind.as_str()
             )));
         }
         Ok(())
@@ -608,17 +545,18 @@ impl Configuration {
 
     fn ensure_unique_generation_model(
         &self,
-        provider_id: Uuid,
+        kind: AiProviderKind,
         model_name: &str,
         model_id: Option<Uuid>,
     ) -> Result<(), ConfigurationError> {
         if self.generation_models.iter().any(|model| {
-            model.provider_id == provider_id
+            model.kind == kind
                 && model.model == model_name
                 && Some(model.generation_model_id) != model_id
         }) {
             return Err(ConfigurationError::ValidationError(format!(
-                "Generation model {model_name} already exists for provider {provider_id}"
+                "Generation model {model_name} already exists for {}",
+                kind.as_str()
             )));
         }
         Ok(())
@@ -645,8 +583,8 @@ impl Configuration {
 #[cfg(test)]
 mod tests {
     use crate::server::domain::configuration::{
-        ai_provider::{AddAiProvider, RemoveAiProvider},
         embedding_model::{AddEmbeddingModel, UpdateEmbeddingModel},
+        kinds::{AiProviderKind, VectorStoreKind},
         pipeline_configuration::commands::CreatePipelineConfiguration,
     };
 
@@ -656,8 +594,10 @@ mod tests {
     fn first_command_bootstraps_configuration() {
         let events = Configuration::handle_command(
             None,
-            ConfigurationCommand::AddAiProvider(AddAiProvider {
-                name: "OpenAI".into(),
+            ConfigurationCommand::AddEmbeddingModel(AddEmbeddingModel {
+                kind: AiProviderKind::Cloudflare,
+                model: "@cf/baai/bge-base-en-v1.5".into(),
+                dimensions: 768,
             }),
         )
         .unwrap();
@@ -666,55 +606,32 @@ mod tests {
             &events[0],
             ConfigurationEvent::ConfigurationCreated(_)
         ));
-        assert!(matches!(&events[1], ConfigurationEvent::AiProviderAdded(_)));
+        assert!(matches!(
+            &events[1],
+            ConfigurationEvent::EmbeddingModelAdded(_)
+        ));
 
         let configuration = Configuration::from_events(&events).unwrap();
         assert_eq!(
             configuration.configuration_id,
             Configuration::singleton_id()
         );
-        assert_eq!(configuration.ai_providers.len(), 1);
-        assert_eq!(configuration.ai_providers[0].name, "OpenAI");
+        assert_eq!(configuration.embedding_models.len(), 1);
+        assert_eq!(
+            configuration.embedding_models[0].kind,
+            AiProviderKind::Cloudflare
+        );
     }
 
     #[test]
-    fn cannot_add_embedding_model_for_unknown_provider() {
+    fn rejects_embedding_model_id_with_wrong_format_for_kind() {
         let error = Configuration::handle_command(
             Some(&Configuration::from_created(Configuration::singleton_id())),
             ConfigurationCommand::AddEmbeddingModel(AddEmbeddingModel {
-                provider_id: Uuid::new_v4(),
+                kind: AiProviderKind::Cloudflare,
                 model: "text-embedding-3-small".into(),
                 dimensions: 1536,
             }),
-        )
-        .unwrap_err();
-
-        assert!(matches!(error, ConfigurationError::NotFound));
-    }
-
-    #[test]
-    fn cannot_remove_provider_that_is_still_referenced() {
-        let provider_id = Uuid::new_v4();
-        let configuration = Configuration::from_events(&[
-            ConfigurationEvent::ConfigurationCreated(ConfigurationCreated {
-                configuration_id: Configuration::singleton_id(),
-            }),
-            ConfigurationEvent::AiProviderAdded(AiProviderAdded {
-                provider_id,
-                name: "OpenAI".into(),
-            }),
-            ConfigurationEvent::EmbeddingModelAdded(EmbeddingModelAdded {
-                model_id: Uuid::new_v4(),
-                provider_id,
-                model: "text-embedding-3-small".into(),
-                dimensions: 1536,
-            }),
-        ])
-        .unwrap();
-
-        let error = Configuration::handle_command(
-            Some(&configuration),
-            ConfigurationCommand::RemoveAiProvider(RemoveAiProvider { provider_id }),
         )
         .unwrap_err();
 
@@ -724,36 +641,30 @@ mod tests {
     #[test]
     fn replay_requires_configuration_created_as_first_event() {
         let configuration =
-            Configuration::from_events(&[ConfigurationEvent::AiProviderAdded(AiProviderAdded {
-                provider_id: Uuid::new_v4(),
-                name: "OpenAI".into(),
-            })]);
+            Configuration::from_events(&[ConfigurationEvent::EmbeddingModelAdded(
+                EmbeddingModelAdded {
+                    model_id: Uuid::new_v4(),
+                    kind: AiProviderKind::Cloudflare,
+                    model: "@cf/baai/bge-base-en-v1.5".into(),
+                    dimensions: 768,
+                },
+            )]);
 
         assert!(configuration.is_none());
     }
 
     #[test]
-    fn can_move_embedding_model_to_another_provider() {
-        let first_provider_id = Uuid::new_v4();
-        let second_provider_id = Uuid::new_v4();
+    fn can_move_embedding_model_to_another_kind() {
         let model_id = Uuid::new_v4();
         let configuration = Configuration::from_events(&[
             ConfigurationEvent::ConfigurationCreated(ConfigurationCreated {
                 configuration_id: Configuration::singleton_id(),
             }),
-            ConfigurationEvent::AiProviderAdded(AiProviderAdded {
-                provider_id: first_provider_id,
-                name: "OpenAI".into(),
-            }),
-            ConfigurationEvent::AiProviderAdded(AiProviderAdded {
-                provider_id: second_provider_id,
-                name: "Anthropic".into(),
-            }),
             ConfigurationEvent::EmbeddingModelAdded(EmbeddingModelAdded {
                 model_id,
-                provider_id: first_provider_id,
-                model: "text-embedding-3-small".into(),
-                dimensions: 1536,
+                kind: AiProviderKind::Cloudflare,
+                model: "@cf/baai/bge-base-en-v1.5".into(),
+                dimensions: 768,
             }),
         ])
         .unwrap();
@@ -762,9 +673,9 @@ mod tests {
             Some(&configuration),
             ConfigurationCommand::UpdateEmbeddingModel(UpdateEmbeddingModel {
                 model_id,
-                provider_id: second_provider_id,
-                model: "voyage-3-lite".into(),
-                dimensions: 1024,
+                kind: AiProviderKind::Ollama,
+                model: "nomic-embed-text".into(),
+                dimensions: 768,
             }),
         )
         .unwrap();
@@ -774,9 +685,9 @@ mod tests {
             vec![ConfigurationEvent::EmbeddingModelUpdated(
                 EmbeddingModelUpdated {
                     model_id,
-                    provider_id: second_provider_id,
-                    model: "voyage-3-lite".into(),
-                    dimensions: 1024,
+                    kind: AiProviderKind::Ollama,
+                    model: "nomic-embed-text".into(),
+                    dimensions: 768,
                 }
             )]
         );
@@ -784,8 +695,6 @@ mod tests {
 
     #[test]
     fn create_pipeline_configuration_validates_dimensions_match() {
-        let provider_id = Uuid::new_v4();
-        let vs_provider_id = Uuid::new_v4();
         let embedding_model_id = Uuid::new_v4();
         let generation_model_id = Uuid::new_v4();
         let vector_index_id = Uuid::new_v4();
@@ -794,30 +703,22 @@ mod tests {
             ConfigurationEvent::ConfigurationCreated(ConfigurationCreated {
                 configuration_id: Configuration::singleton_id(),
             }),
-            ConfigurationEvent::AiProviderAdded(AiProviderAdded {
-                provider_id,
-                name: "OpenAI".into(),
-            }),
             ConfigurationEvent::EmbeddingModelAdded(EmbeddingModelAdded {
                 model_id: embedding_model_id,
-                provider_id,
-                model: "text-embedding-3-small".into(),
-                dimensions: 1536,
+                kind: AiProviderKind::Cloudflare,
+                model: "@cf/baai/bge-large-en-v1.5".into(),
+                dimensions: 1024,
             }),
             ConfigurationEvent::GenerationModelAdded(GenerationModelAdded {
                 model_id: generation_model_id,
-                provider_id,
-                model: "gpt-4o".into(),
-            }),
-            ConfigurationEvent::VectorStoreProviderAdded(VectorStoreProviderAdded {
-                provider_id: vs_provider_id,
-                name: "Cloudflare".into(),
+                kind: AiProviderKind::Cloudflare,
+                model: "@cf/zai-org/glm-4.7-flash".into(),
             }),
             ConfigurationEvent::VectorIndexAdded(VectorIndexAdded {
                 index_id: vector_index_id,
-                vector_store_provider_id: vs_provider_id,
+                kind: VectorStoreKind::CloudflareVectorize,
                 name: "my-index".into(),
-                dimensions: 1024, // mismatch: embedding is 1536
+                dimensions: 768, // mismatch: embedding is 1024
             }),
         ])
         .unwrap();
@@ -838,8 +739,6 @@ mod tests {
 
     #[test]
     fn create_pipeline_configuration_succeeds_with_matching_dimensions() {
-        let provider_id = Uuid::new_v4();
-        let vs_provider_id = Uuid::new_v4();
         let embedding_model_id = Uuid::new_v4();
         let generation_model_id = Uuid::new_v4();
         let vector_index_id = Uuid::new_v4();
@@ -848,30 +747,22 @@ mod tests {
             ConfigurationEvent::ConfigurationCreated(ConfigurationCreated {
                 configuration_id: Configuration::singleton_id(),
             }),
-            ConfigurationEvent::AiProviderAdded(AiProviderAdded {
-                provider_id,
-                name: "OpenAI".into(),
-            }),
             ConfigurationEvent::EmbeddingModelAdded(EmbeddingModelAdded {
                 model_id: embedding_model_id,
-                provider_id,
-                model: "text-embedding-3-small".into(),
-                dimensions: 1536,
+                kind: AiProviderKind::Cloudflare,
+                model: "@cf/baai/bge-large-en-v1.5".into(),
+                dimensions: 1024,
             }),
             ConfigurationEvent::GenerationModelAdded(GenerationModelAdded {
                 model_id: generation_model_id,
-                provider_id,
-                model: "gpt-4o".into(),
-            }),
-            ConfigurationEvent::VectorStoreProviderAdded(VectorStoreProviderAdded {
-                provider_id: vs_provider_id,
-                name: "Cloudflare".into(),
+                kind: AiProviderKind::Cloudflare,
+                model: "@cf/zai-org/glm-4.7-flash".into(),
             }),
             ConfigurationEvent::VectorIndexAdded(VectorIndexAdded {
                 index_id: vector_index_id,
-                vector_store_provider_id: vs_provider_id,
+                kind: VectorStoreKind::CloudflareVectorize,
                 name: "my-index".into(),
-                dimensions: 1536,
+                dimensions: 1024,
             }),
         ])
         .unwrap();

@@ -5,7 +5,8 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::server::application::chunking::ChunkerRegistry;
-use crate::server::application::embedding::EmbeddingService;
+use crate::server::application::configuration::PipelineResolver;
+use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
 use crate::server::application::evaluation::retrieval::{
     cosine_similarity, retrieve_chunks, EvalChunk,
 };
@@ -15,8 +16,6 @@ use crate::server::application::source_document::ports::{
 };
 use crate::server::application::AppError;
 use crate::server::domain::chunk_set::entity::{Chunk, ChunkSet};
-use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
-use crate::server::domain::configuration::ConfigurationRepository;
 use crate::server::domain::embedding_set::entity::{ChunkEmbedding, EmbeddingSet};
 use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
 use crate::server::domain::evaluation::question::EvaluationQuestion;
@@ -43,8 +42,7 @@ pub struct EvaluationRunEffectExecutor {
     embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
     dataset_repository: Arc<dyn EvaluationDatasetRepository>,
     command_processor: Arc<CommandProcessor<EvaluationRun>>,
-    configuration_repository: Arc<dyn ConfigurationRepository>,
-    pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository>,
+    pipeline_resolver: Arc<PipelineResolver>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
 }
@@ -60,8 +58,7 @@ impl EvaluationRunEffectExecutor {
         embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
         dataset_repository: Arc<dyn EvaluationDatasetRepository>,
         command_processor: Arc<CommandProcessor<EvaluationRun>>,
-        configuration_repository: Arc<dyn ConfigurationRepository>,
-        pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository>,
+        pipeline_resolver: Arc<PipelineResolver>,
         clock: Arc<dyn Clock>,
         id_generator: Arc<dyn IdGenerator>,
     ) -> Arc<Self> {
@@ -74,8 +71,7 @@ impl EvaluationRunEffectExecutor {
             embedding_set_repository,
             dataset_repository,
             command_processor,
-            configuration_repository,
-            pipeline_configuration_repository,
+            pipeline_resolver,
             clock,
             id_generator,
         })
@@ -144,40 +140,13 @@ impl EvaluationRunEffectExecutor {
         let plain_text = String::from_utf8(bytes)
             .map_err(|e| AppError::Internal(format!("document content is not valid UTF-8: {e}")))?;
 
-        let pipeline_configs = self
-            .pipeline_configuration_repository
-            .load_all()
-            .await
-            .map_err(|e| AppError::Internal(format!("failed to load pipeline configs: {e}")))?;
-
-        let pc = pipeline_configs
-            .iter()
-            .find(|p| p.pipeline_configuration_id == effect.pipeline_configuration_id)
-            .ok_or_else(|| {
-                AppError::NotFound(format!(
-                    "pipeline configuration {}",
-                    effect.pipeline_configuration_id
-                ))
-            })?;
-
-        let config = self
-            .configuration_repository
-            .load()
-            .await
-            .map_err(|e| AppError::Internal(format!("failed to load configuration: {e}")))?;
-
-        let embedding_model = config
-            .embedding_models
-            .iter()
-            .find(|m| m.embedding_model_id == pc.embedding_model_id)
-            .ok_or_else(|| AppError::NotFound("embedding model not found".into()))?
-            .clone();
+        let pipeline = self
+            .pipeline_resolver
+            .resolve(effect.pipeline_configuration_id)
+            .await?;
+        let embedding_model = &pipeline.embedding_model;
 
         let question_texts: Vec<String> = questions.iter().map(|q| q.question.clone()).collect();
-        let shared_model = crate::shared::EmbeddingModel {
-            id: embedding_model.model.clone(),
-            ..Default::default()
-        };
 
         info!(
             run_id = %effect.run_id,
@@ -185,13 +154,13 @@ impl EvaluationRunEffectExecutor {
             questions = question_texts.len(),
             variants = effect.variants.len(),
             options = effect.options.len(),
-            embedding_model = %shared_model.id,
+            embedding_model = %embedding_model.model,
             "starting evaluation run"
         );
 
         let question_embeddings = self
             .embedding_service
-            .embed_batch(&shared_model, &question_texts)
+            .embed_with_resolved(embedding_model, &question_texts)
             .await?;
 
         for variant in &effect.variants {
@@ -211,12 +180,7 @@ impl EvaluationRunEffectExecutor {
                 .await?;
 
             let (embedding_set_id, chunk_embeddings) = self
-                .find_or_create_embedding_set(
-                    chunk_set_id,
-                    &chunks,
-                    embedding_model.embedding_model_id,
-                    &shared_model,
-                )
+                .find_or_create_embedding_set(chunk_set_id, &chunks, embedding_model)
                 .await?;
 
             self.command_processor
@@ -367,12 +331,11 @@ impl EvaluationRunEffectExecutor {
         &self,
         chunk_set_id: Uuid,
         chunks: &[Chunk],
-        embedding_model_id: Uuid,
-        shared_model: &crate::shared::EmbeddingModel,
+        embedding_model: &ResolvedEmbeddingModel,
     ) -> Result<(Uuid, Vec<Vec<f32>>), AppError> {
         if let Some(existing) = self
             .embedding_set_repository
-            .find_by(chunk_set_id, embedding_model_id)
+            .find_by(chunk_set_id, embedding_model.embedding_model_id)
             .await?
         {
             let embeddings = self
@@ -386,7 +349,7 @@ impl EvaluationRunEffectExecutor {
         let texts: Vec<String> = chunks.iter().map(|c| c.text.clone()).collect();
         let vectors = self
             .embedding_service
-            .embed_batch(shared_model, &texts)
+            .embed_with_resolved(embedding_model, &texts)
             .await?;
 
         let embedding_set_id = self.id_generator.new_uuid();
@@ -394,15 +357,15 @@ impl EvaluationRunEffectExecutor {
         let embedding_set = EmbeddingSet {
             embedding_set_id,
             chunk_set_id,
-            embedding_model_id,
+            embedding_model_id: embedding_model.embedding_model_id,
             embedding_model_snapshot:
                 crate::server::domain::configuration::embedding_model::EmbeddingModel {
-                    embedding_model_id,
-                    model: shared_model.id.clone(),
-                    dimensions: shared_model.dims,
-                    provider_id: Uuid::nil(),
+                    embedding_model_id: embedding_model.embedding_model_id,
+                    kind: embedding_model.kind,
+                    model: embedding_model.model.clone(),
+                    dimensions: embedding_model.dimensions,
                 },
-            dimensions: shared_model.dims,
+            dimensions: embedding_model.dimensions,
             created_at: occurred_at.to_string(),
         };
 

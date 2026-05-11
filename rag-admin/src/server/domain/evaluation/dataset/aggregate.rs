@@ -9,8 +9,9 @@ use crate::server::domain::Aggregate;
 use super::{
     commands::EvaluationDatasetCommand,
     events::{
-        DatasetGenerationCompleted, DatasetGenerationFailed, DatasetGenerationRequested,
-        EvaluationDatasetEvent, QuestionAccepted, QuestionRejected,
+        DatasetDeleted, DatasetGenerationCompleted, DatasetGenerationFailed,
+        DatasetGenerationRequested, DatasetRenamed, EvaluationDatasetEvent, QuestionAccepted,
+        QuestionRejected,
     },
     exceptions::EvaluationDatasetError,
 };
@@ -65,6 +66,8 @@ pub struct EvaluationDataset {
     pub status: DatasetGenerationStatus,
     pub accepted_sequences: BTreeSet<u32>,
     pub created_at: Timestamp,
+    #[serde(default)]
+    pub deleted: bool,
 }
 
 impl EvaluationDataset {
@@ -77,6 +80,7 @@ impl EvaluationDataset {
             status: DatasetGenerationStatus::Generating,
             accepted_sequences: BTreeSet::new(),
             created_at: e.occurred_at.clone(),
+            deleted: false,
         }
     }
 }
@@ -105,6 +109,10 @@ impl Aggregate for EvaluationDataset {
                     reason: e.reason.clone(),
                 };
             }
+            Self::Event::DatasetRenamed(_) => {}
+            Self::Event::DatasetDeleted(_) => {
+                self.deleted = true;
+            }
         }
     }
 
@@ -125,8 +133,8 @@ impl Aggregate for EvaluationDataset {
                         content_hash: cmd.content_hash,
                         label: cmd.label,
                         target_question_count: cmd.target_question_count,
+                        generation_model_id: cmd.generation_model_id,
                         generation_model: cmd.generation_model,
-                        generation_backend: cmd.generation_backend,
                         excerpt_similarity_threshold_milli: cmd.excerpt_similarity_threshold_milli,
                         duplicate_similarity_threshold_milli: cmd
                             .duplicate_similarity_threshold_milli,
@@ -204,6 +212,33 @@ impl Aggregate for EvaluationDataset {
                     },
                 )])
             }
+
+            Self::Command::RenameDataset(cmd) => {
+                let dataset = state.ok_or(EvaluationDatasetError::NotFound)?;
+                if dataset.deleted {
+                    return Err(EvaluationDatasetError::Deleted);
+                }
+                let trimmed = cmd.label.trim();
+                if trimmed.is_empty() {
+                    return Err(EvaluationDatasetError::EmptyLabel);
+                }
+                Ok(vec![Self::Event::DatasetRenamed(DatasetRenamed {
+                    dataset_id: dataset.dataset_id,
+                    label: trimmed.to_string(),
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
+            Self::Command::DeleteDataset(cmd) => {
+                let dataset = state.ok_or(EvaluationDatasetError::NotFound)?;
+                if dataset.deleted {
+                    return Ok(vec![]);
+                }
+                Ok(vec![Self::Event::DatasetDeleted(DatasetDeleted {
+                    dataset_id: dataset.dataset_id,
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
         }
     }
 
@@ -242,8 +277,8 @@ mod tests {
             content_hash: "abc123".to_string(),
             label: "synthetic-default".to_string(),
             target_question_count: 8,
+            generation_model_id: Uuid::new_v4(),
             generation_model: "llama3".to_string(),
-            generation_backend: "ollama".to_string(),
             excerpt_similarity_threshold_milli: 800,
             duplicate_similarity_threshold_milli: 950,
             embedding_model_id: Uuid::new_v4(),
@@ -259,8 +294,8 @@ mod tests {
             content_hash: "abc123".to_string(),
             label: "synthetic-default".to_string(),
             target_question_count: 8,
+            generation_model_id: Uuid::new_v4(),
             generation_model: "llama3".to_string(),
-            generation_backend: "ollama".to_string(),
             excerpt_similarity_threshold_milli: 800,
             duplicate_similarity_threshold_milli: 950,
             embedding_model_id: Uuid::new_v4(),

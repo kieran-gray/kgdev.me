@@ -10,11 +10,6 @@ use crate::server::domain::evaluation::question::EvaluationQuestion;
 use crate::server::event_sourcing::envelope::EventEnvelope;
 use crate::server::event_sourcing::projector::Projector;
 
-/// Projects `EvaluationDatasetEvent`s into the evaluation_* read tables.
-///
-/// One projector per aggregate type. Each event maps to a targeted SQL write
-/// (insert summary on requested, insert question rows on accepted, etc.) —
-/// no full re-projection of state on every event.
 pub struct EvaluationDatasetProjector {
     repository: Arc<dyn EvaluationDatasetRepository>,
 }
@@ -48,8 +43,8 @@ impl Projector<EvaluationDatasetEvent> for EvaluationDatasetProjector {
                             content_hash: e.content_hash.clone(),
                             label: e.label.clone(),
                             target_question_count: e.target_question_count,
+                            generation_model_id: e.generation_model_id,
                             generation_model: e.generation_model.clone(),
-                            generation_backend: e.generation_backend.clone(),
                             excerpt_similarity_threshold_milli: e.excerpt_similarity_threshold_milli,
                             duplicate_similarity_threshold_milli: e
                                 .duplicate_similarity_threshold_milli,
@@ -81,6 +76,14 @@ impl Projector<EvaluationDatasetEvent> for EvaluationDatasetProjector {
                     self.repository
                         .mark_failed(e.dataset_id, e.reason.clone())
                         .await?;
+                }
+                EvaluationDatasetEvent::DatasetRenamed(e) => {
+                    self.repository
+                        .rename(e.dataset_id, e.label.clone())
+                        .await?;
+                }
+                EvaluationDatasetEvent::DatasetDeleted(e) => {
+                    self.repository.mark_deleted(e.dataset_id).await?;
                 }
             }
         }

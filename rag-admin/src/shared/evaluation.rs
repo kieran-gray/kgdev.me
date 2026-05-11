@@ -436,8 +436,17 @@ pub struct EvaluationDatasetSummaryDto {
 pub struct EvaluationDatasetDto {
     pub dataset_id: Uuid,
     pub document_id: Uuid,
+    pub document_version: u32,
+    pub content_hash: String,
     pub label: String,
     pub status: String,
+    pub target_question_count: u32,
+    pub question_count: u32,
+    pub rejection_count: u32,
+    pub generation_model_id: Uuid,
+    pub generation_model: String,
+    pub embedding_model_id: Uuid,
+    pub failure_reason: Option<String>,
     pub questions: Vec<EvaluationQuestionDto>,
     pub created_at: String,
 }
@@ -457,6 +466,8 @@ pub struct RunEvaluationRequestDto {
     pub pipeline_configuration_id: Uuid,
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
+    #[serde(default)]
+    pub autotune: Option<EvaluationAutotuneRequest>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

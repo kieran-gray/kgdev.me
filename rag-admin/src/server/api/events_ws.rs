@@ -12,12 +12,22 @@ use crate::server::setup::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct EventsWsQuery {
-    pub stream_id: Uuid,
+    /// Optional aggregate stream filter. When absent, the socket delivers
+    /// every published event so the client can use it as an app-wide cache
+    /// invalidation bus.
+    pub stream_id: Option<Uuid>,
 }
 
-/// WebSocket endpoint that fans projected domain events out to a client filtered
-/// by `stream_id` (= aggregate id). Clients use the messages purely as cache
-/// invalidation hints and re-query the read model on receipt.
+/// WebSocket endpoint that fans projected domain events out to a client.
+///
+/// Two consumption modes:
+/// - Per-stream subscriber (`?stream_id=<uuid>`): receives events for a single
+///   aggregate. Used by legacy per-job views.
+/// - App-wide subscriber (no `stream_id`): receives every event. Used by the
+///   client-side event bus to drive Resource invalidation.
+///
+/// Either way, the client treats messages as opaque cache invalidation hints
+/// and re-queries the read model on receipt.
 pub async fn events_ws_handler(
     Extension(state): Extension<Arc<AppState>>,
     Query(query): Query<EventsWsQuery>,
@@ -26,24 +36,26 @@ pub async fn events_ws_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, state, query.stream_id))
 }
 
-async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, stream_id: Uuid) {
+async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, stream_id: Option<Uuid>) {
     let mut subscription = state.event_bus.subscribe();
 
     loop {
         let event = match subscription.recv().await {
             Ok(event) => event,
             Err(RecvError::Lagged(n)) => {
-                warn!(stream_id = %stream_id, dropped = n, "events ws subscriber lagged");
+                warn!(?stream_id, dropped = n, "events ws subscriber lagged");
                 continue;
             }
             Err(RecvError::Closed) => {
-                debug!(stream_id = %stream_id, "events bus closed");
+                debug!(?stream_id, "events bus closed");
                 return;
             }
         };
 
-        if event.stream_id != stream_id {
-            continue;
+        if let Some(filter) = stream_id {
+            if event.stream_id != filter {
+                continue;
+            }
         }
 
         let payload = match serde_json::to_string(event.as_ref()) {

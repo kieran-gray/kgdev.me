@@ -1,16 +1,63 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AiProviderDto {
-    pub provider_id: Uuid,
-    pub name: String,
+use crate::shared::ChunkingConfig;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum AiProviderKindDto {
+    Cloudflare,
+    Ollama,
+}
+
+impl AiProviderKindDto {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AiProviderKindDto::Cloudflare => "cloudflare",
+            AiProviderKindDto::Ollama => "ollama",
+        }
+    }
+
+    pub fn display_label(self) -> &'static str {
+        match self {
+            AiProviderKindDto::Cloudflare => "Cloudflare",
+            AiProviderKindDto::Ollama => "Ollama",
+        }
+    }
+
+    pub fn all() -> &'static [AiProviderKindDto] {
+        &[AiProviderKindDto::Cloudflare, AiProviderKindDto::Ollama]
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum VectorStoreKindDto {
+    CloudflareVectorize,
+}
+
+impl VectorStoreKindDto {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            VectorStoreKindDto::CloudflareVectorize => "cloudflare_vectorize",
+        }
+    }
+
+    pub fn display_label(self) -> &'static str {
+        match self {
+            VectorStoreKindDto::CloudflareVectorize => "Cloudflare Vectorize",
+        }
+    }
+
+    pub fn all() -> &'static [VectorStoreKindDto] {
+        &[VectorStoreKindDto::CloudflareVectorize]
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EmbeddingModelDto {
     pub embedding_model_id: Uuid,
-    pub provider_id: Uuid,
+    pub kind: AiProviderKindDto,
     pub model: String,
     pub dimensions: u32,
 }
@@ -18,20 +65,14 @@ pub struct EmbeddingModelDto {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GenerationModelDto {
     pub generation_model_id: Uuid,
-    pub provider_id: Uuid,
+    pub kind: AiProviderKindDto,
     pub model: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct VectorStoreProviderDto {
-    pub provider_id: Uuid,
-    pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VectorIndexDto {
     pub index_id: Uuid,
-    pub vector_store_provider_id: Uuid,
+    pub kind: VectorStoreKindDto,
     pub name: String,
     pub dimensions: u32,
 }
@@ -39,8 +80,6 @@ pub struct VectorIndexDto {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConfigurationDto {
     pub configuration_id: Uuid,
-    pub ai_providers: Vec<AiProviderDto>,
-    pub vector_store_providers: Vec<VectorStoreProviderDto>,
     pub embedding_models: Vec<EmbeddingModelDto>,
     pub generation_models: Vec<GenerationModelDto>,
     pub vector_indexes: Vec<VectorIndexDto>,
@@ -56,4 +95,11 @@ pub struct PipelineConfigurationDto {
     pub generation_model_name: Option<String>,
     pub vector_index_id: Uuid,
     pub vector_index_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChunkingConfigurationDto {
+    pub chunking_configuration_id: Uuid,
+    pub name: String,
+    pub config: ChunkingConfig,
 }

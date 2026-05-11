@@ -2,6 +2,11 @@ use leptos::prelude::*;
 
 use crate::shared::EmbedResult;
 
+/// Sandboxed embedding-test endpoint for the SIMILARITY_LAB page.
+/// Takes a free-form model identifier (e.g. `@cf/baai/bge-base-en-v1.5` or
+/// `qwen3-embedding:0.6b`); the server resolves it against the configuration
+/// registry to find the embedding-model id, then routes through
+/// `EmbeddingService` like any other call site.
 #[server(name = EmbedTexts, prefix = "/api", endpoint = "embed_texts")]
 pub async fn embed_texts(
     model: String,
@@ -14,9 +19,26 @@ pub async fn embed_texts(
 
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    let configuration = state
+        .configuration_query_service
+        .get()
+        .await
+        .map_err(map_app_error)?;
+    let embedding_model_id = configuration
+        .embedding_models
+        .iter()
+        .find(|m| m.model == model)
+        .map(|m| m.embedding_model_id)
+        .ok_or_else(|| {
+            ServerFnError::new(format!(
+                "embedding model '{model}' is not registered in the configuration"
+            ))
+        })?;
+
     state
         .embedding_service
-        .embed_texts(&model, &text_a, &text_b)
+        .embed_texts(embedding_model_id, &text_a, &text_b)
         .await
         .map_err(map_app_error)
 }

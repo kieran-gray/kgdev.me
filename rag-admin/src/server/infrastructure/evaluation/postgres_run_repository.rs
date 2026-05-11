@@ -205,8 +205,9 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let variants = serde_json::to_value(&summary.variants).map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("serialize variants: {e}"))
         })?;
-        let options = serde_json::to_value(&summary.options)
-            .map_err(|e| EvaluationRunRepositoryError::Internal(format!("serialize options: {e}")))?;
+        let options = serde_json::to_value(&summary.options).map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("serialize options: {e}"))
+        })?;
         let autotune_request = serde_json::to_value(&summary.autotune_request).map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("serialize autotune_request: {e}"))
         })?;
@@ -266,39 +267,37 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let variant_config = serde_json::to_value(&result.variant_config).map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("serialize variant_config: {e}"))
         })?;
-        let options = serde_json::to_value(&result.options)
-            .map_err(|e| EvaluationRunRepositoryError::Internal(format!("serialize options: {e}")))?;
+        let options = serde_json::to_value(&result.options).map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("serialize options: {e}"))
+        })?;
 
         let mut tx = self.pool.begin().await.map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("begin transaction: {e}"))
         })?;
 
-        let inserted: (i64,) = sqlx::query_as(
+        let inserted: (bool,) = sqlx::query_as(
             r#"
-            WITH inserted AS (
-                INSERT INTO evaluation_variant_results (
-                    run_id, variant_label, split, variant_config, options,
-                    recall_mean, recall_std,
-                    precision_mean, precision_std, iou_mean, iou_std,
-                    precision_omega_mean, precision_omega_std,
-                    chunk_set_id, embedding_set_id, selected
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-                ON CONFLICT (run_id, variant_label, split) DO UPDATE SET
-                    variant_config = EXCLUDED.variant_config,
-                    options = EXCLUDED.options,
-                    recall_mean = EXCLUDED.recall_mean,
-                    recall_std = EXCLUDED.recall_std,
-                    precision_mean = EXCLUDED.precision_mean,
-                    precision_std = EXCLUDED.precision_std,
-                    iou_mean = EXCLUDED.iou_mean,
-                    iou_std = EXCLUDED.iou_std,
-                    precision_omega_mean = EXCLUDED.precision_omega_mean,
-                    precision_omega_std = EXCLUDED.precision_omega_std,
-                    selected = EXCLUDED.selected
-                RETURNING (xmax = 0) AS is_new
+            INSERT INTO evaluation_variant_results (
+                run_id, variant_label, split, variant_config, options,
+                recall_mean, recall_std,
+                precision_mean, precision_std, iou_mean, iou_std,
+                precision_omega_mean, precision_omega_std,
+                chunk_set_id, embedding_set_id, selected
             )
-            SELECT CASE WHEN is_new THEN 1 ELSE 0 END FROM inserted
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            ON CONFLICT (run_id, variant_label, split) DO UPDATE SET
+                variant_config = EXCLUDED.variant_config,
+                options = EXCLUDED.options,
+                recall_mean = EXCLUDED.recall_mean,
+                recall_std = EXCLUDED.recall_std,
+                precision_mean = EXCLUDED.precision_mean,
+                precision_std = EXCLUDED.precision_std,
+                iou_mean = EXCLUDED.iou_mean,
+                iou_std = EXCLUDED.iou_std,
+                precision_omega_mean = EXCLUDED.precision_omega_mean,
+                precision_omega_std = EXCLUDED.precision_omega_std,
+                selected = EXCLUDED.selected
+            RETURNING (xmax = 0) AS is_new
             "#,
         )
         .bind(result.run_id)
@@ -319,9 +318,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         .bind(result.selected)
         .fetch_one(&mut *tx)
         .await
-        .map_err(|e| {
-            EvaluationRunRepositoryError::Internal(format!("save_variant_result: {e}"))
-        })?;
+        .map_err(|e| EvaluationRunRepositoryError::Internal(format!("save_variant_result: {e}")))?;
 
         for trace in &result.retrieval_traces {
             let retrieved_chunk_ids =
@@ -365,7 +362,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             })?;
         }
 
-        if inserted.0 == 1 {
+        if inserted.0 {
             sqlx::query(
                 "UPDATE evaluation_runs SET variants_scored = variants_scored + 1, status = 'running', updated_at = NOW() WHERE run_id = $1",
             )
@@ -382,10 +379,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         Ok(())
     }
 
-    async fn mark_completed(
-        &self,
-        run_id: Uuid,
-    ) -> Result<(), EvaluationRunRepositoryError> {
+    async fn mark_completed(&self, run_id: Uuid) -> Result<(), EvaluationRunRepositoryError> {
         sqlx::query(
             "UPDATE evaluation_runs SET status = 'completed', failure_reason = NULL, updated_at = NOW() WHERE run_id = $1",
         )
@@ -439,10 +433,13 @@ impl TryFrom<RunRow> for EvaluationRunReadModel {
     type Error = EvaluationRunRepositoryError;
 
     fn try_from(row: RunRow) -> Result<Self, Self::Error> {
-        let variants: Vec<ChunkingVariant> = serde_json::from_value(row.variants)
-            .map_err(|e| EvaluationRunRepositoryError::Internal(format!("deserialize variants: {e}")))?;
-        let options: Vec<EvaluationRunOptions> = serde_json::from_value(row.options)
-            .map_err(|e| EvaluationRunRepositoryError::Internal(format!("deserialize options: {e}")))?;
+        let variants: Vec<ChunkingVariant> = serde_json::from_value(row.variants).map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("deserialize variants: {e}"))
+        })?;
+        let options: Vec<EvaluationRunOptions> =
+            serde_json::from_value(row.options).map_err(|e| {
+                EvaluationRunRepositoryError::Internal(format!("deserialize options: {e}"))
+            })?;
         let autotune_request: Option<EvaluationAutotuneRequest> = row
             .autotune_request
             .and_then(|v| serde_json::from_value(v).ok());
@@ -516,10 +513,12 @@ impl TryFrom<RetrievalTraceRow>
     type Error = EvaluationRunRepositoryError;
 
     fn try_from(row: RetrievalTraceRow) -> Result<Self, Self::Error> {
-        let retrieved_chunk_ids = serde_json::from_value(row.retrieved_chunk_ids)
-            .map_err(|e| EvaluationRunRepositoryError::Internal(format!("deserialize retrieved_chunk_ids: {e}")))?;
-        let scores = serde_json::from_value(row.scores)
-            .map_err(|e| EvaluationRunRepositoryError::Internal(format!("deserialize scores: {e}")))?;
+        let retrieved_chunk_ids = serde_json::from_value(row.retrieved_chunk_ids).map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("deserialize retrieved_chunk_ids: {e}"))
+        })?;
+        let scores = serde_json::from_value(row.scores).map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("deserialize scores: {e}"))
+        })?;
         Ok(Self {
             question_sequence: row.question_sequence as u32,
             retrieved_chunk_ids,

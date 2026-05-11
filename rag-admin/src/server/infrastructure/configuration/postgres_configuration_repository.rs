@@ -26,8 +26,6 @@ impl ConfigurationRepository for PostgresConfigurationRepository {
         let row: Option<ConfigurationRow> = sqlx::query_as(
             r#"
             SELECT id,
-                   ai_providers,
-                   vector_store_providers,
                    embedding_models,
                    generation_models,
                    vector_indexes
@@ -50,22 +48,12 @@ impl ConfigurationRepository for PostgresConfigurationRepository {
         &self,
         read_model: ConfigurationReadModel,
     ) -> Result<(), ConfigurationRepositoryError> {
-        let ai_providers = serde_json::to_value(&read_model.ai_providers).map_err(|e| {
-            ConfigurationRepositoryError::Internal(format!("serialize ai_providers: {e}"))
-        })?;
-        let vector_store_providers = serde_json::to_value(&read_model.vector_store_providers)
-            .map_err(|e| {
-                ConfigurationRepositoryError::Internal(format!(
-                    "serialize vector_store_providers: {e}"
-                ))
-            })?;
         let embedding_models = serde_json::to_value(&read_model.embedding_models).map_err(|e| {
             ConfigurationRepositoryError::Internal(format!("serialize embedding_models: {e}"))
         })?;
-        let generation_models =
-            serde_json::to_value(&read_model.generation_models).map_err(|e| {
-                ConfigurationRepositoryError::Internal(format!("serialize generation_models: {e}"))
-            })?;
+        let generation_models = serde_json::to_value(&read_model.generation_models).map_err(|e| {
+            ConfigurationRepositoryError::Internal(format!("serialize generation_models: {e}"))
+        })?;
         let vector_indexes = serde_json::to_value(&read_model.vector_indexes).map_err(|e| {
             ConfigurationRepositoryError::Internal(format!("serialize vector_indexes: {e}"))
         })?;
@@ -74,25 +62,19 @@ impl ConfigurationRepository for PostgresConfigurationRepository {
             r#"
             INSERT INTO configuration (
                 id,
-                ai_providers,
-                vector_store_providers,
                 embedding_models,
                 generation_models,
                 vector_indexes
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4)
             ON CONFLICT (id) DO UPDATE SET
-                ai_providers           = $2,
-                vector_store_providers = $3,
-                embedding_models       = $4,
-                generation_models      = $5,
-                vector_indexes         = $6,
-                updated_at             = NOW()
+                embedding_models  = $2,
+                generation_models = $3,
+                vector_indexes    = $4,
+                updated_at        = NOW()
             "#,
         )
         .bind(read_model.configuration_id)
-        .bind(&ai_providers)
-        .bind(&vector_store_providers)
         .bind(&embedding_models)
         .bind(&generation_models)
         .bind(&vector_indexes)
@@ -106,8 +88,6 @@ impl ConfigurationRepository for PostgresConfigurationRepository {
 
 struct ConfigurationRow {
     id: Uuid,
-    ai_providers: serde_json::Value,
-    vector_store_providers: serde_json::Value,
     embedding_models: serde_json::Value,
     generation_models: serde_json::Value,
     vector_indexes: serde_json::Value,
@@ -118,8 +98,6 @@ impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for ConfigurationRow {
         use sqlx::Row;
         Ok(Self {
             id: row.try_get("id")?,
-            ai_providers: row.try_get("ai_providers")?,
-            vector_store_providers: row.try_get("vector_store_providers")?,
             embedding_models: row.try_get("embedding_models")?,
             generation_models: row.try_get("generation_models")?,
             vector_indexes: row.try_get("vector_indexes")?,
@@ -133,20 +111,12 @@ impl TryFrom<ConfigurationRow> for ConfigurationReadModel {
     fn try_from(row: ConfigurationRow) -> Result<Self, Self::Error> {
         Ok(ConfigurationReadModel {
             configuration_id: row.id,
-            ai_providers: serde_json::from_value(row.ai_providers).map_err(|e| {
-                ConfigurationRepositoryError::Internal(format!("deserialize ai_providers: {e}"))
-            })?,
-            vector_store_providers: serde_json::from_value(row.vector_store_providers).map_err(
-                |e| {
-                    ConfigurationRepositoryError::Internal(format!(
-                        "deserialize vector_store_providers: {e}"
-                    ))
-                },
-            )?,
             embedding_models: serde_json::from_value::<Vec<EmbeddingModel>>(row.embedding_models)
                 .map_err(|e| {
-                ConfigurationRepositoryError::Internal(format!("deserialize embedding_models: {e}"))
-            })?,
+                    ConfigurationRepositoryError::Internal(format!(
+                        "deserialize embedding_models: {e}"
+                    ))
+                })?,
             generation_models: serde_json::from_value::<Vec<GenerationModel>>(
                 row.generation_models,
             )

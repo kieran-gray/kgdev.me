@@ -1,7 +1,7 @@
-use crate::server::application::embedding::EmbeddingService;
+use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
 use crate::server::application::evaluation::retrieval::cosine_similarity;
 use crate::server::application::AppError;
-use crate::shared::{ordered_f32_vec, EmbeddingModel, EvaluationQuestionDto};
+use crate::shared::{ordered_f32_vec, EvaluationQuestionDto};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct QuestionFilterStats {
@@ -17,7 +17,7 @@ pub enum QuestionFilterDecision {
 
 pub struct GeneratedQuestionGate<'a> {
     embedding_service: &'a EmbeddingService,
-    embedding_model: &'a EmbeddingModel,
+    embedding_model: &'a ResolvedEmbeddingModel,
     excerpt_similarity_threshold: f32,
     duplicate_similarity_threshold: f32,
     questions: Vec<EvaluationQuestionDto>,
@@ -28,7 +28,7 @@ pub struct GeneratedQuestionGate<'a> {
 
 pub async fn filter_generated_questions(
     embedding_service: &EmbeddingService,
-    model: &EmbeddingModel,
+    model: &ResolvedEmbeddingModel,
     questions: Vec<EvaluationQuestionDto>,
     excerpt_similarity_threshold: f32,
     duplicate_similarity_threshold: f32,
@@ -39,7 +39,7 @@ pub async fn filter_generated_questions(
 
     let question_texts: Vec<String> = questions.iter().map(|q| q.question.clone()).collect();
     let question_embeddings = embedding_service
-        .embed_batch(model, &question_texts)
+        .embed_with_resolved(model, &question_texts)
         .await?;
 
     let mut reference_texts = Vec::new();
@@ -55,7 +55,7 @@ pub async fn filter_generated_questions(
         Vec::new()
     } else {
         embedding_service
-            .embed_batch(model, &reference_texts)
+            .embed_with_resolved(model, &reference_texts)
             .await?
     };
 
@@ -72,7 +72,7 @@ pub async fn filter_generated_questions(
 impl<'a> GeneratedQuestionGate<'a> {
     pub fn new(
         embedding_service: &'a EmbeddingService,
-        embedding_model: &'a EmbeddingModel,
+        embedding_model: &'a ResolvedEmbeddingModel,
         excerpt_similarity_threshold: f32,
         duplicate_similarity_threshold: f32,
     ) -> Self {
@@ -105,7 +105,7 @@ impl<'a> GeneratedQuestionGate<'a> {
 
         let embeddings = self
             .embedding_service
-            .embed_batch(self.embedding_model, &texts)
+            .embed_with_resolved(self.embedding_model, &texts)
             .await?;
         let question_embedding = embeddings.first().cloned();
 

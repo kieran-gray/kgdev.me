@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::server::domain::configuration::kinds::AiProviderKind;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddEmbeddingModel {
-    pub provider_id: Uuid,
+    pub kind: AiProviderKind,
     pub model: String,
     pub dimensions: u32,
 }
@@ -11,7 +13,7 @@ pub struct AddEmbeddingModel {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UpdateEmbeddingModel {
     pub model_id: Uuid,
-    pub provider_id: Uuid,
+    pub kind: AiProviderKind,
     pub model: String,
     pub dimensions: u32,
 }

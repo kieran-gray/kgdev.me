@@ -1,7 +1,8 @@
 pub mod app_state;
 pub mod config;
 pub mod exceptions;
-pub mod settings;
+pub mod paths;
+pub mod seed;
 pub mod validation;
 
 pub use app_state::AppState;

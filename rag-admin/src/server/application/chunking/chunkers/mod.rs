@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::ports::ChatClient;
+use crate::server::domain::configuration::ConfigurationRepository;
 
 pub use bert::BertChunker;
 pub use llm::LlmChunker;
@@ -13,10 +14,14 @@ pub use section::SectionChunker;
 
 pub struct BuiltinChunkerDeps {
     pub chat_client: Arc<dyn ChatClient>,
+    pub configuration_repository: Arc<dyn ConfigurationRepository>,
 }
 
 pub fn register_builtin_chunkers(registry: &mut ChunkerRegistry, deps: BuiltinChunkerDeps) {
     registry.add(Arc::new(SectionChunker {}));
     registry.add(Arc::new(BertChunker {}));
-    registry.add(Arc::new(LlmChunker::create(deps.chat_client)));
+    registry.add(Arc::new(LlmChunker::create(
+        deps.chat_client,
+        deps.configuration_repository,
+    )));
 }

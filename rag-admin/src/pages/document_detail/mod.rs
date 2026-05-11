@@ -3,47 +3,65 @@ use leptos::task::spawn_local;
 use leptos_router::hooks::use_params_map;
 
 mod chunk_card;
+mod chunks_tab;
+mod dataset_detail;
+mod eval_launcher;
+mod eval_parser;
 mod evaluation_tab;
+mod indexings_tab;
+mod redirect_by_id;
+mod run_detail;
+mod source_tab;
 mod utils;
 
-use chunk_card::ChunkCard;
+use chunks_tab::ChunksTab;
+pub use dataset_detail::DatasetDetailPage;
 use evaluation_tab::EvaluationTab;
-use utils::{open_event_stream, short_hash};
+use indexings_tab::IndexingsTab;
+pub use redirect_by_id::DocumentByIdRedirect;
+pub use run_detail::RunDetailPage;
+use source_tab::SourceTab;
+use utils::short_hash;
 
-use crate::components::log_panel::LogPanel;
-use crate::server_functions::configuration::get_pipeline_configurations;
+use crate::components::event_bus::use_invalidator;
+use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::server_functions::configuration::{
+    get_chunking_configurations, get_pipeline_configurations,
+};
 use crate::server_functions::source_document::{
-    get_chunks, get_document_detail_by_source_ref, start_source_document_ingest,
+    get_document_detail_by_source_ref, import_source_document,
 };
 use crate::shared::{
-    ChunkingConfig, IndexingDto, IngestJobInfo, LogEvent, PipelineConfigurationDto,
-    SectionChunkingConfig, SourceDocumentDetailDto,
+    ChunkingConfigurationDto, PipelineConfigurationDto, SourceDocumentDetailDto, SourceDocumentDto,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Tab {
-    Ingest,
-    Chunks,
     Evaluation,
+    Indexings,
+    Source,
+    Chunks,
 }
 
 /// Document detail page — generic across all source document types.
-/// Route: /documents/{doc_type}/{source_ref}
 ///
-/// To add support for a new document type:
-///   1. Register an adapter in AppState (infrastructure layer)
-///   2. Add a match arm in `document_type_label()` and `DocumentTypeMetadata`
-///      for the new type's specific display
+/// Route: `/documents/{doc_type}/{source_ref}`
+///
+/// The page has four tabs, defaulting to Evaluation (the primary happy-path
+/// per the UX plan). Adding a new document type only requires registering an
+/// adapter in `AppState` and extending the small label helpers in `utils`.
 #[component]
 pub fn DocumentDetailPage() -> impl IntoView {
     let params = use_params_map();
     let source_ref =
         Memo::new(move |_| params.with(|p| p.get("source_ref").unwrap_or_default().to_string()));
 
-    // Existing ingest record — None if document was never ingested.
+    // Live-refetch the document detail whenever a relevant event arrives.
+    let doc_invalidator =
+        use_invalidator(|e| e.from_any(&["SourceDocument", "Indexing"]));
     let detail = Resource::new(
-        move || source_ref.get(),
-        move |slug| async move {
+        move || (source_ref.get(), doc_invalidator.get()),
+        move |(slug, _)| async move {
             if slug.is_empty() {
                 return Err("missing source_ref".to_string());
             }
@@ -53,423 +71,135 @@ pub fn DocumentDetailPage() -> impl IntoView {
         },
     );
 
-    // Pipeline configurations are always needed for the ingest panel.
+    // Pipelines are slow-moving config but still eventful — refetch when the
+    // Configuration aggregate or any of its sub-aggregates emits an event.
+    let pipeline_invalidator = use_invalidator(|e| e.from_any(&["Configuration"]));
     let pipelines = Resource::new(
-        || (),
+        move || pipeline_invalidator.get(),
         |_| async move { get_pipeline_configurations().await.unwrap_or_default() },
+    );
+    let chunking_configurations = Resource::new(
+        move || pipeline_invalidator.get(),
+        |_| async move { get_chunking_configurations().await.unwrap_or_default() },
     );
 
     view! {
-        <div class="space-y-6">
-            <Transition fallback=|| {
-                view! { <p class="tech-label animate-pulse px-6">"INITIALIZING_COMPONENT..."</p> }
+        <div>
+            <Transition fallback=|| view! {
+                <p class="muted">"Loading document…"</p>
             }>
                 {move || {
                     let pipelines = pipelines.get().unwrap_or_default();
-                    detail
-                        .get()
-                        .map(|res| match res {
-                            Err(e) => view! {
-                                <div class="px-6 card-outer p-4 log-line-error font-mono text-sm">
-                                    {format!("SYSTEM_FAULT: {e}")}
-                                </div>
-                            }
-                                .into_any(),
-                            Ok(existing_detail) => view! {
-                                <DocumentView
-                                    detail=existing_detail
-                                    pipelines=pipelines
-                                    source_ref=source_ref.get()
-                                />
-                            }
-                                .into_any(),
-                        })
+                    let chunking_configurations = chunking_configurations.get().unwrap_or_default();
+                    detail.get().map(|res| match res {
+                        Err(e) => view! {
+                            <Surface>
+                                <div class="log-line-error">{format!("Failed to load: {e}")}</div>
+                            </Surface>
+                        }.into_any(),
+                        Ok(None) => view! {
+                            <UnregisteredDocument source_ref=source_ref.get() />
+                        }.into_any(),
+                        Ok(Some(existing)) => view! {
+                            <DocumentWorkspace
+                                detail=existing
+                                pipelines=pipelines
+                                chunking_configurations=chunking_configurations
+                                source_ref=source_ref.get()
+                            />
+                        }.into_any(),
+                    })
                 }}
             </Transition>
         </div>
     }
 }
 
-/// Main view — shows header (if ingested) + always-visible ingest panel + log stream.
 #[component]
-fn DocumentView(
-    /// None when never ingested; Some once ingest has run at least once.
-    detail: Option<SourceDocumentDetailDto>,
+fn DocumentWorkspace(
+    detail: SourceDocumentDetailDto,
     pipelines: Vec<PipelineConfigurationDto>,
+    chunking_configurations: Vec<ChunkingConfigurationDto>,
     source_ref: String,
 ) -> impl IntoView {
-    let source_ref_stored = StoredValue::new(source_ref.clone());
-    let pipelines_stored = StoredValue::new(pipelines);
-
-    let (active_tab, set_active_tab) = signal(Tab::Ingest);
-
-    let (log_events, set_log_events) = signal::<Vec<LogEvent>>(Vec::new());
-    let (ingest_running, set_ingest_running) = signal(false);
-    let (active_pipeline, set_active_pipeline) = signal::<Option<uuid::Uuid>>(None);
-    let (chunking_config, set_chunking_config) =
-        signal(ChunkingConfig::Section(SectionChunkingConfig {
-            max_section_tokens: 512,
-        }));
-
-    // Refresh detail after a successful ingest by invalidating the resource.
+    let (active_tab, set_active_tab) = signal(Tab::Evaluation);
     let detail_stored = StoredValue::new(detail.clone());
+    let pipelines_stored = StoredValue::new(pipelines);
+    let chunking_stored = StoredValue::new(chunking_configurations);
+    let source_ref_stored = StoredValue::new(source_ref.clone());
+
+    let (header_eyebrow, header_title, header_subtitle, header_status) =
+        derive_header(&detail.document, &detail.indexings);
+    let (status_kind, status_label) = header_status;
 
     view! {
-        <div class="space-y-6 px-6">
-            // ── Header ────────────────────────────────────────────────────────────
-            {match detail.clone() {
-                Some(d) => view! { <DocumentHeader doc=d.document /> }.into_any(),
-                None => view! {
-                    <div class="flex flex-col gap-1">
-                        <span class="tech-label opacity-40">"SYSTEM_VIEW / DOCUMENT_DETAIL"</span>
-                        <h1 class="text-3xl font-bold tracking-tight">{source_ref.clone()}</h1>
-                        <p class="tech-label text-amber-500/60 text-[10px]">
-                            "NOT_YET_INGESTED — select a pipeline below to begin"
-                        </p>
-                    </div>
-                }
-                    .into_any(),
-            }}
+        <div>
+            <PageHeader
+                title=header_title
+                eyebrow=header_eyebrow
+                subtitle=header_subtitle.unwrap_or_default()
+                actions=Box::new(move || view! {
+                    <StatusPill label=status_label.clone() kind=status_kind />
+                }.into_any())
+            />
 
-            <div class="border-b border-[var(--color-border)]">
-                <div class="flex gap-1">
-                    <TabButton
-                        label="INGEST_CONTROL"
-                        active=move || active_tab.get() == Tab::Ingest
-                        on_click=Box::new(move || set_active_tab.set(Tab::Ingest))
-                    />
-                    <TabButton
-                        label="CHUNK_EXPLORER"
-                        active=move || active_tab.get() == Tab::Chunks
-                        on_click=Box::new(move || set_active_tab.set(Tab::Chunks))
-                    />
-                    <TabButton
-                        label="EVALUATION"
-                        active=move || active_tab.get() == Tab::Evaluation
-                        on_click=Box::new(move || set_active_tab.set(Tab::Evaluation))
-                    />
-                </div>
-            </div>
+            <nav class="border-b border-[var(--color-border)] mb-6 flex gap-1">
+                <TabButton label="Evaluation"
+                    active=move || active_tab.get() == Tab::Evaluation
+                    on_click=Box::new(move || set_active_tab.set(Tab::Evaluation)) />
+                <TabButton label="Indexings"
+                    active=move || active_tab.get() == Tab::Indexings
+                    on_click=Box::new(move || set_active_tab.set(Tab::Indexings)) />
+                <TabButton label="Source"
+                    active=move || active_tab.get() == Tab::Source
+                    on_click=Box::new(move || set_active_tab.set(Tab::Source)) />
+                <TabButton label="Chunks"
+                    active=move || active_tab.get() == Tab::Chunks
+                    on_click=Box::new(move || set_active_tab.set(Tab::Chunks)) />
+            </nav>
 
             {move || match active_tab.get() {
-                Tab::Ingest => view! {
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-200">
-                        // ── Left: Pipeline selector + ingest trigger ──────────────────────
-                        <div class="space-y-4">
-                            <div>
-                                <span class="tech-label opacity-40">"INGEST_CONTROL"</span>
-                                <h2 class="text-lg font-bold mt-1">"PIPELINE_INGEST"</h2>
-                            </div>
-
-                            <div class="card-outer p-4 space-y-4">
-                                // Pipeline buttons
-                                <div class="space-y-1">
-                                    <span class="tech-label opacity-50 text-[10px]">"1. SELECT_PIPELINE"</span>
-                                    <div class="flex flex-col gap-2 mt-1">
-                                        {move || {
-                                            let ps = pipelines_stored.get_value();
-                                            if ps.is_empty() {
-                                                return view! {
-                                                    <p class="tech-label opacity-30 text-xs">
-                                                        "No pipelines configured — add one in PIPELINE_CONFIG"
-                                                    </p>
-                                                }
-                                                    .into_any();
-                                            }
-                                            ps.into_iter()
-                                                .map(|pc| {
-                                                    let pc_id = pc.pipeline_configuration_id;
-                                                    let is_active = move || active_pipeline.get() == Some(pc_id);
-                                                    view! {
-                                                        <button
-                                                            class=move || format!(
-                                                                "w-full text-left px-3 py-2 rounded border text-xs font-mono transition-colors {}",
-                                                                if is_active() {
-                                                                    "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-                                                                } else {
-                                                                    "border-[var(--color-border)] hover:border-[var(--color-accent)]/50"
-                                                                },
-                                                            )
-                                                            on:click=move |_| set_active_pipeline.set(Some(pc_id))
-                                                        >
-                                                            <span class="opacity-40 mr-1">"▶"</span>
-                                                            {pc.name}
-                                                        </button>
-                                                    }
-                                                })
-                                                .collect_view()
-                                                .into_any()
-                                        }}
-                                    </div>
-                                </div>
-
-                                // Chunking strategy quick-select
-                                <div class="space-y-1">
-                                    <span class="tech-label opacity-50 text-[10px]">"2. CHUNKING_CONFIG"</span>
-                                    <div class="flex gap-2 flex-wrap mt-1">
-                                        {["256", "384", "512"].into_iter().map(|t| {
-                                            let tokens: u32 = t.parse().unwrap_or(512);
-                                            let current = move || match chunking_config.get() {
-                                                ChunkingConfig::Section(c) => c.max_section_tokens,
-                                                _ => 0,
-                                            };
-                                            view! {
-                                                <button
-                                                    class=move || format!(
-                                                        "px-2 py-1 text-[10px] font-mono tracking-widest border rounded transition-colors {}",
-                                                        if current() == tokens {
-                                                            "border-[var(--color-accent)] text-[var(--color-accent)]"
-                                                        } else {
-                                                            "border-[var(--color-border)] opacity-50 hover:opacity-100"
-                                                        },
-                                                    )
-                                                    on:click=move |_| set_chunking_config.set(
-                                                        ChunkingConfig::Section(SectionChunkingConfig {
-                                                            max_section_tokens: tokens,
-                                                        }),
-                                                    )
-                                                >
-                                                    {format!("section:{t}")}
-                                                </button>
-                                            }
-                                        }).collect_view()}
-                                    </div>
-                                </div>
-
-                                // Ingest button
-                                <button
-                                    class="w-full py-2 text-xs font-bold tracking-widest border border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                    disabled=move || active_pipeline.get().is_none() || ingest_running.get()
-                                    on:click={
-                                        move |_| {
-                                            let Some(pipeline_id) = active_pipeline.get() else {
-                                                return;
-                                            };
-                                            let slug = source_ref_stored.get_value();
-                                            let config = chunking_config.get();
-                                            set_log_events.set(vec![]);
-                                            set_ingest_running.set(true);
-                                            spawn_local(async move {
-                                                match start_source_document_ingest(slug, pipeline_id, config)
-                                                    .await
-                                                {
-                                                    Ok(IngestJobInfo { stream_url, .. }) => {
-                                                        open_event_stream(stream_url, set_log_events, set_ingest_running);
-                                                    }
-                                                    Err(e) => {
-                                                        set_ingest_running.set(false);
-                                                        set_log_events.update(|evs| {
-                                                            evs.push(crate::shared::LogEvent {
-                                                                level: crate::shared::LogLevel::Error,
-                                                                message: format!("{e}"),
-                                                            });
-                                                        });
-                                                    }
-                                                }
-                                            });
-                                        }
-                                    }
-                                >
-                                    {move || {
-                                        if ingest_running.get() {
-                                            "INGESTING..."
-                                        } else if active_pipeline.get().is_none() {
-                                            "SELECT_PIPELINE_FIRST"
-                                        } else {
-                                            "START_INGEST"
-                                        }
-                                    }}
-                                </button>
-                            </div>
-
-                            // Existing indexing records
-                            {move || {
-                                let indexings = detail_stored
-                                    .get_value()
-                                    .map(|d| d.indexings)
-                                    .unwrap_or_default();
-                                if indexings.is_empty() {
-                                    view! {
-                                        <p class="tech-label opacity-30 text-[10px]">
-                                            "No indexings yet — run the first ingest above."
-                                        </p>
-                                    }
-                                        .into_any()
-                                } else {
-                                    view! { <IndexingsTable indexings=indexings /> }.into_any()
-                                }
-                            }}
-                        </div>
-
-                        // ── Right: Log panel ──────────────────────────────────────────────
-                        <div class="space-y-2">
-                            <span class="tech-label opacity-40">"INGEST_LOG"</span>
-                            <div class="h-[480px] overflow-y-auto card-outer p-3">
-                                <LogPanel events=log_events />
-                            </div>
-                        </div>
-                    </div>
+                Tab::Evaluation => view! {
+                    <EvaluationTab
+                        detail=Some(detail_stored.get_value())
+                        pipelines=pipelines_stored.get_value()
+                        chunking_configurations=chunking_stored.get_value()
+                    />
                 }.into_any(),
-
-                Tab::Chunks => {
-                    let indexings = detail_stored
-                        .get_value()
-                        .map(|d| d.indexings)
-                        .unwrap_or_default();
-                    view! {
-                        <ChunksView indexings=indexings />
-                    }.into_any()
-                }
-
-                Tab::Evaluation => {
-                    match detail_stored.get_value() {
-                        None => view! {
-                            <div class="card-outer p-8 flex flex-col items-center justify-center border-dashed opacity-40">
-                                <span class="tech-label">"INGEST_REQUIRED"</span>
-                                <p class="text-[10px] mt-1">
-                                    "Run the first ingest to enable evaluation."
-                                </p>
-                            </div>
-                        }.into_any(),
-                        Some(d) => view! {
-                            <EvaluationTab
-                                document_id=d.document.document_id
-                                pipelines=pipelines_stored.get_value()
-                            />
-                        }.into_any(),
-                    }
-                }
+                Tab::Indexings => view! {
+                    <IndexingsTab
+                        detail=Some(detail_stored.get_value())
+                        pipelines=pipelines_stored.get_value()
+                        source_ref=source_ref_stored.get_value()
+                    />
+                }.into_any(),
+                Tab::Source => view! {
+                    <SourceTab source_ref=source_ref_stored.get_value() />
+                }.into_any(),
+                Tab::Chunks => view! {
+                    <ChunksTab detail=Some(detail_stored.get_value()) />
+                }.into_any(),
             }}
         </div>
     }
 }
 
-/// Document header — type-specific display.
-/// Add a match arm here for each new document type.
 #[component]
-fn DocumentHeader(doc: crate::shared::SourceDocumentDto) -> impl IntoView {
-    let type_label = document_type_label(&doc.document_type);
-    let hash_short = short_hash(&doc.latest_content_hash).to_string();
-
-    view! {
-        <div class="flex flex-col gap-1">
-            <span class="tech-label opacity-40">
-                {format!("SYSTEM_VIEW / {} / {}", type_label, doc.source_ref_key)}
-            </span>
-            <h1 class="text-3xl font-bold tracking-tight">{doc.title.clone()}</h1>
-            <div class="flex gap-4 items-center">
-                <span class="tech-label opacity-40 text-[10px]">
-                    {format!("v{} · {}…", doc.latest_version, hash_short)}
-                </span>
-
-                // Type-specific metadata (add match arms for new document types)
-                {match doc.document_type.as_str() {
-                    "BlogPost" => view! {
-                        <span class="tech-label text-[10px] opacity-40">"TYPE: BLOG_POST"</span>
-                    }
-                        .into_any(),
-                    other => view! {
-                        <span class="tech-label text-[10px] opacity-40">
-                            {format!("TYPE: {}", other.to_uppercase())}
-                        </span>
-                    }
-                        .into_any(),
-                }}
-            </div>
-        </div>
-    }
-}
-
-#[component]
-fn IndexingsTable(indexings: Vec<IndexingDto>) -> impl IntoView {
-    view! {
-        <div class="space-y-1">
-            <span class="tech-label opacity-40 text-[10px]">"EXISTING_INDEXINGS"</span>
-            <div class="card-outer overflow-hidden">
-                <table class="w-full text-xs border-collapse">
-                    <thead>
-                        <tr class="bg-[var(--color-card-inner)]/50">
-                            <th class="text-left px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                                "PIPELINE"
-                            </th>
-                            <th class="text-left px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                                "STATUS"
-                            </th>
-                            <th class="text-right px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                                "v"
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-[var(--color-border)]">
-                        {indexings
-                            .into_iter()
-                            .map(|ix| {
-                                let (cls, label) = status_display(&ix.status);
-                                let pipeline_short = {
-                                    let s = ix.pipeline_configuration_id.to_string();
-                                    s[..8].to_string()
-                                };
-                                view! {
-                                    <tr>
-                                        <td class="px-3 py-2 font-mono opacity-50">
-                                            {format!("{}…", pipeline_short)}
-                                        </td>
-                                        <td class=format!("px-3 py-2 font-bold tracking-widest {}", cls)>
-                                            {label}
-                                        </td>
-                                        <td class="px-3 py-2 text-right opacity-40">
-                                            {format!("v{}", ix.document_version)}
-                                        </td>
-                                    </tr>
-                                }
-                            })
-                            .collect_view()}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    }
-}
-
-fn status_display(status: &str) -> (&'static str, &'static str) {
-    if status.contains("Indexed") {
-        ("text-emerald-500/80", "INDEXED")
-    } else if status.contains("Failed") {
-        ("text-red-500/80", "FAILED")
-    } else if status.contains("Embedding") {
-        ("text-blue-400/80", "EMBEDDING")
-    } else if status.contains("Chunking") {
-        ("text-blue-400/80", "CHUNKING")
-    } else {
-        ("text-amber-500/80", "PENDING")
-    }
-}
-
-fn document_type_label(doc_type: &str) -> &'static str {
-    match doc_type {
-        "BlogPost" => "BLOG_POST",
-        _ => "DOCUMENT",
-    }
-}
-
-#[component]
-fn TabButton<F>(
+fn TabButton(
     label: &'static str,
-    active: F,
+    active: impl Fn() -> bool + Send + Sync + 'static,
     on_click: Box<dyn Fn() + Send + Sync>,
-) -> impl IntoView
-where
-    F: Fn() -> bool + Send + Sync + 'static,
-{
+) -> impl IntoView {
     let on_click_stored = StoredValue::new(on_click);
     view! {
         <button
+            type="button"
             class=move || format!(
-                "px-6 py-2 border-b-2 tech-label font-bold transition-colors {}",
+                "px-4 py-2.5 -mb-px border-b-2 text-sm font-medium transition-colors {}",
                 if active() {
-                    "border-[var(--color-accent)] text-[var(--color-accent)]"
+                    "border-[var(--color-accent)] text-text"
                 } else {
-                    "border-transparent opacity-50 hover:opacity-100 hover:border-[var(--color-border)]"
+                    "border-transparent muted hover:text-text"
                 }
             )
             on:click=move |_| on_click_stored.with_value(|f| f())
@@ -479,85 +209,105 @@ where
     }
 }
 
-#[component]
-fn ChunksView(indexings: Vec<IndexingDto>) -> impl IntoView {
-    let (selected_chunk_set, set_selected_chunk_set) = signal::<Option<uuid::Uuid>>(None);
+fn derive_header(
+    doc: &SourceDocumentDto,
+    indexings: &[crate::shared::IndexingDto],
+) -> (String, String, Option<String>, (Status, String)) {
+    let type_label = document_type_label(&doc.document_type);
+    let eyebrow = format!("Documents / {} / {}", type_label, doc.source_ref_key);
+    let title = doc.title.clone();
+    let subtitle = Some(format!(
+        "{type_label} · v{} · {}",
+        doc.latest_version,
+        short_hash(&doc.latest_content_hash),
+    ));
+    let status = derive_status(indexings);
+    (eyebrow, title, subtitle, status)
+}
 
-    let chunks = Resource::new(
-        move || selected_chunk_set.get(),
-        move |cid| async move {
-            match cid {
-                Some(id) => get_chunks(id).await.map_err(|e| e.to_string()),
-                None => Ok(vec![]),
+fn derive_status(indexings: &[crate::shared::IndexingDto]) -> (Status, String) {
+    if indexings.is_empty() {
+        return (Status::Info, "Registered".to_string());
+    }
+    if indexings.iter().any(|i| i.status.contains("Indexed")) {
+        return (Status::Ok, "Indexed".to_string());
+    }
+    if indexings.iter().any(|i| i.status.contains("Failed")) {
+        return (Status::Fail, "Failed".to_string());
+    }
+    if indexings.iter().any(|i| i.status.contains("Embedding")) {
+        return (Status::Pending, "Embedding".to_string());
+    }
+    if indexings.iter().any(|i| i.status.contains("Chunking")) {
+        return (Status::Pending, "Chunking".to_string());
+    }
+    (Status::Pending, "Pending".to_string())
+}
+
+fn document_type_label(doc_type: &str) -> &'static str {
+    match doc_type {
+        "BlogPost" => "Blog post",
+        _ => "Document",
+    }
+}
+
+#[component]
+fn UnregisteredDocument(source_ref: String) -> impl IntoView {
+    let source_ref_stored = StoredValue::new(source_ref.clone());
+    let (busy, set_busy) = signal(false);
+    let (error, set_error) = signal::<Option<String>>(None);
+
+    let import = move |_| {
+        if busy.get_untracked() {
+            return;
+        }
+        let slug = source_ref_stored.get_value();
+        set_busy.set(true);
+        set_error.set(None);
+        spawn_local(async move {
+            match import_source_document(slug).await {
+                Ok(_) => {
+                    // The detail Resource is keyed on the source_ref signal +
+                    // SourceDocument event invalidator; the import dispatches
+                    // SourceDocument events so the parent will refetch.
+                    set_busy.set(false);
+                }
+                Err(e) => {
+                    set_error.set(Some(format!("{e}")));
+                    set_busy.set(false);
+                }
             }
-        },
-    );
+        });
+    };
 
     view! {
-        <div class="space-y-6 animate-in fade-in duration-200">
-            <div class="flex flex-col gap-4">
-                <div>
-                    <span class="tech-label opacity-40">"DATA_SOURCE"</span>
-                    <h2 class="text-lg font-bold mt-1">"SELECT_INDEXING"</h2>
-                </div>
-
-                <div class="flex gap-2 overflow-x-auto pb-2">
-                    {indexings
-                        .into_iter()
-                        .filter(|ix| ix.chunk_set_id.is_some())
-                        .map(|ix| {
-                            let cid = ix.chunk_set_id.unwrap();
-                            let is_active = move || selected_chunk_set.get() == Some(cid);
-                            let pipeline_short = &ix.pipeline_configuration_id.to_string()[..8];
-                            view! {
-                                <button
-                                    class=move || format!(
-                                        "px-3 py-2 rounded border text-xs font-mono transition-colors whitespace-nowrap {}",
-                                        if is_active() {
-                                            "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-                                        } else {
-                                            "border-[var(--color-border)] hover:border-[var(--color-accent)]/50"
-                                        },
-                                    )
-                                    on:click=move |_| set_selected_chunk_set.set(Some(cid))
-                                >
-                                    {format!("PIPELINE:{} (v{})", pipeline_short, ix.document_version)}
-                                </button>
-                            }
-                        })
-                        .collect_view()}
-                </div>
-            </div>
-
-            <Transition fallback=|| view! { <p class="tech-label animate-pulse">"LOADING_CHUNKS..."</p> }>
-                {move || {
-                    chunks.get().map(|res| match res {
-                        Err(e) => view! {
-                            <div class="card-outer p-4 log-line-error font-mono text-sm">
-                                {format!("SYSTEM_FAULT: {e}")}
-                            </div>
-                        }.into_any(),
-                        Ok(cs) => {
-                            if cs.is_empty() {
-                                view! {
-                                    <div class="card-outer p-12 flex flex-col items-center justify-center border-dashed opacity-30">
-                                        <span class="tech-label">"NO_CHUNKS_LOADED"</span>
-                                        <p class="text-[10px] mt-1">"Select an indexing above to explore its output."</p>
-                                    </div>
-                                }.into_any()
-                            } else {
-                                view! {
-                                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                                        {cs.into_iter()
-                                            .map(|c| view! { <ChunkCard chunk=c /> })
-                                            .collect_view()}
-                                    </div>
-                                }.into_any()
-                            }
-                        }
-                    })
-                }}
-            </Transition>
+        <div>
+            <PageHeader
+                title=source_ref.clone()
+                eyebrow=format!("Documents / {source_ref}")
+                subtitle="This document is available upstream but hasn't been imported yet. Import it to inspect chunks, run experiments, or index it.".to_string()
+            />
+            <Surface>
+                <EmptyState
+                    title="Not imported"
+                    body="Importing fetches the upstream content and registers a versioned SourceDocument. After that you can run evaluations, chunk it with different strategies, and (optionally) index it.".to_string()
+                    action=Box::new(move || view! {
+                        <div class="flex flex-col items-start gap-2">
+                            <button
+                                type="button"
+                                class="btn btn-primary"
+                                disabled=busy
+                                on:click=import
+                            >
+                                {move || if busy.get() { "Importing…" } else { "Import from source" }}
+                            </button>
+                            {move || error.get().map(|e| view! {
+                                <div class="log-line-error text-sm">{e}</div>
+                            })}
+                        </div>
+                    }.into_any())
+                />
+            </Surface>
         </div>
     }
 }

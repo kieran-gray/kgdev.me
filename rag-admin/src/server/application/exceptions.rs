@@ -3,6 +3,7 @@ use thiserror::Error;
 
 use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::configuration::{
+    chunking_configuration::ChunkingConfigurationRepositoryError,
     exceptions::ConfigurationError, pipeline_configuration::PipelineConfigurationRepositoryError,
     ConfigurationRepositoryError,
 };
@@ -48,6 +49,12 @@ impl From<ConfigurationRepositoryError> for AppError {
 
 impl From<PipelineConfigurationRepositoryError> for AppError {
     fn from(value: PipelineConfigurationRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<ChunkingConfigurationRepositoryError> for AppError {
+    fn from(value: ChunkingConfigurationRepositoryError) -> Self {
         AppError::Internal(value.to_string())
     }
 }
@@ -109,6 +116,8 @@ impl From<EvaluationDatasetError> for AppError {
             | EvaluationDatasetError::AlreadyCompleted
             | EvaluationDatasetError::AlreadyFailed
             | EvaluationDatasetError::NoQuestionsAccepted
+            | EvaluationDatasetError::Deleted
+            | EvaluationDatasetError::EmptyLabel
             | EvaluationDatasetError::InvalidCommand(_) => AppError::Validation(value.to_string()),
         }
     }

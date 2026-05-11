@@ -1,43 +1,57 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 
+use crate::components::event_bus::use_invalidator;
+use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 use crate::server_functions::source_document::list_documents_with_status;
 use crate::shared::DocumentListItemDto;
 
 #[component]
 pub fn PostsListPage() -> impl IntoView {
-    let docs = Resource::new(|| (), |_| async move { list_documents_with_status().await });
+    // Refetch whenever a source-document or indexing event arrives, and once on
+    // every websocket reconnect.
+    let invalidator = use_invalidator(|e| e.from_any(&["SourceDocument", "Indexing"]));
+    let docs = Resource::new(
+        move || invalidator.get(),
+        |_| async move { list_documents_with_status().await },
+    );
 
     view! {
-        <div class="space-y-8">
-            <div class="px-6 flex flex-col gap-1">
-                <span class="tech-label opacity-40">"SYSTEM_VIEW / SOURCE_DOCUMENTS"</span>
-                <h1 class="text-3xl font-bold tracking-tight">"DOCUMENT_INDEX"</h1>
-            </div>
+        <div>
+            <PageHeader
+                title="Documents"
+                subtitle="Source documents discovered by the registered adapters.".to_string()
+                actions=Box::new(|| view! {
+                    // Import is a real action; ingest/refresh modals land in a
+                    // follow-up. For now this is a disabled affordance so the
+                    // header layout reflects the final shape.
+                    <button class="btn btn-primary" disabled=true title="Coming soon">
+                        "+ Import"
+                    </button>
+                }.into_any())
+            />
 
-            <Suspense fallback=|| {
-                view! {
-                    <div class="px-6">
-                        <p class="tech-label animate-pulse">"LOADING_DATA..."</p>
-                    </div>
-                }
+            <Suspense fallback=|| view! {
+                <Surface flush=true>
+                    <div class="p-6 muted text-sm">"Loading documents…"</div>
+                </Surface>
             }>
-                {move || {
-                    docs.get()
-                        .map(|res| match res {
-                            Ok(list) => view! { <DocumentsTable docs=list /> }.into_any(),
-                            Err(e) => {
-                                view! {
-                                    <div class="px-6">
-                                        <div class="card-outer p-4 log-line-error font-mono text-sm">
-                                            {format!("ERROR_LOG: {e}")}
-                                        </div>
-                                    </div>
-                                }
-                                    .into_any()
-                            }
-                        })
-                }}
+                {move || docs.get().map(|res| match res {
+                    Ok(list) if list.is_empty() => view! {
+                        <Surface>
+                            <EmptyState
+                                title="No documents yet"
+                                body="Import sources from the upstream blog or another adapter to begin.".to_string()
+                            />
+                        </Surface>
+                    }.into_any(),
+                    Ok(list) => view! { <DocumentsTable docs=list /> }.into_any(),
+                    Err(e) => view! {
+                        <Surface>
+                            <div class="log-line-error text-sm">{format!("Failed to load: {e}")}</div>
+                        </Surface>
+                    }.into_any(),
+                })}
             </Suspense>
         </div>
     }
@@ -45,115 +59,120 @@ pub fn PostsListPage() -> impl IntoView {
 
 #[component]
 fn DocumentsTable(docs: Vec<DocumentListItemDto>) -> impl IntoView {
-    if docs.is_empty() {
-        return view! {
-            <div class="px-6">
-                <div class="card-outer p-8 text-center tech-label opacity-40">
-                    "NO_RECORDS_FOUND"
-                </div>
-            </div>
-        }
-        .into_any();
-    }
-
     let total = docs.len();
+    let indexed = docs
+        .iter()
+        .filter(|d| d.indexings.iter().any(|i| i.status.contains("Indexed")))
+        .count();
+    let failed = docs
+        .iter()
+        .filter(|d| d.indexings.iter().any(|i| i.status.contains("Failed")))
+        .count();
+    let in_progress = docs
+        .iter()
+        .filter(|d| {
+            d.document_id.is_some()
+                && !d.indexings.is_empty()
+                && d.indexings
+                    .iter()
+                    .all(|i| !i.status.contains("Indexed") && !i.status.contains("Failed"))
+        })
+        .count();
+
     view! {
-        <div class="border-y border-[var(--color-border)] bg-black/10 overflow-hidden">
-            <table class="w-full text-sm border-collapse">
+        <Surface flush=true>
+            <table class="data-table">
                 <thead>
-                    <tr class="bg-[var(--color-card-inner)]/50">
-                        <th class="text-left px-6 py-3 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "REF"
-                        </th>
-                        <th class="text-left px-4 py-3 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "TITLE"
-                        </th>
-                        <th class="text-left px-4 py-3 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "TYPE"
-                        </th>
-                        <th class="text-left px-4 py-3 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "STATUS"
-                        </th>
-                        <th class="text-right px-4 py-3 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "VERSION"
-                        </th>
+                    <tr>
+                        <th class="w-[36%]">"Title"</th>
+                        <th>"Type"</th>
+                        <th>"Status"</th>
+                        <th class="text-right">"Version"</th>
+                        <th class="w-8 text-right"></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-[var(--color-border)]">
-                    {docs
-                        .into_iter()
-                        .map(|doc| {
-                            let href = format!(
-                                "/documents/{}/{}",
-                                doc.document_type.to_lowercase(),
-                                doc.source_ref_key,
-                            );
-                            let (status_label, status_cls) = ingest_status(&doc);
-                            let version_label = doc
-                                .latest_version
-                                .map(|v| format!("v{v}"))
-                                .unwrap_or_else(|| "—".into());
-                            let type_label = document_type_label(&doc.document_type);
-                            view! {
-                                <tr class="hover:bg-[var(--color-accent)]/5 transition-colors group">
-                                    <td class="px-6 py-3 font-mono text-xs">
-                                        <A
-                                            href=href
-                                            attr:class="text-[var(--color-accent)] hover:underline"
-                                        >
-                                            {format!("./{}", doc.source_ref_key)}
-                                        </A>
-                                    </td>
-                                    <td class="px-4 py-3 font-medium text-sm">{doc.title}</td>
-                                    <td class="px-4 py-3">
-                                        <span class="text-[10px] font-bold tracking-widest opacity-50">
-                                            {type_label}
-                                        </span>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <span class=format!(
-                                            "text-[10px] font-bold tracking-widest {}",
-                                            status_cls,
-                                        )>{status_label}</span>
-                                    </td>
-                                    <td class="px-4 py-3 font-mono text-xs text-right opacity-40">
-                                        {version_label}
-                                    </td>
-                                </tr>
-                            }
-                        })
-                        .collect_view()}
+                <tbody>
+                    {docs.into_iter().map(|doc| view! { <DocumentRow doc /> }).collect_view()}
                 </tbody>
             </table>
-            <div class="px-6 py-2 bg-black/40 flex justify-between items-center border-t border-[var(--color-border)]">
-                <span class="tech-label opacity-40 text-[9px]">
-                    {format!("TOTAL_RECORDS: {:03}", total)}
-                </span>
-                <span class="tech-label opacity-40 text-[9px]">"SYSTEM_STABLE // PAGE_01"</span>
+            <div class="px-4 py-2.5 border-t border-[var(--color-border)] flex items-center gap-4 text-xs muted">
+                <span>{format!("{total} documents")}</span>
+                <span class="faint">"·"</span>
+                <span>{format!("{indexed} indexed")}</span>
+                {(in_progress > 0).then(|| view! {
+                    <>
+                        <span class="faint">"·"</span>
+                        <span style="color: var(--status-pending)">
+                            {format!("{in_progress} in progress")}
+                        </span>
+                    </>
+                })}
+                {(failed > 0).then(|| view! {
+                    <>
+                        <span class="faint">"·"</span>
+                        <span style="color: var(--status-fail)">
+                            {format!("{failed} failed")}
+                        </span>
+                    </>
+                })}
             </div>
-        </div>
+        </Surface>
     }
-        .into_any()
 }
 
-fn ingest_status(doc: &DocumentListItemDto) -> (&'static str, &'static str) {
+#[component]
+fn DocumentRow(doc: DocumentListItemDto) -> impl IntoView {
+    let href = format!(
+        "/documents/{}/{}",
+        doc.document_type.to_lowercase(),
+        doc.source_ref_key,
+    );
+    let (status_label, status_kind) = ingest_status(&doc);
+    let version_label = doc
+        .latest_version
+        .map(|v| format!("v{v}"))
+        .unwrap_or_else(|| "—".into());
+    let type_label = document_type_label(&doc.document_type).to_string();
+    let title = doc.title.clone();
+    let source_ref = doc.source_ref_key.clone();
+
+    view! {
+        <tr>
+            <td>
+                <A href=href.clone() attr:class="block">
+                    <div class="text-text font-medium">{title}</div>
+                    <div class="faint text-xs mt-0.5">{format!("./{source_ref}")}</div>
+                </A>
+            </td>
+            <td><span class="pill pill-neutral">{type_label}</span></td>
+            <td><StatusPill label=status_label kind=status_kind /></td>
+            <td class="text-right text-xs muted">{version_label}</td>
+            <td class="text-right faint">"›"</td>
+        </tr>
+    }
+}
+
+fn ingest_status(doc: &DocumentListItemDto) -> (String, Status) {
     if doc.document_id.is_none() {
-        ("NEVER_INGESTED", "text-amber-500/80")
+        ("Not ingested".to_string(), Status::Stale)
     } else if doc.indexings.is_empty() {
-        // Has a document record but no indexings
-        ("REGISTERED", "text-blue-400/80")
+        ("Registered".to_string(), Status::Info)
     } else if doc.indexings.iter().any(|i| i.status.contains("Indexed")) {
-        ("INDEXED", "text-emerald-500/80")
+        ("Indexed".to_string(), Status::Ok)
     } else if doc.indexings.iter().any(|i| i.status.contains("Failed")) {
-        ("FAILED", "text-red-500/80")
+        ("Failed".to_string(), Status::Fail)
+    } else if doc.indexings.iter().any(|i| i.status.contains("Embedding")) {
+        ("Embedding".to_string(), Status::Pending)
+    } else if doc.indexings.iter().any(|i| i.status.contains("Chunking")) {
+        ("Chunking".to_string(), Status::Pending)
     } else {
-        ("IN_PROGRESS", "text-amber-500/80")
+        ("Pending".to_string(), Status::Pending)
     }
 }
 
 fn document_type_label(doc_type: &str) -> &'static str {
     match doc_type {
-        "BlogPost" => "BLOG_POST",
-        _ => "DOCUMENT",
+        "BlogPost" => "Blog post",
+        _ => "Document",
     }
 }

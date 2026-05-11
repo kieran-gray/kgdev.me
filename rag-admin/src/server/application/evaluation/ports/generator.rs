@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use uuid::Uuid;
 
 use crate::server::application::AppError;
 
@@ -18,7 +19,7 @@ pub struct GeneratedEvaluationQuestion {
 pub trait EvaluationGenerator: Send + Sync {
     async fn generate_question(
         &self,
-        model: &str,
+        generation_model_id: Uuid,
         prompt: EvaluationPrompt,
     ) -> Result<GeneratedEvaluationQuestion, AppError>;
 }

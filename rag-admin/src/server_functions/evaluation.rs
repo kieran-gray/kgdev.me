@@ -62,8 +62,17 @@ pub async fn get_dataset(dataset_id: Uuid) -> Result<Option<EvaluationDatasetDto
         Ok(Some(EvaluationDatasetDto {
             dataset_id: d.dataset_id,
             document_id: d.document_id,
+            document_version: d.document_version,
+            content_hash: d.content_hash,
             label: d.label,
             status: d.status.as_str().to_string(),
+            target_question_count: d.target_question_count,
+            question_count: d.question_count,
+            rejection_count: d.rejection_count,
+            generation_model_id: d.generation_model_id,
+            generation_model: d.generation_model,
+            embedding_model_id: d.embedding_model_id,
+            failure_reason: d.failure_reason,
             questions: questions.into_iter().map(|q| q.into()).collect(),
             created_at: d.created_at.to_string(),
         }))
@@ -79,6 +88,7 @@ pub async fn get_dataset(dataset_id: Uuid) -> Result<Option<EvaluationDatasetDto
 )]
 pub async fn start_generate_synthetic_dataset(
     document_id: Uuid,
+    pipeline_configuration_id: Uuid,
     label: String,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
     use crate::server::application::ports::{Clock, IdGenerator};
@@ -93,25 +103,18 @@ pub async fn start_generate_synthetic_dataset(
     let state: Arc<AppState> =
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
 
-    let settings = state.settings.read().await.clone();
-    let eval_settings = settings.evaluation;
-    let model_name = settings.embedding_model.id.clone();
+    let eval_settings = state
+        .evaluation_defaults_store
+        .load()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .evaluation;
 
-    let configuration = state
-        .configuration_query_service
-        .get()
+    let pipeline = state
+        .pipeline_resolver
+        .resolve(pipeline_configuration_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    let embedding_model = configuration
-        .embedding_models
-        .iter()
-        .find(|m| m.model == model_name)
-        .ok_or_else(|| {
-            ServerFnError::new(format!(
-                "embedding model '{model_name}' is not registered in the configuration"
-            ))
-        })?;
 
     let document = state
         .source_document_query_service
@@ -135,11 +138,11 @@ pub async fn start_generate_synthetic_dataset(
                 content_hash: document.latest_content_hash.clone(),
                 label,
                 target_question_count: eval_settings.question_count,
-                generation_model: eval_settings.generation_model.clone(),
-                generation_backend: eval_settings.generation_backend.as_str().to_string(),
+                generation_model_id: pipeline.generation_model.generation_model_id,
+                generation_model: pipeline.generation_model.model.clone(),
                 excerpt_similarity_threshold_milli: eval_settings.excerpt_similarity_threshold_milli,
                 duplicate_similarity_threshold_milli: eval_settings.duplicate_similarity_threshold_milli,
-                embedding_model_id: embedding_model.embedding_model_id,
+                embedding_model_id: pipeline.embedding_model.embedding_model_id,
                 occurred_at,
             }),
         )
@@ -150,6 +153,61 @@ pub async fn start_generate_synthetic_dataset(
         job_id: dataset_id.to_string(),
         stream_url: format!("/api/events/ws?stream_id={dataset_id}"),
     })
+}
+
+#[server(name = RenameDataset, prefix = "/api", endpoint = "rename_dataset")]
+pub async fn rename_dataset(dataset_id: Uuid, label: String) -> Result<(), ServerFnError> {
+    use crate::server::application::ports::Clock;
+    use crate::server::domain::evaluation::dataset::commands::{
+        EvaluationDatasetCommand, RenameDataset,
+    };
+    use crate::server::infrastructure::time::SystemClock;
+    use crate::server::setup::AppState;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .evaluation_dataset_command_processor
+        .handle(
+            dataset_id,
+            EvaluationDatasetCommand::RenameDataset(RenameDataset {
+                dataset_id,
+                label,
+                occurred_at: SystemClock.now(),
+            }),
+        )
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    Ok(())
+}
+
+#[server(name = DeleteDataset, prefix = "/api", endpoint = "delete_dataset")]
+pub async fn delete_dataset(dataset_id: Uuid) -> Result<(), ServerFnError> {
+    use crate::server::application::ports::Clock;
+    use crate::server::domain::evaluation::dataset::commands::{
+        DeleteDataset, EvaluationDatasetCommand,
+    };
+    use crate::server::infrastructure::time::SystemClock;
+    use crate::server::setup::AppState;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .evaluation_dataset_command_processor
+        .handle(
+            dataset_id,
+            EvaluationDatasetCommand::DeleteDataset(DeleteDataset {
+                dataset_id,
+                occurred_at: SystemClock.now(),
+            }),
+        )
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    Ok(())
 }
 
 #[server(
@@ -186,7 +244,7 @@ pub async fn start_run_evaluation(
         request.pipeline_configuration_id,
         &request.variants,
         &request.options,
-        None,
+        request.autotune.as_ref(),
     );
     let occurred_at = SystemClock.now();
 
@@ -202,7 +260,7 @@ pub async fn start_run_evaluation(
                 document_version: dataset.document_version,
                 variants: request.variants,
                 options: request.options,
-                autotune_request: None,
+                autotune_request: request.autotune,
                 scoring_policy,
                 occurred_at,
             }),

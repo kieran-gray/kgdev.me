@@ -1,6 +1,8 @@
 use leptos::prelude::*;
 
-use crate::shared::{ConfigurationCommandDto, ConfigurationDto, PipelineConfigurationDto};
+use crate::shared::{
+    ChunkingConfigurationDto, ConfigurationCommandDto, ConfigurationDto, PipelineConfigurationDto,
+};
 
 #[server(
     name = GetConfiguration,
@@ -37,6 +39,26 @@ pub async fn get_pipeline_configurations() -> Result<Vec<PipelineConfigurationDt
 
     state
         .pipeline_configuration_query_service
+        .list()
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = GetChunkingConfigurations,
+    prefix = "/api",
+    endpoint = "get_chunking_configurations"
+)]
+pub async fn get_chunking_configurations() -> Result<Vec<ChunkingConfigurationDto>, ServerFnError> {
+    use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .chunking_configuration_query_service
         .list()
         .await
         .map_err(map_app_error)

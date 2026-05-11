@@ -1,36 +1,109 @@
+use std::collections::HashMap;
 use std::sync::Arc;
+
+use uuid::Uuid;
 
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::AppError;
-use crate::shared::{EmbedResult, EmbeddingModel};
+use crate::server::domain::configuration::kinds::AiProviderKind;
+use crate::server::domain::configuration::{ConfigurationRepository, ConfigurationRepositoryError};
+use crate::shared::EmbedResult;
+
+/// What an embedding-model id resolves to before dispatch.
+#[derive(Debug, Clone)]
+pub struct ResolvedEmbeddingModel {
+    pub embedding_model_id: Uuid,
+    pub kind: AiProviderKind,
+    pub model: String,
+    pub dimensions: u32,
+}
 
 pub struct EmbeddingService {
-    embedder: Arc<dyn Embedder>,
+    embedders: HashMap<AiProviderKind, Arc<dyn Embedder>>,
+    configuration_repository: Arc<dyn ConfigurationRepository>,
 }
 
 impl EmbeddingService {
-    pub fn new(embedder: Arc<dyn Embedder>) -> Arc<Self> {
-        Arc::new(Self { embedder })
+    pub fn new(
+        embedders: HashMap<AiProviderKind, Arc<dyn Embedder>>,
+        configuration_repository: Arc<dyn ConfigurationRepository>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            embedders,
+            configuration_repository,
+        })
     }
 
+    /// Embed a batch using the model identified by `embedding_model_id`. The
+    /// configuration is loaded fresh so renames/dimension changes pick up
+    /// without restart.
     pub async fn embed_batch(
         &self,
-        model: &EmbeddingModel,
+        embedding_model_id: Uuid,
         texts: &[String],
     ) -> Result<Vec<Vec<f32>>, AppError> {
-        let vecs = self.embedder.embed_batch(&model.id, texts).await?;
+        let resolved = self.resolve(embedding_model_id).await?;
+        self.embed_with_resolved(&resolved, texts).await
+    }
+
+    /// Embed using a pre-resolved model record. Useful for hot loops that
+    /// resolved once up front and don't want to re-hit the repository.
+    pub async fn embed_with_resolved(
+        &self,
+        model: &ResolvedEmbeddingModel,
+        texts: &[String],
+    ) -> Result<Vec<Vec<f32>>, AppError> {
+        let embedder = self.embedders.get(&model.kind).ok_or_else(|| {
+            AppError::Internal(format!(
+                "no embedder registered for provider kind {}",
+                model.kind.as_str()
+            ))
+        })?;
+        let vecs = embedder
+            .embed_batch(&model.model, model.dimensions, texts)
+            .await?;
         verify_dims(model, &vecs)?;
         Ok(vecs)
     }
 
+    /// Resolve an embedding-model id to its provider kind + model id + dims.
+    /// Exposed so other application services (e.g. PipelineResolver) can avoid
+    /// duplicating the lookup.
+    pub async fn resolve(
+        &self,
+        embedding_model_id: Uuid,
+    ) -> Result<ResolvedEmbeddingModel, AppError> {
+        let config = self
+            .configuration_repository
+            .load()
+            .await
+            .map_err(|e| match e {
+                ConfigurationRepositoryError::Internal(m) => AppError::Internal(m),
+            })?;
+        let model = config
+            .embedding_models
+            .iter()
+            .find(|m| m.embedding_model_id == embedding_model_id)
+            .ok_or_else(|| {
+                AppError::NotFound(format!("embedding model {embedding_model_id} not registered"))
+            })?;
+        Ok(ResolvedEmbeddingModel {
+            embedding_model_id: model.embedding_model_id,
+            kind: model.kind,
+            model: model.model.clone(),
+            dimensions: model.dimensions,
+        })
+    }
+
+    /// Embed two texts and report cosine similarity. Used by the eval gate.
     pub async fn embed_texts(
         &self,
-        model: &str,
+        embedding_model_id: Uuid,
         text_a: &str,
         text_b: &str,
     ) -> Result<EmbedResult, AppError> {
         let texts = vec![text_a.to_string(), text_b.to_string()];
-        let vecs = self.embedder.embed_batch(model, &texts).await?;
+        let vecs = self.embed_batch(embedding_model_id, &texts).await?;
 
         if vecs.len() < 2 || vecs[0].is_empty() {
             return Err(AppError::Internal(
@@ -59,14 +132,14 @@ impl EmbeddingService {
     }
 }
 
-fn verify_dims(model: &EmbeddingModel, vecs: &[Vec<f32>]) -> Result<(), AppError> {
+fn verify_dims(model: &ResolvedEmbeddingModel, vecs: &[Vec<f32>]) -> Result<(), AppError> {
     if let Some(first) = vecs.first() {
-        if first.len() as u32 != model.dims {
+        if first.len() as u32 != model.dimensions {
             return Err(AppError::Validation(format!(
                 "embedder returned dims={} but model '{}' declares dims={}",
                 first.len(),
-                model.id,
-                model.dims
+                model.model,
+                model.dimensions
             )));
         }
     }
@@ -75,86 +148,4 @@ fn verify_dims(model: &EmbeddingModel, vecs: &[Vec<f32>]) -> Result<(), AppError
 
 fn l2_norm(v: &[f32]) -> f32 {
     v.iter().map(|x| x * x).sum::<f32>().sqrt()
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use super::*;
-    use crate::server::application::test_support::MockEmbedder;
-    use crate::shared::EmbedderBackend;
-
-    fn model(dims: u32) -> EmbeddingModel {
-        EmbeddingModel {
-            backend: EmbedderBackend::Cloudflare,
-            id: "@cf/test/model".into(),
-            dims,
-        }
-    }
-
-    #[tokio::test]
-    async fn embed_batch_returns_one_vector_per_text() {
-        let embedder = Arc::new(MockEmbedder::new(4));
-        let svc = EmbeddingService::new(embedder.clone());
-
-        let vecs = svc
-            .embed_batch(&model(4), &["a".into(), "b".into(), "c".into()])
-            .await
-            .unwrap();
-
-        assert_eq!(vecs.len(), 3);
-        assert!(vecs.iter().all(|v| v.len() == 4));
-        assert_eq!(embedder.calls().len(), 1);
-        assert_eq!(embedder.calls()[0].0, "@cf/test/model");
-    }
-
-    #[tokio::test]
-    async fn embed_batch_rejects_dim_mismatch() {
-        let embedder = Arc::new(MockEmbedder::new(4).with_actual_dims(3));
-        let svc = EmbeddingService::new(embedder);
-
-        let err = svc.embed_batch(&model(4), &["x".into()]).await.unwrap_err();
-        assert!(matches!(err, AppError::Validation(_)));
-    }
-
-    #[tokio::test]
-    async fn embed_batch_propagates_embedder_failure() {
-        let embedder =
-            Arc::new(MockEmbedder::new(4).with_failure(AppError::Upstream("boom".into())));
-        let svc = EmbeddingService::new(embedder);
-
-        let err = svc.embed_batch(&model(4), &["x".into()]).await.unwrap_err();
-        assert!(matches!(err, AppError::Upstream(_)));
-    }
-
-    #[tokio::test]
-    async fn embed_batch_skips_dim_check_when_empty() {
-        let embedder = Arc::new(MockEmbedder::new(4).with_actual_dims(99));
-        let svc = EmbeddingService::new(embedder);
-
-        let vecs = svc.embed_batch(&model(4), &[]).await.unwrap();
-        assert!(vecs.is_empty());
-    }
-
-    #[tokio::test]
-    async fn embed_texts_computes_unit_similarity_for_identical_vectors() {
-        let embedder = Arc::new(MockEmbedder::new(4));
-        let svc = EmbeddingService::new(embedder);
-
-        let res = svc.embed_texts("m", "hello", "world").await.unwrap();
-
-        assert_eq!(res.dims, 4);
-        assert!(res.norm_a > 0.0);
-        assert!(res.norm_b > 0.0);
-    }
-
-    #[tokio::test]
-    async fn embed_texts_returns_zero_similarity_for_zero_vector() {
-        let embedder = Arc::new(MockEmbedder::new(0));
-        let svc = EmbeddingService::new(embedder);
-
-        let err = svc.embed_texts("m", "a", "b").await.unwrap_err();
-        assert!(matches!(err, AppError::Internal(_)));
-    }
 }

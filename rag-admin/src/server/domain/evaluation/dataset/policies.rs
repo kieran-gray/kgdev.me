@@ -28,7 +28,7 @@ fn for_dataset_generation_requested(
             dataset_id: event.dataset_id,
             document_id: event.document_id,
             target_question_count: event.target_question_count,
-            generation_model: event.generation_model.clone(),
+            generation_model_id: event.generation_model_id,
             embedding_model_id: event.embedding_model_id,
             excerpt_similarity_threshold_milli: event.excerpt_similarity_threshold_milli,
             duplicate_similarity_threshold_milli: event.duplicate_similarity_threshold_milli,
@@ -60,6 +60,8 @@ pub fn derive_dataset_effects(
         EvaluationDatasetEvent::QuestionAccepted(_)
         | EvaluationDatasetEvent::QuestionRejected(_)
         | EvaluationDatasetEvent::DatasetGenerationCompleted(_)
-        | EvaluationDatasetEvent::DatasetGenerationFailed(_) => Vec::new(),
+        | EvaluationDatasetEvent::DatasetGenerationFailed(_)
+        | EvaluationDatasetEvent::DatasetRenamed(_)
+        | EvaluationDatasetEvent::DatasetDeleted(_) => Vec::new(),
     }
 }

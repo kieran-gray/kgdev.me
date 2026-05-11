@@ -1,32 +1,11 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub enum ProviderType {
-    Ai,
-    VectorStore,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AddProviderDto {
-    pub name: String,
-    pub provider_type: ProviderType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RemoveAiProviderDto {
-    pub provider_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateAiProviderDto {
-    pub provider_id: Uuid,
-    pub name: String,
-}
+use crate::shared::{AiProviderKindDto, ChunkingConfig, VectorStoreKindDto};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddEmbeddingModelDto {
-    pub provider_id: Uuid,
+    pub kind: AiProviderKindDto,
     pub model: String,
     pub dimensions: u32,
 }
@@ -34,7 +13,7 @@ pub struct AddEmbeddingModelDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateEmbeddingModelDto {
     pub model_id: Uuid,
-    pub provider_id: Uuid,
+    pub kind: AiProviderKindDto,
     pub model: String,
     pub dimensions: u32,
 }
@@ -46,14 +25,14 @@ pub struct RemoveEmbeddingModelDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddGenerationModelDto {
-    pub provider_id: Uuid,
+    pub kind: AiProviderKindDto,
     pub model: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateGenerationModelDto {
     pub model_id: Uuid,
-    pub provider_id: Uuid,
+    pub kind: AiProviderKindDto,
     pub model: String,
 }
 
@@ -63,19 +42,8 @@ pub struct RemoveGenerationModelDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateVectorStoreProviderDto {
-    pub provider_id: Uuid,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RemoveVectorStoreProviderDto {
-    pub provider_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddVectorIndexDto {
-    pub vector_store_provider_id: Uuid,
+    pub kind: VectorStoreKindDto,
     pub name: String,
     pub dimensions: u32,
 }
@@ -83,7 +51,7 @@ pub struct AddVectorIndexDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateVectorIndexDto {
     pub index_id: Uuid,
-    pub vector_store_provider_id: Uuid,
+    pub kind: VectorStoreKindDto,
     pub name: String,
     pub dimensions: u32,
 }
@@ -116,23 +84,39 @@ pub struct DeletePipelineConfigurationDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateChunkingConfigurationDto {
+    pub name: String,
+    pub config: ChunkingConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateChunkingConfigurationDto {
+    pub chunking_configuration_id: Uuid,
+    pub name: String,
+    pub config: ChunkingConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteChunkingConfigurationDto {
+    pub chunking_configuration_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum ConfigurationCommandDto {
-    AddProvider(AddProviderDto),
-    UpdateAiProvider(UpdateAiProviderDto),
-    RemoveAiProvider(RemoveAiProviderDto),
     AddEmbeddingModel(AddEmbeddingModelDto),
     UpdateEmbeddingModel(UpdateEmbeddingModelDto),
     RemoveEmbeddingModel(RemoveEmbeddingModelDto),
     AddGenerationModel(AddGenerationModelDto),
     UpdateGenerationModel(UpdateGenerationModelDto),
     RemoveGenerationModel(RemoveGenerationModelDto),
-    UpdateVectorStoreProvider(UpdateVectorStoreProviderDto),
-    RemoveVectorStoreProvider(RemoveVectorStoreProviderDto),
     AddVectorIndex(AddVectorIndexDto),
     UpdateVectorIndex(UpdateVectorIndexDto),
     RemoveVectorIndex(RemoveVectorIndexDto),
     CreatePipelineConfiguration(CreatePipelineConfigurationDto),
     UpdatePipelineConfiguration(UpdatePipelineConfigurationDto),
     DeletePipelineConfiguration(DeletePipelineConfigurationDto),
+    CreateChunkingConfiguration(CreateChunkingConfigurationDto),
+    UpdateChunkingConfiguration(UpdateChunkingConfigurationDto),
+    DeleteChunkingConfiguration(DeleteChunkingConfigurationDto),
 }

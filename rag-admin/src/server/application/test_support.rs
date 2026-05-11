@@ -40,7 +40,6 @@ pub fn make_blog_post(slug: &str, title: &str, body: &str) -> BlogPost {
         published_at: "2026-01-01T00:00:00Z".into(),
         source_markdown: format!("---\ntitle: {title}\n---\n{body}"),
         markdown_body: body.into(),
-        plain_text: body.into(),
         glossary_terms: Vec::new(),
     }
 }
@@ -154,7 +153,12 @@ impl MockEmbedder {
 
 #[async_trait]
 impl Embedder for MockEmbedder {
-    async fn embed_batch(&self, model: &str, texts: &[String]) -> Result<Vec<Vec<f32>>, AppError> {
+    async fn embed_batch(
+        &self,
+        model: &str,
+        _dimensions: u32,
+        texts: &[String],
+    ) -> Result<Vec<Vec<f32>>, AppError> {
         if let Some(err) = self.failure.lock().unwrap().take() {
             return Err(err);
         }

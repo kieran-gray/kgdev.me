@@ -4,6 +4,9 @@ use tracing::info;
 
 use crate::server::application::configuration::ports::ConfigurationEventStore;
 use crate::server::application::AppError;
+use crate::server::domain::configuration::chunking_configuration::{
+    ChunkingConfigurationProjector, ChunkingConfigurationRepository,
+};
 use crate::server::domain::configuration::pipeline_configuration::{
     PipelineConfigurationProjector, PipelineConfigurationRepository,
 };
@@ -18,6 +21,7 @@ pub struct ConfigurationCommandHandler {
     event_store: Arc<dyn ConfigurationEventStore>,
     configuration_repository: Arc<dyn ConfigurationRepository>,
     pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository>,
+    chunking_configuration_repository: Arc<dyn ChunkingConfigurationRepository>,
 }
 
 impl ConfigurationCommandHandler {
@@ -25,11 +29,13 @@ impl ConfigurationCommandHandler {
         event_store: Arc<dyn ConfigurationEventStore>,
         configuration_repository: Arc<dyn ConfigurationRepository>,
         pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository>,
+        chunking_configuration_repository: Arc<dyn ChunkingConfigurationRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             event_store,
             configuration_repository,
             pipeline_configuration_repository,
+            chunking_configuration_repository,
         })
     }
 
@@ -74,6 +80,10 @@ impl ConfigurationCommandHandler {
             .rebuild(&PipelineConfigurationProjector::from_events(&all_events))
             .await?;
 
+        self.chunking_configuration_repository
+            .rebuild(&ChunkingConfigurationProjector::from_events(&all_events))
+            .await?;
+
         Ok(())
     }
 
@@ -90,10 +100,14 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::server::domain::configuration::ai_provider::commands::AddAiProvider;
-    use crate::server::domain::configuration::events::{
-        AiProviderAdded, ConfigurationCreated, ConfigurationEvent,
+    use crate::server::domain::configuration::chunking_configuration::{
+        ChunkingConfigurationReadModel, ChunkingConfigurationRepositoryError,
     };
+    use crate::server::domain::configuration::embedding_model::commands::AddEmbeddingModel;
+    use crate::server::domain::configuration::events::{
+        ConfigurationCreated, ConfigurationEvent, EmbeddingModelAdded,
+    };
+    use crate::server::domain::configuration::kinds::AiProviderKind;
     use crate::server::domain::configuration::pipeline_configuration::{
         PipelineConfigurationReadModel, PipelineConfigurationRepositoryError,
     };
@@ -194,17 +208,62 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct MockChunkingConfigurationRepository {
+        saved: Mutex<Vec<ChunkingConfigurationReadModel>>,
+        deleted: Mutex<Vec<Uuid>>,
+    }
+
+    #[async_trait]
+    impl ChunkingConfigurationRepository for MockChunkingConfigurationRepository {
+        async fn load_all(
+            &self,
+        ) -> Result<Vec<ChunkingConfigurationReadModel>, ChunkingConfigurationRepositoryError>
+        {
+            Ok(self.saved.lock().unwrap().clone())
+        }
+
+        async fn save(
+            &self,
+            read_model: ChunkingConfigurationReadModel,
+        ) -> Result<(), ChunkingConfigurationRepositoryError> {
+            self.saved.lock().unwrap().push(read_model);
+            Ok(())
+        }
+
+        async fn delete(&self, id: Uuid) -> Result<(), ChunkingConfigurationRepositoryError> {
+            self.deleted.lock().unwrap().push(id);
+            Ok(())
+        }
+
+        async fn rebuild(
+            &self,
+            configurations: &[ChunkingConfigurationReadModel],
+        ) -> Result<(), ChunkingConfigurationRepositoryError> {
+            let mut guard = self.saved.lock().unwrap();
+            *guard = configurations.to_vec();
+            Ok(())
+        }
+    }
+
     #[tokio::test]
     async fn first_command_creates_and_persists_configuration_stream() {
         let store = Arc::new(MockConfigurationEventStore::default());
         let config_repo = Arc::new(MockConfigurationRepository::default());
         let pc_repo = Arc::new(MockPipelineConfigurationRepository::default());
-        let handler =
-            ConfigurationCommandHandler::new(store.clone(), config_repo.clone(), pc_repo.clone());
+        let cc_repo = Arc::new(MockChunkingConfigurationRepository::default());
+        let handler = ConfigurationCommandHandler::new(
+            store.clone(),
+            config_repo.clone(),
+            pc_repo.clone(),
+            cc_repo.clone(),
+        );
 
         handler
-            .handle(ConfigurationCommand::AddAiProvider(AddAiProvider {
-                name: "OpenAI".into(),
+            .handle(ConfigurationCommand::AddEmbeddingModel(AddEmbeddingModel {
+                kind: AiProviderKind::Cloudflare,
+                model: "@cf/baai/bge-base-en-v1.5".into(),
+                dimensions: 768,
             }))
             .await
             .unwrap();
@@ -220,38 +279,47 @@ mod tests {
         ));
         assert!(matches!(
             &append_calls[0].2[1],
-            ConfigurationEvent::AiProviderAdded(AiProviderAdded { .. })
+            ConfigurationEvent::EmbeddingModelAdded(EmbeddingModelAdded { .. })
         ));
 
         let saved = config_repo.saved.lock().unwrap();
         assert_eq!(saved.len(), 1);
-        assert_eq!(saved[0].ai_providers.len(), 1);
-        assert_eq!(saved[0].ai_providers[0].name, "OpenAI");
+        assert_eq!(saved[0].embedding_models.len(), 1);
+        assert_eq!(saved[0].embedding_models[0].model, "@cf/baai/bge-base-en-v1.5");
     }
 
     #[tokio::test]
     async fn existing_stream_uses_loaded_version_for_append() {
-        let provider_id = Uuid::new_v4();
+        let model_id = Uuid::new_v4();
         let store = Arc::new(MockConfigurationEventStore {
             events: Mutex::new(vec![
                 ConfigurationEvent::ConfigurationCreated(ConfigurationCreated {
                     configuration_id: Configuration::singleton_id(),
                 }),
-                ConfigurationEvent::AiProviderAdded(AiProviderAdded {
-                    provider_id,
-                    name: "OpenAI".into(),
+                ConfigurationEvent::EmbeddingModelAdded(EmbeddingModelAdded {
+                    model_id,
+                    kind: AiProviderKind::Cloudflare,
+                    model: "@cf/baai/bge-base-en-v1.5".into(),
+                    dimensions: 768,
                 }),
             ]),
             append_calls: Mutex::new(Vec::new()),
         });
         let config_repo = Arc::new(MockConfigurationRepository::default());
         let pc_repo = Arc::new(MockPipelineConfigurationRepository::default());
-        let handler =
-            ConfigurationCommandHandler::new(store.clone(), config_repo.clone(), pc_repo.clone());
+        let cc_repo = Arc::new(MockChunkingConfigurationRepository::default());
+        let handler = ConfigurationCommandHandler::new(
+            store.clone(),
+            config_repo.clone(),
+            pc_repo.clone(),
+            cc_repo.clone(),
+        );
 
         handler
-            .handle(ConfigurationCommand::AddAiProvider(AddAiProvider {
-                name: "Anthropic".into(),
+            .handle(ConfigurationCommand::AddEmbeddingModel(AddEmbeddingModel {
+                kind: AiProviderKind::Ollama,
+                model: "qwen3-embedding:0.6b".into(),
+                dimensions: 1024,
             }))
             .await
             .unwrap();
@@ -263,6 +331,6 @@ mod tests {
 
         let saved = config_repo.saved.lock().unwrap();
         assert_eq!(saved.len(), 1);
-        assert_eq!(saved[0].ai_providers.len(), 2);
+        assert_eq!(saved[0].embedding_models.len(), 2);
     }
 }

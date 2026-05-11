@@ -95,10 +95,6 @@ impl Post {
         &self.blog_post.markdown_body
     }
 
-    pub fn plain_text(&self) -> &str {
-        &self.blog_post.plain_text
-    }
-
     pub fn glossary_terms(&self) -> &[GlossaryTerm] {
         &self.blog_post.glossary_terms
     }
@@ -144,7 +140,6 @@ mod tests {
             published_at: "2026-01-01".into(),
             source_markdown: source.into(),
             markdown_body: source.into(),
-            plain_text: source.into(),
             glossary_terms: glossary,
         }
     }

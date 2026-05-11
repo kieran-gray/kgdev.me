@@ -1,66 +1,19 @@
+//! Legacy settings DTO. After the configuration aggregate rewrite this holds
+//! only **evaluation defaults** — embedding model, vector index, and default
+//! chunking now live in the `Configuration` aggregate registry and are looked
+//! up by id at runtime.
+//!
+//! The shape is preserved (rather than renamed) to keep the
+//! `/api/load_settings` and `/api/save_settings` server functions stable for
+//! the existing legacy settings page; the UI overhaul will replace this
+//! surface with a dedicated evaluation-defaults page.
+
 use serde::{Deserialize, Serialize};
 
-use super::chunking::ChunkingConfig;
-use super::embedding::EmbeddingModel;
 use super::evaluation::EvaluationSettings;
-use super::vector::VectorIndexConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct SettingsDto {
     #[serde(default)]
-    pub vector_index: VectorIndexConfig,
-    #[serde(default)]
-    pub embedding_model: EmbeddingModel,
-    #[serde(default)]
-    pub default_chunking: ChunkingConfig,
-    #[serde(default)]
     pub evaluation: EvaluationSettings,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn deserializes_numeric_strings_from_server_function_payloads() {
-        let parsed: SettingsDto = serde_json::from_value(json!({
-            "vector_index": {
-                "provider": "cloudflare",
-                "name": "blog-chunks",
-                "dimensions": "1024"
-            },
-            "embedding_model": {
-                "backend": "ollama",
-                "id": "qwen3-embedding:0.6b",
-                "dims": "1024"
-            },
-            "default_chunking": {
-                "section": {
-                    "max_section_tokens": "480"
-                }
-            },
-            "evaluation": {
-                "generation_backend": "ollama",
-                "generation_model": "granite4.1:8b",
-                "question_count": "8",
-                "excerpt_similarity_threshold_milli": "360",
-                "duplicate_similarity_threshold_milli": "700",
-                "top_k": "5",
-                "min_score_milli": "0",
-                "include_glossary": true
-            }
-        }))
-        .unwrap();
-
-        assert_eq!(parsed.vector_index.dimensions(), 1024);
-        assert_eq!(parsed.embedding_model.dims, 1024);
-        assert_eq!(
-            parsed
-                .default_chunking
-                .param_value(crate::shared::ChunkParamKey::MaxSectionTokens),
-            480
-        );
-        assert_eq!(parsed.evaluation.question_count, 8);
-    }
 }

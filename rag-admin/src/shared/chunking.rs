@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
@@ -130,7 +131,7 @@ impl ChunkStrategy {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ChunkingConfig {
     Bert(BertChunkingConfig),
@@ -146,7 +147,7 @@ impl Default for ChunkingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BertChunkingConfig {
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub target_tokens: u32,
@@ -166,7 +167,7 @@ impl Default for BertChunkingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SectionChunkingConfig {
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub max_section_tokens: u32,
@@ -180,13 +181,13 @@ impl Default for SectionChunkingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LlmChunkingConfig {
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub target_tokens: u32,
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub micro_chunk_tokens: u32,
-    pub generation_model: String,
+    pub generation_model_id: Uuid,
 }
 
 impl Default for LlmChunkingConfig {
@@ -194,7 +195,7 @@ impl Default for LlmChunkingConfig {
         Self {
             target_tokens: 384,
             micro_chunk_tokens: 96,
-            generation_model: "ministral-3:14b".to_string(),
+            generation_model_id: Uuid::nil(),
         }
     }
 }
@@ -288,46 +289,6 @@ impl ChunkingConfig {
         }
     }
 
-    pub fn sweep_configs(current: &Self) -> Vec<Self> {
-        let mut configs = vec![current.clone()];
-
-        for max_section_tokens in [256, 384, 480, 512] {
-            push_unique_config(
-                &mut configs,
-                ChunkingConfig::Section(SectionChunkingConfig { max_section_tokens }),
-            );
-        }
-
-        for (target_tokens, overlap_tokens) in [(256, 0), (320, 48), (384, 64), (448, 64)] {
-            push_unique_config(
-                &mut configs,
-                ChunkingConfig::Bert(BertChunkingConfig {
-                    target_tokens,
-                    overlap_tokens,
-                    min_tokens: 96,
-                }),
-            );
-        }
-
-        for micro_chunk_tokens in [64, 96, 128] {
-            push_unique_config(
-                &mut configs,
-                ChunkingConfig::Llm(LlmChunkingConfig {
-                    target_tokens: 500,
-                    micro_chunk_tokens,
-                    generation_model: "ministral-3:14b".to_string(),
-                }),
-            );
-        }
-
-        configs
-    }
-}
-
-fn push_unique_config(configs: &mut Vec<ChunkingConfig>, config: ChunkingConfig) {
-    if configs.iter().all(|existing| *existing != config) {
-        configs.push(config);
-    }
 }
 
 #[cfg(test)]
@@ -356,25 +317,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn sweep_configs_are_unique_and_start_with_current() {
-        let current = ChunkingConfig::Llm(LlmChunkingConfig {
-            target_tokens: 500,
-            micro_chunk_tokens: 96,
-            generation_model: "ministral-3:14b".to_string(),
-        });
-        let configs = ChunkingConfig::sweep_configs(&current);
-
-        assert_eq!(configs.first(), Some(&current));
-        for (idx, config) in configs.iter().enumerate() {
-            assert_eq!(
-                configs
-                    .iter()
-                    .filter(|candidate| *candidate == config)
-                    .count(),
-                1,
-                "duplicate sweep config at index {idx}"
-            );
-        }
-    }
 }

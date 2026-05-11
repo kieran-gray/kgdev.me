@@ -34,12 +34,12 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             r#"
             SELECT
                 dataset_id, document_id, document_version, content_hash, label,
-                target_question_count, generation_model, generation_backend,
+                target_question_count, generation_model_id, generation_model,
                 excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
                 embedding_model_id, status, question_count, rejection_count,
                 failure_reason, created_at
             FROM evaluation_datasets
-            WHERE dataset_id = $1
+            WHERE dataset_id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(dataset_id)
@@ -58,12 +58,12 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             r#"
             SELECT
                 dataset_id, document_id, document_version, content_hash, label,
-                target_question_count, generation_model, generation_backend,
+                target_question_count, generation_model_id, generation_model,
                 excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
                 embedding_model_id, status, question_count, rejection_count,
                 failure_reason, created_at
             FROM evaluation_datasets
-            WHERE document_id = $1
+            WHERE document_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -125,7 +125,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             r#"
             INSERT INTO evaluation_datasets (
                 dataset_id, document_id, document_version, content_hash, label,
-                target_question_count, generation_model, generation_backend,
+                target_question_count, generation_model_id, generation_model,
                 excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
                 embedding_model_id, status, question_count, rejection_count,
                 failure_reason, created_at, updated_at
@@ -140,8 +140,8 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         .bind(&summary.content_hash)
         .bind(&summary.label)
         .bind(summary.target_question_count as i32)
+        .bind(summary.generation_model_id)
         .bind(&summary.generation_model)
-        .bind(&summary.generation_backend)
         .bind(summary.excerpt_similarity_threshold_milli as i32)
         .bind(summary.duplicate_similarity_threshold_milli as i32)
         .bind(summary.embedding_model_id)
@@ -166,17 +166,14 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             EvaluationDatasetRepositoryError::Internal(format!("serialize question embedding: {e}"))
         })?;
 
-        let inserted: (i64,) = sqlx::query_as(
+        let inserted: (bool,) = sqlx::query_as(
             r#"
-            WITH inserted AS (
-                INSERT INTO evaluation_questions (dataset_id, sequence, question, embedding)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (dataset_id, sequence) DO UPDATE SET
-                    question = EXCLUDED.question,
-                    embedding = EXCLUDED.embedding
-                RETURNING (xmax = 0) AS is_new
-            )
-            SELECT CASE WHEN is_new THEN 1 ELSE 0 END FROM inserted
+            INSERT INTO evaluation_questions (dataset_id, sequence, question, embedding)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (dataset_id, sequence) DO UPDATE SET
+                question = EXCLUDED.question,
+                embedding = EXCLUDED.embedding
+            RETURNING (xmax = 0) AS is_new
             "#,
         )
         .bind(dataset_id)
@@ -221,7 +218,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             })?;
         }
 
-        if inserted.0 == 1 {
+        if inserted.0 {
             sqlx::query(
                 "UPDATE evaluation_datasets SET question_count = question_count + 1, updated_at = NOW() WHERE dataset_id = $1",
             )
@@ -283,6 +280,36 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("mark_failed: {e}")))?;
         Ok(())
     }
+
+    async fn rename(
+        &self,
+        dataset_id: Uuid,
+        label: String,
+    ) -> Result<(), EvaluationDatasetRepositoryError> {
+        sqlx::query(
+            "UPDATE evaluation_datasets SET label = $2, updated_at = NOW() WHERE dataset_id = $1",
+        )
+        .bind(dataset_id)
+        .bind(label)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("rename: {e}")))?;
+        Ok(())
+    }
+
+    async fn mark_deleted(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<(), EvaluationDatasetRepositoryError> {
+        sqlx::query(
+            "UPDATE evaluation_datasets SET deleted_at = NOW(), updated_at = NOW() WHERE dataset_id = $1 AND deleted_at IS NULL",
+        )
+        .bind(dataset_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("mark_deleted: {e}")))?;
+        Ok(())
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -293,8 +320,8 @@ struct DatasetRow {
     content_hash: String,
     label: String,
     target_question_count: i32,
+    generation_model_id: Uuid,
     generation_model: String,
-    generation_backend: String,
     excerpt_similarity_threshold_milli: i32,
     duplicate_similarity_threshold_milli: i32,
     embedding_model_id: Uuid,
@@ -314,8 +341,8 @@ impl From<DatasetRow> for EvaluationDatasetReadModel {
             content_hash: row.content_hash,
             label: row.label,
             target_question_count: row.target_question_count as u32,
+            generation_model_id: row.generation_model_id,
             generation_model: row.generation_model,
-            generation_backend: row.generation_backend,
             excerpt_similarity_threshold_milli: row.excerpt_similarity_threshold_milli as u32,
             duplicate_similarity_threshold_milli: row.duplicate_similarity_threshold_milli as u32,
             embedding_model_id: row.embedding_model_id,

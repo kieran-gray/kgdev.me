@@ -7,6 +7,7 @@ pub mod exceptions;
 pub mod indexing;
 pub mod ingest;
 pub mod job;
+pub mod llm;
 pub mod markdown;
 pub mod ports;
 pub mod source_document;

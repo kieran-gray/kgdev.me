@@ -1,54 +1,75 @@
+//! Evaluation tab — the primary happy-path of the application.
+//!
+//! Layout:
+//!   1. Dataset selector (compact list + generate form)
+//!   2. Launcher (variants × options × run-mode, see `eval_launcher.rs`)
+//!   3. Runs leaderboard
+//!
+//! Eventful: datasets and runs refetch live as `EvaluationDataset` /
+//! `EvaluationRun` events arrive on the bus.
+
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_router::components::A;
 use uuid::Uuid;
 
+use crate::components::event_bus::use_invalidator;
 use crate::components::log_panel::LogPanel;
+use crate::components::primitives::{EmptyState, Status, StatusPill, Surface};
 use crate::server_functions::evaluation::{
-    get_datasets_for_document, get_run, get_runs_for_document, start_generate_synthetic_dataset,
+    get_datasets_for_document, get_runs_for_document, start_generate_synthetic_dataset,
     start_run_evaluation,
 };
 use crate::shared::{
-    ChunkingConfig, ChunkingVariant, EvaluationDatasetSummaryDto, EvaluationRunOptions,
-    EvaluationRunSummaryDto, EvaluationVariantResult, LogEvent, PipelineConfigurationDto,
-    RunEvaluationRequestDto, SectionChunkingConfig,
+    ChunkingConfigurationDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto, LogEvent,
+    LogLevel, PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto,
 };
 
+use super::eval_launcher::{EvaluationLauncher, LauncherCallbacks};
 use super::utils::open_event_stream;
 
 #[component]
 pub fn EvaluationTab(
-    document_id: Uuid,
+    detail: Option<SourceDocumentDetailDto>,
     pipelines: Vec<PipelineConfigurationDto>,
+    chunking_configurations: Vec<ChunkingConfigurationDto>,
 ) -> impl IntoView {
+    // The parent guards against unregistered documents and only mounts this
+    // tab once the document exists — but keep a defensive surface in case
+    // something upstream changes.
+    let Some(detail) = detail else {
+        return view! {
+            <Surface>
+                <EmptyState
+                    title="Document not imported"
+                    body="Import this document from its source first; evaluations run their own chunk+embed in memory and don't require an indexing.".to_string()
+                />
+            </Surface>
+        }.into_any();
+    };
+    let document_id = detail.document.document_id;
     let pipelines_stored = StoredValue::new(pipelines);
+    let chunking_stored = StoredValue::new(chunking_configurations);
 
-    let (active_dataset, set_active_dataset) = signal::<Option<Uuid>>(None);
-    let (active_pipeline, set_active_pipeline) = signal::<Option<Uuid>>(None);
-    let (selected_run, set_selected_run) = signal::<Option<Uuid>>(None);
-    let (log_events, set_log_events) = signal::<Vec<LogEvent>>(Vec::new());
-    let (job_running, set_job_running) = signal(false);
-    let (dataset_label, set_dataset_label) = signal("synthetic-default".to_string());
-    let (variant_tokens, set_variant_tokens) = signal(512u32);
+    view! {
+        <EvaluationWorkspace
+            document_id=document_id
+            pipelines=pipelines_stored
+            chunking_configurations=chunking_stored
+        />
+    }.into_any()
+}
 
-    let (datasets_version, set_datasets_version) = signal(0u32);
-    let (runs_version, set_runs_version) = signal(0u32);
-
-    // Refresh datasets and runs when a job finishes.
-    Effect::watch(
-        move || job_running.get(),
-        move |running, prev, _| {
-            if let Some(true) = prev {
-                if !running {
-                    set_datasets_version.update(|v| *v += 1);
-                    set_runs_version.update(|v| *v += 1);
-                }
-            }
-        },
-        false,
-    );
-
+#[component]
+fn EvaluationWorkspace(
+    document_id: Uuid,
+    pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
+    chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
+) -> impl IntoView {
+    // ── Eventful Resources ─────────────────────────────────────────────────
+    let dataset_invalidator = use_invalidator(|e| e.from_any(&["EvaluationDataset"]));
     let datasets = Resource::new(
-        move || datasets_version.get(),
+        move || dataset_invalidator.get(),
         move |_| async move {
             get_datasets_for_document(document_id)
                 .await
@@ -56,287 +77,200 @@ pub fn EvaluationTab(
         },
     );
 
+    let run_invalidator = use_invalidator(|e| e.from_any(&["EvaluationRun"]));
     let runs = Resource::new(
-        move || runs_version.get(),
-        move |_| async move {
-            get_runs_for_document(document_id)
-                .await
-                .unwrap_or_default()
-        },
+        move || run_invalidator.get(),
+        move |_| async move { get_runs_for_document(document_id).await.unwrap_or_default() },
     );
 
-    let run_detail = Resource::new(
-        move || selected_run.get(),
-        move |run_id| async move {
-            match run_id {
-                Some(id) => get_run(id).await.unwrap_or(None),
-                None => None,
+    // ── Selection state ────────────────────────────────────────────────────
+    let (active_dataset, set_active_dataset) = signal::<Option<Uuid>>(None);
+    let (active_pipeline, set_active_pipeline) = signal::<Option<Uuid>>(None);
+
+    // Auto-select the first dataset / pipeline once they load.
+    Effect::new(move |_| {
+        if active_dataset.get_untracked().is_none() {
+            if let Some(list) = datasets.get() {
+                if let Some(first) = list.first() {
+                    set_active_dataset.set(Some(first.dataset_id));
+                }
             }
-        },
-    );
+        }
+    });
+    Effect::new(move |_| {
+        if active_pipeline.get_untracked().is_none() {
+            let list = pipelines.get_value();
+            if let Some(first) = list.first() {
+                set_active_pipeline.set(Some(first.pipeline_configuration_id));
+            }
+        }
+    });
 
-    let can_run = move || active_dataset.get().is_some() && active_pipeline.get().is_some();
+    // ── Job state (shared between launcher + dataset generation) ───────────
+    let (job_running, set_job_running) = signal(false);
+    let (log_events, set_log_events) = signal::<Vec<LogEvent>>(Vec::new());
+    let (dataset_label, set_dataset_label) = signal("synthetic-default".to_string());
+
+    let on_generate = move |_| {
+        let label = dataset_label.get();
+        let Some(pipeline_configuration_id) = active_pipeline.get() else {
+            set_log_events.update(|evs| evs.push(LogEvent {
+                level: LogLevel::Error,
+                message:
+                    "Select a pipeline configuration before generating a synthetic dataset."
+                        .to_string(),
+            }));
+            return;
+        };
+        set_log_events.set(vec![]);
+        set_job_running.set(true);
+        spawn_local(async move {
+            match start_generate_synthetic_dataset(document_id, pipeline_configuration_id, label)
+                .await
+            {
+                Ok(job) => open_event_stream(job.stream_url, set_log_events, set_job_running),
+                Err(e) => {
+                    set_job_running.set(false);
+                    set_log_events.update(|evs| evs.push(LogEvent {
+                        level: LogLevel::Error,
+                        message: format!("{e}"),
+                    }));
+                }
+            }
+        });
+    };
+
+    let on_start_run = Callback::new(move |request: RunEvaluationRequestDto| {
+        set_log_events.set(vec![]);
+        set_job_running.set(true);
+        spawn_local(async move {
+            match start_run_evaluation(request).await {
+                Ok(job) => open_event_stream(job.stream_url, set_log_events, set_job_running),
+                Err(e) => {
+                    set_job_running.set(false);
+                    set_log_events.update(|evs| evs.push(LogEvent {
+                        level: LogLevel::Error,
+                        message: format!("{e}"),
+                    }));
+                }
+            }
+        });
+    });
 
     view! {
-        <div class="space-y-6 animate-in fade-in duration-200">
-
-            // ── Top row: Pipeline selector (left) + Dataset panel (right) ─────────
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                // ── Pipeline selector ────────────────────────────────────────────
-                <div class="space-y-2">
-                    <span class="tech-label opacity-40">"PIPELINE_SELECTOR"</span>
-                    <div class="card-outer p-4 space-y-2">
-                        {move || {
-                            let ps = pipelines_stored.get_value();
-                            if ps.is_empty() {
-                                return view! {
-                                    <p class="tech-label opacity-30 text-xs">
-                                        "No pipelines — add one in PIPELINE_CONFIG"
-                                    </p>
-                                }.into_any();
-                            }
-                            ps.into_iter().map(|pc| {
-                                let pc_id = pc.pipeline_configuration_id;
-                                let is_active = move || active_pipeline.get() == Some(pc_id);
-                                view! {
-                                    <button
-                                        class=move || format!(
-                                            "w-full text-left px-3 py-2 rounded border text-xs font-mono transition-colors {}",
-                                            if is_active() {
-                                                "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-                                            } else {
-                                                "border-[var(--color-border)] hover:border-[var(--color-accent)]/50"
-                                            }
-                                        )
-                                        on:click=move |_| set_active_pipeline.set(Some(pc_id))
-                                    >
-                                        <span class="opacity-40 mr-1">"▶"</span>
-                                        {pc.name}
-                                    </button>
-                                }
-                            }).collect_view().into_any()
-                        }}
-                    </div>
-                </div>
-
-                // ── Dataset panel ────────────────────────────────────────────────
-                <div class="space-y-2">
-                    <span class="tech-label opacity-40">"DATASET_PANEL"</span>
-                    <div class="card-outer p-4 space-y-3">
-
-                        // Generate form
-                        <div class="space-y-1">
-                            <span class="tech-label opacity-50 text-[10px]">"GENERATE_NEW_DATASET"</span>
-                            <div class="flex gap-2 mt-1">
-                                <input
-                                    class="flex-1 px-2 py-1 text-xs font-mono bg-[var(--color-card-inner)] border border-[var(--color-border)] rounded focus:outline-none focus:border-[var(--color-accent)]"
-                                    placeholder="label (e.g. synthetic-default)"
-                                    prop:value=move || dataset_label.get()
-                                    on:input=move |ev| set_dataset_label.set(event_target_value(&ev))
-                                />
-                                <button
-                                    class="px-3 py-1 text-[10px] font-bold tracking-widest border border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                    disabled=move || job_running.get()
-                                    on:click=move |_| {
-                                        let label = dataset_label.get();
-                                        set_log_events.set(vec![]);
-                                        set_job_running.set(true);
-                                        spawn_local(async move {
-                                            match start_generate_synthetic_dataset(document_id, label).await {
-                                                Ok(job) => open_event_stream(job.stream_url, set_log_events, set_job_running),
-                                                Err(e) => {
-                                                    set_job_running.set(false);
-                                                    set_log_events.update(|evs| evs.push(LogEvent {
-                                                        level: crate::shared::LogLevel::Error,
-                                                        message: format!("{e}"),
-                                                    }));
-                                                }
-                                            }
-                                        });
-                                    }
-                                >
-                                    {move || if job_running.get() { "GENERATING..." } else { "GENERATE" }}
-                                </button>
-                            </div>
-                        </div>
-
-                        // Dataset list
-                        <Transition fallback=|| view! {
-                            <p class="tech-label animate-pulse text-[10px]">"LOADING..."</p>
-                        }>
-                            {move || {
-                                let ds = datasets.get().unwrap_or_default();
-                                if ds.is_empty() {
-                                    return view! {
-                                        <p class="tech-label opacity-30 text-[10px]">
-                                            "No datasets yet — generate one above."
-                                        </p>
-                                    }.into_any();
-                                }
-                                view! {
-                                    <div class="space-y-1">
-                                        <span class="tech-label opacity-40 text-[10px]">"EXISTING_DATASETS"</span>
-                                        {ds.into_iter().map(|d| {
-                                            let did = d.dataset_id;
-                                            let is_active = move || active_dataset.get() == Some(did);
-                                            view! {
-                                                <DatasetRow
-                                                    dataset=d
-                                                    is_active=is_active
-                                                    on_select=move || set_active_dataset.set(Some(did))
-                                                />
-                                            }
-                                        }).collect_view()}
-                                    </div>
-                                }.into_any()
-                            }}
-                        </Transition>
-                    </div>
-                </div>
-            </div>
-
-            // ── Run launcher ──────────────────────────────────────────────────────
-            <div class="space-y-2">
-                <span class="tech-label opacity-40">"RUN_LAUNCHER"</span>
-                <div class="card-outer p-4 space-y-3">
-                    <div class="space-y-1">
-                        <span class="tech-label opacity-50 text-[10px]">"CHUNKING_VARIANT"</span>
-                        <div class="flex gap-2 flex-wrap mt-1">
-                            {[256u32, 384, 512, 768, 1024].into_iter().map(|t| {
-                                let is_active = move || variant_tokens.get() == t;
-                                view! {
-                                    <button
-                                        class=move || format!(
-                                            "px-2 py-1 text-[10px] font-mono tracking-widest border rounded transition-colors {}",
-                                            if is_active() {
-                                                "border-[var(--color-accent)] text-[var(--color-accent)]"
-                                            } else {
-                                                "border-[var(--color-border)] opacity-50 hover:opacity-100"
-                                            }
-                                        )
-                                        on:click=move |_| set_variant_tokens.set(t)
-                                    >
-                                        {format!("section:{t}")}
-                                    </button>
-                                }
-                            }).collect_view()}
-                        </div>
-                    </div>
-
-                    <button
-                        class="w-full py-2 text-xs font-bold tracking-widest border border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        disabled=move || !can_run() || job_running.get()
-                        on:click=move |_| {
-                            let Some(dataset_id) = active_dataset.get() else { return; };
-                            let Some(pipeline_id) = active_pipeline.get() else { return; };
-                            let tokens = variant_tokens.get();
-                            let request = RunEvaluationRequestDto {
-                                dataset_id,
-                                pipeline_configuration_id: pipeline_id,
-                                variants: vec![ChunkingVariant {
-                                    label: format!("section:{tokens}"),
-                                    config: ChunkingConfig::Section(SectionChunkingConfig {
-                                        max_section_tokens: tokens,
-                                    }),
-                                }],
-                                options: vec![EvaluationRunOptions::default()],
-                            };
-                            set_log_events.set(vec![]);
-                            set_job_running.set(true);
-                            spawn_local(async move {
-                                match start_run_evaluation(request).await {
-                                    Ok(job) => open_event_stream(job.stream_url, set_log_events, set_job_running),
-                                    Err(e) => {
-                                        set_job_running.set(false);
-                                        set_log_events.update(|evs| evs.push(LogEvent {
-                                            level: crate::shared::LogLevel::Error,
-                                            message: format!("{e}"),
-                                        }));
-                                    }
-                                }
-                            });
-                        }
-                    >
-                        {move || {
-                            if job_running.get() {
-                                "RUNNING..."
-                            } else if !can_run() {
-                                "SELECT_DATASET_AND_PIPELINE"
-                            } else {
-                                "START_EVALUATION_RUN"
-                            }
-                        }}
-                    </button>
-                </div>
-            </div>
-
-            // ── Job log (visible only while active) ───────────────────────────────
-            {move || {
-                if log_events.with(|evs| evs.is_empty()) && !job_running.get() {
-                    return view! { <div></div> }.into_any();
-                }
-                view! {
-                    <div class="space-y-2">
-                        <span class="tech-label opacity-40">"JOB_LOG"</span>
-                        <div class="h-48 overflow-y-auto card-outer p-3">
-                            <LogPanel events=log_events />
-                        </div>
-                    </div>
-                }.into_any()
-            }}
-
-            // ── Run history ───────────────────────────────────────────────────────
-            <div class="space-y-2">
-                <span class="tech-label opacity-40">"RUN_HISTORY"</span>
-                <Transition fallback=|| view! {
-                    <p class="tech-label animate-pulse text-[10px]">"LOADING_RUNS..."</p>
-                }>
+        <div class="space-y-6">
+            // ── Dataset ───────────────────────────────────────────────────
+            <Surface title="Dataset".to_string()>
+                <Transition fallback=|| view! { <p class="muted">"Loading datasets…"</p> }>
                     {move || {
-                        let rs = runs.get().unwrap_or_default();
-                        if rs.is_empty() {
+                        let list = datasets.get().unwrap_or_default();
+                        if list.is_empty() {
                             return view! {
-                                <div class="card-outer p-8 flex items-center justify-center border-dashed opacity-30">
-                                    <span class="tech-label text-[10px]">"NO_RUNS_YET"</span>
-                                </div>
+                                <DatasetGenerateForm
+                                    dataset_label=dataset_label
+                                    set_dataset_label=set_dataset_label
+                                    on_generate=Box::new(on_generate)
+                                    running=job_running
+                                />
                             }.into_any();
                         }
                         view! {
-                            <RunHistoryTable
-                                runs=rs
-                                selected_run=selected_run
-                                on_select=move |id| set_selected_run.set(Some(id))
-                            />
+                            <div class="space-y-3">
+                                {list.into_iter().map(|d| {
+                                    let did = d.dataset_id;
+                                    let active = move || active_dataset.get() == Some(did);
+                                    view! {
+                                        <DatasetRow
+                                            dataset=d
+                                            is_active=active
+                                            on_select=move || set_active_dataset.set(Some(did))
+                                        />
+                                    }
+                                }).collect_view()}
+                                <div class="pt-2 border-t border-[var(--color-border)]">
+                                    <DatasetGenerateForm
+                                        dataset_label=dataset_label
+                                        set_dataset_label=set_dataset_label
+                                        on_generate=Box::new(on_generate)
+                                        running=job_running
+                                    />
+                                </div>
+                            </div>
                         }.into_any()
                     }}
                 </Transition>
-            </div>
+            </Surface>
 
-            // ── Run details (when a run is selected) ──────────────────────────────
-            {move || {
-                if selected_run.get().is_none() {
-                    return view! { <div></div> }.into_any();
-                }
-                view! {
-                    <div class="space-y-2">
-                        <span class="tech-label opacity-40">"RUN_DETAILS"</span>
-                        <Transition fallback=|| view! {
-                            <p class="tech-label animate-pulse text-[10px]">"LOADING_RUN..."</p>
-                        }>
-                            {move || match run_detail.get() {
-                                None => view! { <div></div> }.into_any(),
-                                Some(None) => view! {
-                                    <p class="tech-label opacity-30 text-[10px]">"RUN_NOT_FOUND"</p>
-                                }.into_any(),
-                                Some(Some(run)) => view! {
-                                    <RunDetails run=run />
-                                }.into_any(),
-                            }}
-                        </Transition>
+            // ── Launcher ──────────────────────────────────────────────────
+            <EvaluationLauncher
+                pipelines=pipelines
+                chunking_configurations=chunking_configurations
+                active_dataset=active_dataset
+                active_pipeline=active_pipeline
+                set_active_pipeline=set_active_pipeline
+                running=job_running
+                callbacks=LauncherCallbacks { on_start: on_start_run }
+            />
+
+            // ── Live job log ──────────────────────────────────────────────
+            {move || (job_running.get() || !log_events.with(|e| e.is_empty())).then(|| view! {
+                <Surface title="Live log".to_string()>
+                    <div class="h-44 overflow-y-auto">
+                        <LogPanel events=log_events />
                     </div>
-                }.into_any()
-            }}
+                </Surface>
+            })}
 
+            // ── Runs leaderboard ──────────────────────────────────────────
+            <Surface title="Runs".to_string()>
+                <Transition fallback=|| view! { <p class="muted">"Loading runs…"</p> }>
+                    {move || {
+                        let list = runs.get().unwrap_or_default();
+                        if list.is_empty() {
+                            return view! {
+                                <EmptyState
+                                    title="No runs yet"
+                                    body="Launch a tune-for-best run above; results land here as they complete.".to_string()
+                                />
+                            }.into_any();
+                        }
+                        view! {
+                            <div class="space-y-3">
+                                {list.into_iter().map(|r| view! { <RunCard run=r /> }).collect_view()}
+                            </div>
+                        }.into_any()
+                    }}
+                </Transition>
+            </Surface>
+        </div>
+    }
+}
+
+#[component]
+fn DatasetGenerateForm(
+    dataset_label: ReadSignal<String>,
+    set_dataset_label: WriteSignal<String>,
+    on_generate: Box<dyn Fn(leptos::ev::MouseEvent) + Send + Sync>,
+    running: ReadSignal<bool>,
+) -> impl IntoView {
+    let on_generate = StoredValue::new(on_generate);
+    view! {
+        <div class="flex items-center gap-2">
+            <span class="eyebrow shrink-0">"Generate"</span>
+            <input
+                class="input"
+                placeholder="dataset label"
+                prop:value=move || dataset_label.get()
+                on:input=move |ev| set_dataset_label.set(event_target_value(&ev))
+            />
+            <button
+                type="button"
+                class="btn"
+                disabled=move || running.get()
+                on:click=move |ev| on_generate.with_value(|f| f(ev))
+            >
+                {move || if running.get() { "Generating…" } else { "Generate" }}
+            </button>
         </div>
     }
 }
@@ -351,196 +285,74 @@ where
     F: Fn() -> bool + Send + Sync + 'static,
 {
     let on_select_stored = StoredValue::new(on_select);
-    let (status_cls, status_label) = eval_status_display(&dataset.status);
+    let (kind, label) = eval_status(&dataset.status);
+    let q_count = dataset.question_count;
+    let dataset_label = dataset.label;
+    let dataset_id = dataset.dataset_id;
     view! {
-        <button
+        <div
             class=move || format!(
-                "w-full text-left px-3 py-2 rounded border text-xs font-mono transition-colors {}",
+                "w-full flex items-center justify-between gap-3 px-3 py-2 rounded border transition-colors {}",
                 if is_active() {
-                    "border-[var(--color-accent)] bg-[var(--color-accent)]/10"
+                    "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
                 } else {
-                    "border-[var(--color-border)] hover:border-[var(--color-accent)]/50"
+                    "border-[var(--color-border)] hover:border-[var(--color-border-strong)]"
                 }
             )
-            on:click=move |_| on_select_stored.with_value(|f| f())
         >
-            <div class="flex items-center justify-between">
-                <span>{dataset.label}</span>
-                <div class="flex gap-3 items-center">
-                    <span class=format!("font-bold tracking-widest {status_cls}")>{status_label}</span>
-                    <span class="opacity-50">{format!("{}Q", dataset.question_count)}</span>
+            <button
+                type="button"
+                class="flex-1 text-left text-text"
+                on:click=move |_| on_select_stored.with_value(|f| f())
+            >
+                {dataset_label}
+            </button>
+            <div class="flex items-center gap-3">
+                <span class="text-xs muted">{format!("{q_count} questions")}</span>
+                <StatusPill label=label.to_string() kind=kind />
+                <A
+                    href=format!("/datasets/{dataset_id}")
+                    attr:class="text-xs muted hover:text-text underline-offset-2 hover:underline"
+                >
+                    "View →"
+                </A>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn RunCard(run: EvaluationRunSummaryDto) -> impl IntoView {
+    let (kind, label) = eval_status(&run.status);
+    let when = run.created_at.get(..16).unwrap_or(&run.created_at).to_string();
+    let run_short = run.run_id.to_string()[..8].to_string();
+    let variant_count = run.variant_count;
+    let run_id = run.run_id;
+
+    view! {
+        <div class="surface-raised rounded p-4 space-y-2">
+            <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <A href=format!("/runs/{run_id}")>
+                        <span class="font-mono text-sm">{format!("run-{run_short}")}</span>
+                    </A>
+                    <StatusPill label=label.to_string() kind=kind />
+                    <span class="text-xs muted">{format!("{variant_count} variants")}</span>
                 </div>
+                <span class="text-xs faint font-mono">{when}</span>
             </div>
-        </button>
-    }
-}
-
-#[component]
-fn RunHistoryTable(
-    runs: Vec<EvaluationRunSummaryDto>,
-    selected_run: ReadSignal<Option<Uuid>>,
-    on_select: impl Fn(Uuid) + Send + Sync + 'static,
-) -> impl IntoView {
-    let on_select_stored = StoredValue::new(on_select);
-    view! {
-        <div class="card-outer overflow-hidden">
-            <table class="w-full text-xs border-collapse">
-                <thead>
-                    <tr class="bg-[var(--color-card-inner)]/50">
-                        <th class="text-left px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "RUN_ID"
-                        </th>
-                        <th class="text-left px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "STATUS"
-                        </th>
-                        <th class="text-right px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "VARIANTS"
-                        </th>
-                        <th class="text-right px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "CREATED"
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-[var(--color-border)]">
-                    {runs.into_iter().map(|r| {
-                        let rid = r.run_id;
-                        let is_selected = move || selected_run.get() == Some(rid);
-                        let (status_cls, status_label) = eval_status_display(&r.status);
-                        let date_short = r.created_at.get(..16).unwrap_or(&r.created_at).to_string();
-                        let run_short = r.run_id.to_string()[..8].to_string();
-                        view! {
-                            <tr
-                                class=move || format!(
-                                    "cursor-pointer transition-colors {}",
-                                    if is_selected() {
-                                        "bg-[var(--color-accent)]/10"
-                                    } else {
-                                        "hover:bg-[var(--color-card-inner)]/50"
-                                    }
-                                )
-                                on:click=move |_| on_select_stored.with_value(|f| f(rid))
-                            >
-                                <td class="px-3 py-2 font-mono opacity-60">
-                                    {format!("{run_short}…")}
-                                </td>
-                                <td class=format!("px-3 py-2 font-bold tracking-widest {status_cls}")>
-                                    {status_label}
-                                </td>
-                                <td class="px-3 py-2 text-right opacity-60">
-                                    {r.variant_count.to_string()}
-                                </td>
-                                <td class="px-3 py-2 text-right opacity-40">{date_short}</td>
-                            </tr>
-                        }
-                    }).collect_view()}
-                </tbody>
-            </table>
+            <div class="text-xs muted">"Open the run to compare variants."</div>
         </div>
     }
 }
 
-#[component]
-fn RunDetails(run: crate::shared::EvaluationRunDto) -> impl IntoView {
-    let (status_cls, status_label) = eval_status_display(&run.status);
-    view! {
-        <div class="card-outer p-4 space-y-4">
-            <div class="flex items-center gap-4">
-                <span class="font-mono text-xs opacity-50">{run.run_id.to_string()}</span>
-                <span class=format!("tech-label text-[10px] font-bold {status_cls}")>
-                    {status_label}
-                </span>
-            </div>
-
-            {if run.variants.is_empty() {
-                view! {
-                    <p class="tech-label opacity-30 text-[10px]">
-                        "NO_VARIANT_RESULTS — run may still be in progress."
-                    </p>
-                }.into_any()
-            } else {
-                view! { <VariantResultsTable variants=run.variants /> }.into_any()
-            }}
-        </div>
-    }
-}
-
-#[component]
-fn VariantResultsTable(variants: Vec<EvaluationVariantResult>) -> impl IntoView {
-    view! {
-        <div class="overflow-x-auto">
-            <table class="w-full text-xs border-collapse">
-                <thead>
-                    <tr class="bg-[var(--color-card-inner)]/50">
-                        <th class="text-left px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "VARIANT"
-                        </th>
-                        <th class="text-right px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "RECALL"
-                        </th>
-                        <th class="text-right px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "PRECISION"
-                        </th>
-                        <th class="text-right px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "IOU"
-                        </th>
-                        <th class="text-right px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "Ω-PREC"
-                        </th>
-                        <th class="text-right px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "SPLIT"
-                        </th>
-                        <th class="text-right px-3 py-2 tech-label opacity-50 border-b border-[var(--color-border)]">
-                            "SEL"
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-[var(--color-border)]">
-                    {variants.into_iter().map(|v| {
-                        let is_selected = v.selected;
-                        view! {
-                            <tr class=move || if is_selected {
-                                "bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors"
-                            } else {
-                                "hover:bg-[var(--color-card-inner)]/50 transition-colors"
-                            }>
-                                <td class="px-3 py-2 font-mono">{v.variant.label.clone()}</td>
-                                <td class="px-3 py-2 text-right font-mono">
-                                    {format!("{:.1}%", v.metrics.recall_mean * 100.0)}
-                                </td>
-                                <td class="px-3 py-2 text-right font-mono">
-                                    {format!("{:.1}%", v.metrics.precision_mean * 100.0)}
-                                </td>
-                                <td class="px-3 py-2 text-right font-mono">
-                                    {format!("{:.1}%", v.metrics.iou_mean * 100.0)}
-                                </td>
-                                <td class="px-3 py-2 text-right font-mono">
-                                    {format!("{:.1}%", v.metrics.precision_omega_mean * 100.0)}
-                                </td>
-                                <td class="px-3 py-2 text-right opacity-50 uppercase">
-                                    {v.split.as_str()}
-                                </td>
-                                <td class=format!(
-                                    "px-3 py-2 text-right font-bold {}",
-                                    if is_selected { "text-emerald-400" } else { "opacity-20" }
-                                )>
-                                    {if is_selected { "✓" } else { "·" }}
-                                </td>
-                            </tr>
-                        }
-                    }).collect_view()}
-                </tbody>
-            </table>
-        </div>
-    }
-}
-
-fn eval_status_display(status: &str) -> (&'static str, &'static str) {
+fn eval_status(status: &str) -> (Status, &'static str) {
     match status {
-        "completed" => ("text-emerald-500/80", "COMPLETED"),
-        "failed" => ("text-red-500/80", "FAILED"),
-        "running" => ("text-blue-400/80", "RUNNING"),
-        "generating" => ("text-blue-400/80", "GENERATING"),
-        "pending" => ("text-amber-500/80", "PENDING"),
-        _ => ("opacity-50", "UNKNOWN"),
+        "completed" => (Status::Ok, "Completed"),
+        "failed" => (Status::Fail, "Failed"),
+        "running" => (Status::Pending, "Running"),
+        "generating" => (Status::Pending, "Generating"),
+        "pending" => (Status::Pending, "Pending"),
+        _ => (Status::Neutral, "Unknown"),
     }
 }

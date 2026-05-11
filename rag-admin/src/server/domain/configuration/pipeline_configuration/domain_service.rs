@@ -22,13 +22,14 @@ impl PipelineConfigurationValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::server::domain::configuration::kinds::{AiProviderKind, VectorStoreKind};
     use uuid::Uuid;
 
     fn embedding_model(dimensions: u32) -> EmbeddingModel {
         EmbeddingModel {
             embedding_model_id: Uuid::new_v4(),
-            provider_id: Uuid::new_v4(),
-            model: "test-model".into(),
+            kind: AiProviderKind::Cloudflare,
+            model: "@cf/test-model".into(),
             dimensions,
         }
     }
@@ -36,7 +37,7 @@ mod tests {
     fn vector_index(dimensions: u32) -> VectorIndex {
         VectorIndex {
             index_id: Uuid::new_v4(),
-            vector_store_provider_id: Uuid::new_v4(),
+            kind: VectorStoreKind::CloudflareVectorize,
             name: "test-index".into(),
             dimensions,
         }

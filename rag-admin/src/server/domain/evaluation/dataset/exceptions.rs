@@ -6,6 +6,8 @@ pub enum EvaluationDatasetError {
     AlreadyCompleted,
     AlreadyFailed,
     NoQuestionsAccepted,
+    Deleted,
+    EmptyLabel,
     InvalidCommand(String),
 }
 
@@ -27,6 +29,12 @@ impl std::fmt::Display for EvaluationDatasetError {
             }
             EvaluationDatasetError::NoQuestionsAccepted => {
                 write!(f, "cannot complete dataset with no accepted questions")
+            }
+            EvaluationDatasetError::Deleted => {
+                write!(f, "evaluation dataset has been deleted")
+            }
+            EvaluationDatasetError::EmptyLabel => {
+                write!(f, "dataset label must not be empty")
             }
             EvaluationDatasetError::InvalidCommand(msg) => write!(f, "{msg}"),
         }
