@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use crate::server::application::blog::ports::PostChunkingConfigStore;
+use crate::server::application::source_document::ports::PostChunkingConfigStore;
 use crate::server::application::AppError;
 use crate::shared::ChunkingConfig;
 

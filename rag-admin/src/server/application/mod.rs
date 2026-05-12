@@ -1,11 +1,10 @@
-pub mod blog;
+pub mod activity;
 pub mod chunking;
 pub mod configuration;
 pub mod embedding;
 pub mod evaluation;
 pub mod exceptions;
 pub mod indexing;
-pub mod ingest;
 pub mod job;
 pub mod llm;
 pub mod markdown;
@@ -15,5 +14,6 @@ pub mod source_document;
 #[cfg(test)]
 pub mod test_support;
 
+pub use activity::{spawn_activity_projection, ActivityRegistry};
 pub use exceptions::AppError;
-pub use job::{IngestLogEvent, IngestLogLevel, Job, JobMessage, JobRegistry};
+pub use job::{InternalLogEvent, InternalLogLevel, Job, JobMessage, JobRegistry};

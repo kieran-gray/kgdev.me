@@ -12,7 +12,7 @@ use crate::server::application::JobMessage;
 use crate::server::setup::AppState;
 use crate::shared::LogEvent;
 
-pub async fn ingest_logs_handler(
+pub async fn job_logs_handler(
     Path(job_id): Path<String>,
     Extension(state): Extension<Arc<AppState>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {

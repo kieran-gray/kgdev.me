@@ -6,8 +6,9 @@ use crate::{server::event_sourcing::Aggregate, shared::ChunkingConfig};
 use super::{
     commands::IndexingCommand,
     events::{
-        ChunkingCompleted, EmbeddingCompleted, IndexingCompleted, IndexingEvent, IndexingRemoved,
-        IngestRequested, IngestionFailed, IngestionRetried,
+        ChunkingCompleted, ChunkingRequeued, EmbeddingCompleted, EmbeddingRequeued,
+        IndexingCompleted, IndexingEvent, IndexingRemoved, IndexingRequeued, IngestRequested,
+        IngestionFailed, IngestionRetried,
     },
     exceptions::IndexingError,
     status::{IndexingStatus, IngestStage},
@@ -28,6 +29,9 @@ pub struct Indexing {
     pub attempts: u32,
     pub last_request_id: Option<Uuid>,
     pub removed: bool,
+    /// Whether the process manager should chain stages automatically after
+    /// completion events, or stop and wait for the operator to `RequeueX`.
+    pub auto_advance: bool,
 }
 
 impl Indexing {
@@ -49,6 +53,7 @@ impl Indexing {
             attempts: 1,
             last_request_id: Some(e.request_id),
             removed: false,
+            auto_advance: e.auto_advance,
         }
     }
 }
@@ -72,6 +77,7 @@ impl Aggregate for Indexing {
                 self.status = IndexingStatus::Pending;
                 self.attempts += 1;
                 self.last_request_id = Some(e.request_id);
+                self.auto_advance = e.auto_advance;
             }
             Self::Event::ChunkingCompleted(e) => {
                 self.chunk_set_id = Some(e.chunk_set_id);
@@ -103,6 +109,10 @@ impl Aggregate for Indexing {
             Self::Event::IndexingRemoved(_) => {
                 self.removed = true;
             }
+            // Markers — purely for policy dispatch, no state change.
+            Self::Event::ChunkingRequeued(_)
+            | Self::Event::EmbeddingRequeued(_)
+            | Self::Event::IndexingRequeued(_) => {}
         }
     }
 
@@ -118,6 +128,7 @@ impl Aggregate for Indexing {
                     document_version: cmd.document_version,
                     chunking_config: cmd.chunking_config,
                     request_id: cmd.request_id,
+                    auto_advance: cmd.auto_advance,
                     occurred_at: cmd.occurred_at,
                 })]),
                 Some(s) if s.removed => Err(IndexingError::Removed),
@@ -128,6 +139,7 @@ impl Aggregate for Indexing {
                     document_version: cmd.document_version,
                     chunking_config: cmd.chunking_config,
                     request_id: cmd.request_id,
+                    auto_advance: cmd.auto_advance,
                     occurred_at: cmd.occurred_at,
                 })]),
             },
@@ -210,6 +222,46 @@ impl Aggregate for Indexing {
                     occurred_at: cmd.occurred_at,
                 })])
             }
+
+            Self::Command::RequeueChunking(cmd) => {
+                let s = state.ok_or(IndexingError::NotFound)?;
+                if s.removed {
+                    return Err(IndexingError::Removed);
+                }
+                Ok(vec![Self::Event::ChunkingRequeued(ChunkingRequeued {
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
+            Self::Command::RequeueEmbedding(cmd) => {
+                let s = state.ok_or(IndexingError::NotFound)?;
+                if s.removed {
+                    return Err(IndexingError::Removed);
+                }
+                if s.chunk_set_id.is_none() {
+                    return Err(IndexingError::ValidationError(
+                        "cannot requeue embedding before chunking has completed".into(),
+                    ));
+                }
+                Ok(vec![Self::Event::EmbeddingRequeued(EmbeddingRequeued {
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
+            Self::Command::RequeueIndexing(cmd) => {
+                let s = state.ok_or(IndexingError::NotFound)?;
+                if s.removed {
+                    return Err(IndexingError::Removed);
+                }
+                if s.embedding_set_id.is_none() {
+                    return Err(IndexingError::ValidationError(
+                        "cannot requeue indexing before embedding has completed".into(),
+                    ));
+                }
+                Ok(vec![Self::Event::IndexingRequeued(IndexingRequeued {
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
         }
     }
 
@@ -251,6 +303,7 @@ mod tests {
                 max_section_tokens: 512,
             }),
             request_id: Uuid::new_v4(),
+            auto_advance: true,
             occurred_at: now(),
         })
     }
@@ -291,6 +344,7 @@ mod tests {
                     max_section_tokens: 512,
                 }),
                 request_id,
+                auto_advance: true,
                 occurred_at: now(),
             }),
         )
@@ -307,12 +361,120 @@ mod tests {
                     max_section_tokens: 512,
                 }),
                 request_id,
+                auto_advance: true,
                 occurred_at: now(),
             }),
         )
         .unwrap();
 
         assert!(second.is_empty());
+    }
+
+    #[test]
+    fn requeue_chunking_emits_marker_event() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let indexing = base_state(doc_id, pc_id);
+
+        let events = Indexing::handle_command(
+            Some(&indexing),
+            IndexingCommand::RequeueChunking(RequeueChunking { occurred_at: now() }),
+        )
+        .unwrap();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], IndexingEvent::ChunkingRequeued(_)));
+    }
+
+    #[test]
+    fn requeue_embedding_requires_chunk_set() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let indexing = base_state(doc_id, pc_id);
+
+        let err = Indexing::handle_command(
+            Some(&indexing),
+            IndexingCommand::RequeueEmbedding(RequeueEmbedding { occurred_at: now() }),
+        )
+        .unwrap_err();
+        assert!(matches!(err, IndexingError::ValidationError(_)));
+    }
+
+    #[test]
+    fn requeue_embedding_succeeds_after_chunking() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
+            chunk_set_id: Uuid::new_v4(),
+            chunk_count: 10,
+            occurred_at: now(),
+        }));
+        let indexing = Indexing::from_events(&events).unwrap();
+
+        let out = Indexing::handle_command(
+            Some(&indexing),
+            IndexingCommand::RequeueEmbedding(RequeueEmbedding { occurred_at: now() }),
+        )
+        .unwrap();
+        assert_eq!(out.len(), 1);
+        assert!(matches!(out[0], IndexingEvent::EmbeddingRequeued(_)));
+    }
+
+    #[test]
+    fn requeue_indexing_requires_embedding_set() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let indexing = base_state(doc_id, pc_id);
+
+        let err = Indexing::handle_command(
+            Some(&indexing),
+            IndexingCommand::RequeueIndexing(RequeueIndexing { occurred_at: now() }),
+        )
+        .unwrap_err();
+        assert!(matches!(err, IndexingError::ValidationError(_)));
+    }
+
+    #[test]
+    fn requeue_events_do_not_change_status_or_ids() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let chunk_set_id = Uuid::new_v4();
+        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
+            chunk_set_id,
+            chunk_count: 5,
+            occurred_at: now(),
+        }));
+        events.push(IndexingEvent::ChunkingRequeued(ChunkingRequeued {
+            occurred_at: now(),
+        }));
+
+        let indexing = Indexing::from_events(&events).unwrap();
+        assert_eq!(indexing.status, IndexingStatus::Chunking);
+        assert_eq!(indexing.chunk_set_id, Some(chunk_set_id));
+    }
+
+    #[test]
+    fn auto_advance_carried_through_event() {
+        let doc_id = Uuid::new_v4();
+        let pc_id = Uuid::new_v4();
+        let events = Indexing::handle_command(
+            None,
+            IndexingCommand::RequestIngest(RequestIngest {
+                document_id: doc_id,
+                pipeline_configuration_id: pc_id,
+                document_version: 1,
+                chunking_config: ChunkingConfig::Section(SectionChunkingConfig {
+                    max_section_tokens: 512,
+                }),
+                request_id: Uuid::new_v4(),
+                auto_advance: false,
+                occurred_at: now(),
+            }),
+        )
+        .unwrap();
+        let indexing = Indexing::from_events(&events).unwrap();
+        assert!(!indexing.auto_advance);
     }
 
     #[test]

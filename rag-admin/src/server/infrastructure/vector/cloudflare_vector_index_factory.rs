@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::server::application::ingest::ports::VectorIndex;
+use crate::server::application::indexing::ports::VectorIndex;
 use crate::server::application::source_document::ports::VectorIndexProvider;
 use crate::server::infrastructure::clients::CloudflareApi;
 

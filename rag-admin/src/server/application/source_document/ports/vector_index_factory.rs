@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::server::application::ingest::ports::VectorIndex;
+use crate::server::application::indexing::ports::VectorIndex;
 
 /// One implementation per `VectorStoreKind`. Given an index *name* and
 /// *dimensions*, build a concrete `VectorIndex` bound to that index.

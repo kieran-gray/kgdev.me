@@ -42,6 +42,7 @@ impl Projector<IndexingEvent> for IndexingProjector {
                             m.embedding_set_id = None;
                             m.status = IndexingStatus::Pending;
                             m.attempts += 1;
+                            m.auto_advance = e.auto_advance;
                             m
                         }
                         None => IndexingReadModel {
@@ -55,6 +56,7 @@ impl Projector<IndexingEvent> for IndexingProjector {
                             status: IndexingStatus::Pending,
                             attempts: 1,
                             removed: false,
+                            auto_advance: e.auto_advance,
                         },
                     };
                     self.repository.save(read_model).await?;
@@ -103,6 +105,11 @@ impl Projector<IndexingEvent> for IndexingProjector {
                 }
                 IndexingEvent::IndexingRemoved(_) => {
                     self.update(indexing_id, |m| m.removed = true).await?;
+                }
+                IndexingEvent::ChunkingRequeued(_)
+                | IndexingEvent::EmbeddingRequeued(_)
+                | IndexingEvent::IndexingRequeued(_) => {
+                    // Marker events — no read-model state change.
                 }
             }
         }

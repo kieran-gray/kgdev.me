@@ -3,7 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
-use crate::server::application::ingest::{ResolvedVectorIndex, VectorIndexResolver};
+use crate::server::application::indexing::{ResolvedVectorIndex, VectorIndexResolver};
 use crate::server::application::llm::{ChatService, ResolvedGenerationModel};
 use crate::server::application::AppError;
 use crate::server::domain::configuration::pipeline_configuration::{

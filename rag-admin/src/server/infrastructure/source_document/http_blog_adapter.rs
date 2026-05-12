@@ -1,26 +1,76 @@
+//! HTTP blog adapter — implements `SourceAdapter` directly against an
+//! upstream blog API. Listing hits `/api/posts/index.json`; fetching a
+//! single post hits `/api/posts/{slug}.json`.
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use reqwest::header::HeaderMap;
+use reqwest::Method;
+use serde::Deserialize;
 
-use crate::server::application::{
-    blog::ports::BlogSource,
-    source_document::ports::source_adapter::{DocumentSummary, FetchedDocument, SourceAdapter},
-    AppError,
+use crate::server::application::source_document::ports::source_adapter::{
+    DocumentSummary, FetchedDocument, SourceAdapter,
 };
+use crate::server::application::AppError;
 use crate::server::domain::source_document::{
     document_type::DocumentType,
     source_ref::SourceRef,
     version::{BlogPostMetadata, DocumentMetadata},
 };
+use crate::server::infrastructure::http_client::ReqwestHttpClient;
 
 pub struct HttpBlogAdapter {
-    blog_source: Arc<dyn BlogSource>,
+    http: Arc<ReqwestHttpClient>,
+    blog_url: String,
 }
 
 impl HttpBlogAdapter {
-    pub fn new(blog_source: Arc<dyn BlogSource>) -> Arc<Self> {
-        Arc::new(Self { blog_source })
+    pub fn new(http: Arc<ReqwestHttpClient>, blog_url: String) -> Arc<Self> {
+        Arc::new(Self { http, blog_url })
     }
+
+    fn base_url(&self) -> Result<String, AppError> {
+        let url = self.blog_url.trim().trim_end_matches('/').to_string();
+        if url.is_empty() {
+            return Err(AppError::Validation("blog URL is not configured".into()));
+        }
+        Ok(url)
+    }
+
+    async fn get_json<T: for<'de> Deserialize<'de>>(&self, url: &str) -> Result<T, AppError> {
+        let (status, body) = self
+            .http
+            .request_text(Method::GET, url, HeaderMap::new(), None)
+            .await?;
+        if !(200..300).contains(&status) {
+            return Err(AppError::Upstream(format!(
+                "GET {url} returned {status}: {}",
+                truncate(&body, 300)
+            )));
+        }
+        serde_json::from_str(&body).map_err(|e| AppError::Upstream(format!("parse {url}: {e}")))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct PostsListResponse {
+    posts: Vec<PostSummaryWire>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PostSummaryWire {
+    slug: String,
+    title: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PostDetailWire {
+    title: String,
+    published_at: String,
+    source_markdown: String,
 }
 
 #[async_trait]
@@ -30,33 +80,40 @@ impl SourceAdapter for HttpBlogAdapter {
     }
 
     async fn list(&self) -> Result<Vec<DocumentSummary>, AppError> {
-        let summaries = self.blog_source.list().await?;
-        Ok(summaries
+        let base = self.base_url()?;
+        let url = format!("{base}/api/posts/index.json");
+        let res: PostsListResponse = self.get_json(&url).await?;
+        Ok(res
+            .posts
             .into_iter()
-            .map(|s| DocumentSummary {
-                source_ref: SourceRef::UpstreamSlug { slug: s.slug },
-                title: s.title,
+            .map(|p| DocumentSummary {
+                source_ref: SourceRef::UpstreamSlug { slug: p.slug },
+                title: p.title,
             })
             .collect())
     }
 
     async fn fetch(&self, source_ref: &SourceRef) -> Result<FetchedDocument, AppError> {
-        let slug = match source_ref {
-            SourceRef::UpstreamSlug { slug } => slug,
-        };
-
-        let blog_post = self.blog_source.fetch(slug).await?;
-
-        let content = blog_post.source_markdown.as_bytes().to_vec();
-        let metadata = DocumentMetadata::BlogPost(BlogPostMetadata {
-            title: blog_post.title.clone(),
-            published_at: blog_post.published_at.clone(),
-        });
+        let SourceRef::UpstreamSlug { slug } = source_ref;
+        let base = self.base_url()?;
+        let url = format!("{base}/api/posts/{slug}.json");
+        let detail: PostDetailWire = self.get_json(&url).await?;
 
         Ok(FetchedDocument {
             source_ref: source_ref.clone(),
-            content,
-            metadata,
+            content: detail.source_markdown.into_bytes(),
+            metadata: DocumentMetadata::BlogPost(BlogPostMetadata {
+                title: detail.title,
+                published_at: detail.published_at,
+            }),
         })
+    }
+}
+
+fn truncate(s: &str, n: usize) -> String {
+    if s.chars().count() <= n {
+        s.to_string()
+    } else {
+        s.chars().take(n).collect::<String>() + "…"
     }
 }

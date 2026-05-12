@@ -42,6 +42,8 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_event_bus();
+    // ActivityState is provided inside AppShell, which lives under <Router>
+    // and so has access to router hooks (location/navigate).
 
     view! {
         <Title text="rag-admin" />

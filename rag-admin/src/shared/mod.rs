@@ -1,3 +1,4 @@
+mod activity;
 mod chunking;
 mod configuration;
 mod configuration_commands;
@@ -10,6 +11,10 @@ mod settings;
 mod source_document;
 mod vector;
 
+pub use activity::{
+    classify, classify_event, ActivityDelta, ActivityJobDto, ActivityKind, ActivityStart,
+    ActivityStatus,
+};
 pub use chunking::{
     BertChunkingConfig, ChunkParamDefinition, ChunkParamKey, ChunkStrategy, ChunkerDefinition,
     ChunkingConfig, LlmChunkingConfig, SectionChunkingConfig,
@@ -39,7 +44,7 @@ pub use evaluation::{
     EvaluationSettings, EvaluationVariantResult, RunEvaluationRequestDto,
 };
 pub use events::{aggregate as aggregate_type, PublishedEvent};
-pub use ingest::{IngestJobInfo, IngestOptions, LogEvent, LogLevel};
+pub use ingest::{IngestOptions, LogEvent, LogLevel};
 pub use settings::SettingsDto;
 pub use source_document::{
     ChunkDto, DocumentListItemDto, IndexingDto, SourceDocumentDetailDto, SourceDocumentDto,

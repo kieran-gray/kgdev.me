@@ -13,7 +13,15 @@ pub struct IngestRequested {
     pub document_version: u32,
     pub chunking_config: ChunkingConfig,
     pub request_id: Uuid,
+    /// See `RequestIngest::auto_advance`. Defaulted on the deserialise path
+    /// so events written before this field existed still replay.
+    #[serde(default = "default_auto_advance")]
+    pub auto_advance: bool,
     pub occurred_at: Timestamp,
+}
+
+fn default_auto_advance() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -53,6 +61,23 @@ pub struct IndexingRemoved {
     pub occurred_at: Timestamp,
 }
 
+/// Marker event: operator asked to run the chunking stage. Carries no state
+/// — its only purpose is to give the policy a hook to fire `ChunkingEffect`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ChunkingRequeued {
+    pub occurred_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EmbeddingRequeued {
+    pub occurred_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IndexingRequeued {
+    pub occurred_at: Timestamp,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "data")]
 pub enum IndexingEvent {
@@ -63,4 +88,7 @@ pub enum IndexingEvent {
     IngestionFailed(IngestionFailed),
     IngestionRetried(IngestionRetried),
     IndexingRemoved(IndexingRemoved),
+    ChunkingRequeued(ChunkingRequeued),
+    EmbeddingRequeued(EmbeddingRequeued),
+    IndexingRequeued(IndexingRequeued),
 }

@@ -30,7 +30,7 @@ impl IndexingRepository for PostgresIndexingRepository {
             SELECT
                 indexing_id, document_id, pipeline_configuration_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
-                attempts, removed
+                attempts, removed, auto_advance
             FROM indexings
             WHERE indexing_id = $1
             "#,
@@ -54,9 +54,9 @@ impl IndexingRepository for PostgresIndexingRepository {
             INSERT INTO indexings (
                 indexing_id, document_id, pipeline_configuration_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
-                attempts, removed, updated_at
+                attempts, removed, auto_advance, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
             ON CONFLICT (indexing_id) DO UPDATE SET
                 document_id = EXCLUDED.document_id,
                 pipeline_configuration_id = EXCLUDED.pipeline_configuration_id,
@@ -68,6 +68,7 @@ impl IndexingRepository for PostgresIndexingRepository {
                 failure_stage = EXCLUDED.failure_stage,
                 attempts = EXCLUDED.attempts,
                 removed = EXCLUDED.removed,
+                auto_advance = EXCLUDED.auto_advance,
                 updated_at = NOW()
             "#,
         )
@@ -82,6 +83,7 @@ impl IndexingRepository for PostgresIndexingRepository {
         .bind(failure_stage)
         .bind(read_model.attempts as i32)
         .bind(read_model.removed)
+        .bind(read_model.auto_advance)
         .execute(&self.pool)
         .await
         .map_err(|e| IndexingRepositoryError::Internal(format!("save: {e}")))?;
@@ -98,7 +100,7 @@ impl IndexingRepository for PostgresIndexingRepository {
             SELECT
                 indexing_id, document_id, pipeline_configuration_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
-                attempts, removed
+                attempts, removed, auto_advance
             FROM indexings
             WHERE document_id = $1
             ORDER BY updated_at DESC
@@ -126,6 +128,7 @@ struct IndexingRow {
     failure_stage: Option<String>,
     attempts: i32,
     removed: bool,
+    auto_advance: bool,
 }
 
 impl TryFrom<IndexingRow> for IndexingReadModel {
@@ -149,6 +152,7 @@ impl TryFrom<IndexingRow> for IndexingReadModel {
             status,
             attempts: row.attempts as u32,
             removed: row.removed,
+            auto_advance: row.auto_advance,
         })
     }
 }

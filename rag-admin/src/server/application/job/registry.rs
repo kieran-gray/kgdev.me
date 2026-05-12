@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::{error, info, warn};
 
 use tokio::sync::{broadcast, Mutex};
 
-use crate::server::application::IngestLogEvent;
+use crate::server::application::InternalLogEvent;
 
 const BROADCAST_CAPACITY: usize = 256;
 
 pub struct JobInner {
-    pub buffered: Vec<IngestLogEvent>,
+    pub buffered: Vec<InternalLogEvent>,
     pub finished: bool,
 }
 
@@ -19,7 +20,7 @@ pub struct Job {
 
 #[derive(Debug, Clone)]
 pub enum JobMessage {
-    Event(IngestLogEvent),
+    Event(InternalLogEvent),
     Done,
 }
 
@@ -35,10 +36,45 @@ impl Job {
         })
     }
 
-    pub async fn emit(&self, event: IngestLogEvent) {
+    pub async fn emit(&self, event: InternalLogEvent) {
+        // Mirror to tracing so structured metadata still lands in the server
+        // logs even though the UI only ever sees `message`.
+        let meta = if event.metadata.is_empty() {
+            None
+        } else {
+            Some(serde_json::to_string(&event.metadata).unwrap_or_default())
+        };
+        match event.level {
+            crate::server::application::InternalLogLevel::Info
+            | crate::server::application::InternalLogLevel::Success => match &meta {
+                Some(m) => info!(metadata = %m, "{}", event.message),
+                None => info!("{}", event.message),
+            },
+            crate::server::application::InternalLogLevel::Warn => match &meta {
+                Some(m) => warn!(metadata = %m, "{}", event.message),
+                None => warn!("{}", event.message),
+            },
+            crate::server::application::InternalLogLevel::Error => match &meta {
+                Some(m) => error!(metadata = %m, "{}", event.message),
+                None => error!("{}", event.message),
+            },
+        }
+
         let mut inner = self.inner.lock().await;
         inner.buffered.push(event.clone());
         let _ = self.sender.send(JobMessage::Event(event));
+    }
+
+    pub async fn info(&self, log: &str) {
+        self.emit(InternalLogEvent::info(log)).await;
+    }
+
+    pub async fn warn(&self, log: &str) {
+        self.emit(InternalLogEvent::warn(log)).await;
+    }
+
+    pub async fn error(&self, log: &str) {
+        self.emit(InternalLogEvent::error(log)).await;
     }
 
     pub async fn finish(&self) {

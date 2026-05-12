@@ -1,8 +1,7 @@
 use leptos::prelude::*;
 
 use crate::shared::{
-    ChunkDto, ChunkingConfig, DocumentListItemDto, IngestJobInfo, SourceDocumentDetailDto,
-    SourceDocumentDto,
+    ChunkDto, ChunkingConfig, DocumentListItemDto, SourceDocumentDetailDto, SourceDocumentDto,
 };
 
 #[server(name = GetChunks, prefix = "/api", endpoint = "get_chunks")]
@@ -30,7 +29,7 @@ pub async fn start_source_document_ingest(
     source_ref_slug: String,
     pipeline_configuration_id: uuid::Uuid,
     chunking_config: ChunkingConfig,
-) -> Result<IngestJobInfo, ServerFnError> {
+) -> Result<uuid::Uuid, ServerFnError> {
     use crate::server::domain::source_document::document_type::DocumentType;
     use crate::server::domain::source_document::source_ref::SourceRef;
     use crate::server::setup::AppState;
@@ -42,13 +41,24 @@ pub async fn start_source_document_ingest(
 
     state
         .source_document_ingest_service
-        .start_ingest(
+        .import_document(
+            SourceRef::UpstreamSlug {
+                slug: source_ref_slug.clone(),
+            },
+            DocumentType::BlogPost,
+        )
+        .await
+        .map_err(map_app_error)?;
+
+    state
+        .source_document_ingest_service
+        .request_indexing(
             SourceRef::UpstreamSlug {
                 slug: source_ref_slug,
             },
-            DocumentType::BlogPost,
             pipeline_configuration_id,
             chunking_config,
+            true,
         )
         .await
         .map_err(map_app_error)
@@ -92,8 +102,8 @@ pub async fn request_indexing(
     source_ref_slug: String,
     pipeline_configuration_id: uuid::Uuid,
     chunking_config: ChunkingConfig,
+    auto_advance: bool,
 ) -> Result<uuid::Uuid, ServerFnError> {
-    use crate::server::domain::source_document::document_type::DocumentType;
     use crate::server::domain::source_document::source_ref::SourceRef;
     use crate::server::setup::AppState;
     use crate::server_functions::error::map_app_error;
@@ -108,20 +118,16 @@ pub async fn request_indexing(
             SourceRef::UpstreamSlug {
                 slug: source_ref_slug,
             },
-            DocumentType::BlogPost,
             pipeline_configuration_id,
             chunking_config,
+            auto_advance,
         )
         .await
         .map_err(map_app_error)
 }
 
-#[server(
-    name = StartChunkingStage,
-    prefix = "/api",
-    endpoint = "start_chunking_stage"
-)]
-pub async fn start_chunking_stage(indexing_id: uuid::Uuid) -> Result<IngestJobInfo, ServerFnError> {
+#[server(name = RequeueChunking, prefix = "/api", endpoint = "requeue_chunking")]
+pub async fn requeue_chunking(indexing_id: uuid::Uuid) -> Result<(), ServerFnError> {
     use crate::server::setup::AppState;
     use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
@@ -131,19 +137,13 @@ pub async fn start_chunking_stage(indexing_id: uuid::Uuid) -> Result<IngestJobIn
 
     state
         .source_document_ingest_service
-        .start_chunking_stage(indexing_id)
+        .requeue_chunking(indexing_id)
         .await
         .map_err(map_app_error)
 }
 
-#[server(
-    name = StartEmbeddingStage,
-    prefix = "/api",
-    endpoint = "start_embedding_stage"
-)]
-pub async fn start_embedding_stage(
-    indexing_id: uuid::Uuid,
-) -> Result<IngestJobInfo, ServerFnError> {
+#[server(name = RequeueEmbedding, prefix = "/api", endpoint = "requeue_embedding")]
+pub async fn requeue_embedding(indexing_id: uuid::Uuid) -> Result<(), ServerFnError> {
     use crate::server::setup::AppState;
     use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
@@ -153,17 +153,13 @@ pub async fn start_embedding_stage(
 
     state
         .source_document_ingest_service
-        .start_embedding_stage(indexing_id)
+        .requeue_embedding(indexing_id)
         .await
         .map_err(map_app_error)
 }
 
-#[server(
-    name = StartUpsertStage,
-    prefix = "/api",
-    endpoint = "start_upsert_stage"
-)]
-pub async fn start_upsert_stage(indexing_id: uuid::Uuid) -> Result<IngestJobInfo, ServerFnError> {
+#[server(name = RequeueIndexing, prefix = "/api", endpoint = "requeue_indexing")]
+pub async fn requeue_indexing(indexing_id: uuid::Uuid) -> Result<(), ServerFnError> {
     use crate::server::setup::AppState;
     use crate::server_functions::error::map_app_error;
     use std::sync::Arc;
@@ -173,7 +169,7 @@ pub async fn start_upsert_stage(indexing_id: uuid::Uuid) -> Result<IngestJobInfo
 
     state
         .source_document_ingest_service
-        .start_upsert_stage(indexing_id)
+        .requeue_indexing(indexing_id)
         .await
         .map_err(map_app_error)
 }

@@ -5,10 +5,9 @@ use reqwest::Method;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::server::application::ingest::ports::vector_index::{
-    VectorIndexDescription, VectorMatch, VectorQuery,
+use crate::server::application::indexing::ports::vector_index::{
+    VectorIndex, VectorIndexDescription, VectorMatch, VectorQuery,
 };
-use crate::server::application::ingest::ports::VectorIndex;
 use crate::server::application::AppError;
 use crate::server::domain::VectorRecord;
 use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE};

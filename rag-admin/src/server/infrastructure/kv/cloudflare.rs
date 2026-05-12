@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use reqwest::Method;
 use serde_json::Value;
 
-use crate::server::application::ingest::ports::KvStore;
+use crate::server::application::indexing::ports::KvStore;
 use crate::server::application::AppError;
 use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
 

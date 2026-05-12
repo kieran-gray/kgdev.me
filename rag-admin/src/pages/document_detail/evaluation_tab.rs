@@ -13,8 +13,8 @@ use leptos::task::spawn_local;
 use leptos_router::components::A;
 use uuid::Uuid;
 
+use crate::components::activity::toggle_drawer;
 use crate::components::event_bus::use_invalidator;
-use crate::components::log_panel::LogPanel;
 use crate::components::primitives::{EmptyState, Status, StatusPill, Surface};
 use crate::server_functions::evaluation::{
     get_datasets_for_document, get_runs_for_document, start_generate_synthetic_dataset,
@@ -22,11 +22,10 @@ use crate::server_functions::evaluation::{
 };
 use crate::shared::{
     aggregate_type, ChunkingConfigurationDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto,
-    LogEvent, LogLevel, PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto,
+    PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto,
 };
 
 use super::eval_launcher::{EvaluationLauncher, LauncherCallbacks};
-use super::utils::open_event_stream;
 
 #[component]
 pub fn EvaluationTab(
@@ -108,58 +107,59 @@ fn EvaluationWorkspace(
         }
     });
 
-    // ── Job state (shared between launcher + dataset generation) ───────────
+    // ── Job lifecycle ─────────────────────────────────────────────────────
+    //
+    // Per the UX plan, per-screen log panels are gone — every job's progress
+    // is the activity drawer's job. We still need a local "running" flag for
+    // the launcher button to disable itself between click and the first
+    // event, plus a small error surface when the *kick-off* fails before any
+    // events were published.
     let (job_running, set_job_running) = signal(false);
-    let (log_events, set_log_events) = signal::<Vec<LogEvent>>(Vec::new());
+    let (launch_error, set_launch_error) = signal::<Option<String>>(None);
     let (dataset_label, set_dataset_label) = signal("synthetic-default".to_string());
 
     let on_generate = move |_| {
         let label = dataset_label.get();
         let Some(pipeline_configuration_id) = active_pipeline.get() else {
-            set_log_events.update(|evs| {
-                evs.push(LogEvent {
-                    level: LogLevel::Error,
-                    message:
-                        "Select a pipeline configuration before generating a synthetic dataset."
-                            .to_string(),
-                })
-            });
+            set_launch_error.set(Some(
+                "Select a pipeline configuration before generating a synthetic dataset."
+                    .to_string(),
+            ));
             return;
         };
-        set_log_events.set(vec![]);
+        set_launch_error.set(None);
         set_job_running.set(true);
         spawn_local(async move {
             match start_generate_synthetic_dataset(document_id, pipeline_configuration_id, label)
                 .await
             {
-                Ok(job) => open_event_stream(job.stream_url, set_log_events, set_job_running),
+                Ok(_job) => {
+                    toggle_drawer(true);
+                    // The drawer renders the job from this point on. The
+                    // event bus will flip its terminal state when the
+                    // aggregate publishes `*Completed`/`*Failed`.
+                    set_job_running.set(false);
+                }
                 Err(e) => {
                     set_job_running.set(false);
-                    set_log_events.update(|evs| {
-                        evs.push(LogEvent {
-                            level: LogLevel::Error,
-                            message: format!("{e}"),
-                        })
-                    });
+                    set_launch_error.set(Some(format!("{e}")));
                 }
             }
         });
     };
 
     let on_start_run = Callback::new(move |request: RunEvaluationRequestDto| {
-        set_log_events.set(vec![]);
+        set_launch_error.set(None);
         set_job_running.set(true);
         spawn_local(async move {
             match start_run_evaluation(request).await {
-                Ok(job) => open_event_stream(job.stream_url, set_log_events, set_job_running),
+                Ok(_job) => {
+                    toggle_drawer(true);
+                    set_job_running.set(false);
+                }
                 Err(e) => {
                     set_job_running.set(false);
-                    set_log_events.update(|evs| {
-                        evs.push(LogEvent {
-                            level: LogLevel::Error,
-                            message: format!("{e}"),
-                        })
-                    });
+                    set_launch_error.set(Some(format!("{e}")));
                 }
             }
         });
@@ -220,12 +220,10 @@ fn EvaluationWorkspace(
                 callbacks=LauncherCallbacks { on_start: on_start_run }
             />
 
-            // ── Live job log ──────────────────────────────────────────────
-            {move || (job_running.get() || !log_events.with(|e| e.is_empty())).then(|| view! {
-                <Surface title="Live log".to_string()>
-                    <div class="h-44 overflow-y-auto">
-                        <LogPanel events=log_events />
-                    </div>
+            // ── Launch error ──────────────────────────────────────────────
+            {move || launch_error.get().map(|err| view! {
+                <Surface>
+                    <div class="log-line-error text-sm">{err}</div>
                 </Surface>
             })}
 

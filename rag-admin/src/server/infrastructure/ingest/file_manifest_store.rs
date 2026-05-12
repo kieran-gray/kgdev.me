@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use tokio::fs;
 use tokio::sync::Mutex;
 
-use crate::server::application::ingest::ports::ManifestStore;
+use crate::server::application::indexing::ports::ManifestStore;
 use crate::server::application::AppError;
 use crate::server::domain::{Manifest, ManifestEntry};
 

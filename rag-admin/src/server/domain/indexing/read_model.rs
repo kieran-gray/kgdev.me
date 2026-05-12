@@ -17,6 +17,12 @@ pub struct IndexingReadModel {
     pub status: IndexingStatus,
     pub attempts: u32,
     pub removed: bool,
+    #[serde(default = "default_true")]
+    pub auto_advance: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl From<&Indexing> for IndexingReadModel {
@@ -32,6 +38,7 @@ impl From<&Indexing> for IndexingReadModel {
             status: indexing.status.clone(),
             attempts: indexing.attempts,
             removed: indexing.removed,
+            auto_advance: indexing.auto_advance,
         }
     }
 }

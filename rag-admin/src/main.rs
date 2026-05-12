@@ -7,7 +7,7 @@ async fn main() {
     use rag_admin::app::{shell, App};
     use rag_admin::server::api::events_ws::events_ws_handler;
     use rag_admin::server::api::health::health_check;
-    use rag_admin::server::api::sse::ingest_logs_handler;
+    use rag_admin::server::api::sse::job_logs_handler;
     use rag_admin::server::setup::AppState;
     use std::sync::Arc;
     use tracing_subscriber::EnvFilter;
@@ -31,8 +31,8 @@ async fn main() {
 
     let app = Router::new()
         .route(
-            "/api/ingest/logs/{job_id}",
-            axum::routing::get(ingest_logs_handler),
+            "/api/job/logs/{job_id}",
+            axum::routing::get(job_logs_handler),
         )
         .route("/api/events/ws", axum::routing::get(events_ws_handler))
         .route("/api/health", axum::routing::get(health_check))

@@ -6,7 +6,6 @@ use serde::Serialize;
 use sqlx::PgPool;
 use tokio::sync::Notify;
 
-use crate::server::application::blog::ports::PostChunkingConfigStore;
 use crate::server::application::chunking::chunkers::{
     register_builtin_chunkers, BuiltinChunkerDeps,
 };
@@ -24,11 +23,14 @@ use crate::server::application::evaluation::effects::{
 };
 use crate::server::application::evaluation::ports::{EvaluationGenerator, Retriever};
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
-use crate::server::application::indexing::IndexingCommandHandler;
-use crate::server::application::ingest::ports::VectorIndex;
-use crate::server::application::ingest::VectorIndexResolver;
+use crate::server::application::indexing::ports::VectorIndex;
+use crate::server::application::indexing::VectorIndexResolver;
+use crate::server::application::indexing::{
+    IndexingCommandHandler, IndexingEffect, IndexingEffectExecutor,
+};
 use crate::server::application::llm::ChatService;
 use crate::server::application::ports::ChatClient;
+use crate::server::application::source_document::ports::PostChunkingConfigStore;
 use crate::server::application::source_document::ports::{
     SourceAdapterRegistry, VectorIndexProvider,
 };
@@ -36,8 +38,9 @@ use crate::server::application::source_document::{
     SourceDocumentCommandHandler, SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
     SourceDocumentQueryService,
 };
-use crate::server::application::AppError;
-use crate::server::application::JobRegistry;
+use crate::server::application::{
+    spawn_activity_projection, ActivityRegistry, AppError, JobRegistry,
+};
 use crate::server::domain::configuration::aggregate::Configuration;
 use crate::server::domain::configuration::chunking_configuration::{
     ChunkingConfigurationProjector, ChunkingConfigurationRepository,
@@ -57,6 +60,7 @@ use crate::server::domain::evaluation::run::policies::derive_run_effects;
 use crate::server::domain::evaluation::run::projector::EvaluationRunProjector;
 use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
 use crate::server::domain::indexing::aggregate::Indexing;
+use crate::server::domain::indexing::policies::derive_indexing_effects;
 use crate::server::domain::indexing::projector::IndexingProjector;
 use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::aggregate::SourceDocument;
@@ -72,7 +76,6 @@ use crate::server::event_sourcing::process_manager::ProcessManager;
 use crate::server::event_sourcing::projection_driver::ProjectionDriver;
 use crate::server::event_sourcing::projector::Projector;
 use crate::server::event_sourcing::Aggregate;
-use crate::server::infrastructure::blog::HttpBlogSource;
 use crate::server::infrastructure::chunking::FilePostChunkingConfigStore;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::configuration::{
@@ -122,6 +125,7 @@ pub struct AppState {
     pub vector_index_resolver: Arc<VectorIndexResolver>,
     pub evaluation_defaults_store: Arc<dyn EvaluationDefaultsStore>,
     pub job_registry: Arc<JobRegistry>,
+    pub activity_registry: Arc<ActivityRegistry>,
     pub post_chunking_config_store: Arc<dyn PostChunkingConfigStore>,
     pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
@@ -143,7 +147,6 @@ impl AppState {
         );
         let cf_api = Arc::new(CloudflareApi::new(http.clone(), config.cloudflare.clone()));
         let ollama_api = Arc::new(OllamaApi::new(http.clone(), config.ollama.base_url.clone()));
-        let blog_source = HttpBlogSource::new(http.clone(), config.blog_url.clone());
 
         // ---- Shared event-sourcing infrastructure ----
         let event_bus = Arc::new(EventBus::new());
@@ -240,6 +243,8 @@ impl AppState {
         let post_chunking_config_store: Arc<dyn PostChunkingConfigStore> =
             FilePostChunkingConfigStore::new(post_chunking_config_path());
         let job_registry = Arc::new(JobRegistry::new());
+        let activity_registry = Arc::new(ActivityRegistry::new());
+        spawn_activity_projection(activity_registry.clone(), event_bus.clone());
 
         // ---- Command handlers (thin wrappers over CommandProcessor) ----
         let configuration_command_handler =
@@ -292,12 +297,40 @@ impl AppState {
             event_bus.clone(),
             &mut wakeups,
         );
-        spawn_driver::<Indexing, ()>(
+        // ---- Indexing pipeline (with process manager / effects) ----
+        let indexing_effect_ledger: Arc<dyn EffectLedger<IndexingEffect>> =
+            Arc::new(PostgresEffectLedger::<IndexingEffect>::new(pool.clone()));
+
+        let indexing_effect_executor = IndexingEffectExecutor::new(
+            source_document_repository.clone(),
+            indexing_repository.clone(),
+            blob_store.clone(),
+            chunking_engine.clone(),
+            chunk_set_repository.clone(),
+            embedding_service.clone(),
+            embedding_set_repository.clone(),
+            vector_index_resolver.clone(),
+            pipeline_resolver.clone(),
+            indexing_wiring.command_processor.clone(),
+            job_registry.clone(),
+            activity_registry.clone(),
+            clock.clone(),
+            id_generator.clone(),
+        );
+
+        let indexing_process_manager = Arc::new(ProcessManager::<Indexing, IndexingEffect>::new(
+            indexing_wiring.aggregate_repository.clone(),
+            indexing_effect_ledger,
+            indexing_effect_executor,
+            derive_indexing_effects,
+        ));
+
+        spawn_driver::<Indexing, IndexingEffect>(
             indexing_wiring.event_store.clone(),
             vec![Arc::new(IndexingProjector::new(
                 indexing_repository.clone(),
             ))],
-            None,
+            Some(indexing_process_manager),
             checkpoint_repository.clone(),
             event_bus.clone(),
             &mut wakeups,
@@ -317,6 +350,8 @@ impl AppState {
             evaluation_generator,
             embedding_service.clone(),
             dataset_wiring.command_processor.clone(),
+            job_registry.clone(),
+            activity_registry.clone(),
             clock.clone(),
         );
         let evaluation_retriever: Arc<dyn Retriever> =
@@ -333,6 +368,8 @@ impl AppState {
             evaluation_retriever,
             run_wiring.command_processor.clone(),
             pipeline_resolver.clone(),
+            job_registry.clone(),
+            activity_registry.clone(),
             clock.clone(),
             id_generator.clone(),
         );
@@ -379,7 +416,7 @@ impl AppState {
 
         // ---- Source document ingest pipeline ----
         let mut source_adapter_registry = SourceAdapterRegistry::new();
-        source_adapter_registry.register(HttpBlogAdapter::new(blog_source));
+        source_adapter_registry.register(HttpBlogAdapter::new(http.clone(), config.blog_url.clone()));
         let source_adapter_registry = Arc::new(source_adapter_registry);
 
         let source_document_ingest_service =
@@ -387,16 +424,9 @@ impl AppState {
                 source_document_command_handler,
                 indexing_command_handler,
                 source_document_repository: source_document_repository.clone(),
-                indexing_repository: indexing_repository.clone(),
                 blob_store,
-                chunk_set_repository: chunk_set_repository.clone(),
-                embedding_set_repository,
                 source_adapter_registry: source_adapter_registry.clone(),
-                chunker_registry: chunking_engine,
-                embedding_service: embedding_service.clone(),
-                vector_index_resolver: vector_index_resolver.clone(),
                 pipeline_resolver: pipeline_resolver.clone(),
-                job_registry: job_registry.clone(),
                 clock,
                 id_generator,
             });
@@ -421,6 +451,7 @@ impl AppState {
             vector_index_resolver,
             evaluation_defaults_store,
             job_registry,
+            activity_registry,
             post_chunking_config_store,
             source_document_ingest_service,
             source_document_query_service,

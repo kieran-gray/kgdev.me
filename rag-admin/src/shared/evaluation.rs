@@ -131,7 +131,7 @@ pub struct EvaluationJobInfo {
     pub stream_url: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EvaluationRunOptions {
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub top_k: u32,

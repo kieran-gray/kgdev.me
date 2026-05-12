@@ -2,21 +2,17 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_location;
 
+use crate::components::activity::{toggle_drawer, use_activity_state};
 use crate::components::event_bus::{use_event_bus, ConnectionState};
-use crate::shared::{aggregate_type, PublishedEvent};
 
-/// Top navigation bar. One row, six destinations, an activity dot on the right.
-///
-/// The activity dot mirrors the event-bus connection state plus a running
-/// count of in-flight aggregate jobs (best-effort, derived from recently
-/// observed start/finish events).
+/// Top navigation bar. One row, five destinations, an activity button on the
+/// right that toggles the activity drawer.
 #[component]
 pub fn AppNav() -> impl IntoView {
     let location = use_location();
     let bus = use_event_bus();
+    let activity = use_activity_state();
 
-    // Static destination list — kept in one place so a fifth screen doesn't
-    // require touching multiple files.
     let destinations: &[(&'static str, &'static str)] = &[
         ("/", "Documents"),
         ("/evaluations", "Evaluations"),
@@ -34,39 +30,22 @@ pub fn AppNav() -> impl IntoView {
         }
     };
 
-    // Best-effort in-flight job counter. Updates from the event bus: increment
-    // on a "started" event, decrement on a "completed" / "failed" event. Per-
-    // event semantics are encoded in `event_indicates_*` below so adding new
-    // aggregate types is a one-line change.
-    let (active_jobs, set_active_jobs) = signal(0u32);
-
-    Effect::new(move |_| {
-        if let Some(event) = bus.last_event.get() {
-            apply_event_to_counter(&event, set_active_jobs);
-        }
-    });
-
-    Effect::new(move |prev: Option<u32>| {
-        // On reconnect, reset the counter — we don't trust our cached count
-        // after a gap in the event stream.
-        let epoch = bus.epoch.get();
-        if prev.is_some() && prev != Some(epoch) {
-            set_active_jobs.set(0);
-        }
-        epoch
-    });
+    // Authoritative running-job count: read from ActivityState rather than
+    // counting events. The activity registry is the single source of truth.
+    let running_count = move || activity.running_count();
+    let drawer_open = activity.open;
 
     let activity_dot_class = move || {
-        let active = active_jobs.get() > 0;
+        let running = running_count() > 0;
         let connected = matches!(bus.connection.get(), ConnectionState::Open);
-        match (connected, active) {
+        match (connected, running) {
             (false, _) => "activity-dot activity-dot-fail",
             (true, false) => "activity-dot",
             (true, true) => "activity-dot activity-dot-active",
         }
     };
 
-    let activity_title = move || match (bus.connection.get(), active_jobs.get()) {
+    let activity_title = move || match (bus.connection.get(), running_count()) {
         (ConnectionState::Open, 0) => "Connected · idle".to_string(),
         (ConnectionState::Open, n) => format!("Connected · {n} active job(s)"),
         (ConnectionState::Connecting, _) => "Connecting…".to_string(),
@@ -98,11 +77,13 @@ pub fn AppNav() -> impl IntoView {
                     type="button"
                     class="btn-ghost btn flex items-center gap-2"
                     title=activity_title
-                    aria-label="Activity"
+                    aria-label="Toggle activity drawer"
+                    aria-expanded=move || if drawer_open.get() { "true" } else { "false" }
+                    on:click=move |_| toggle_drawer(!drawer_open.get_untracked())
                 >
                     <span class=activity_dot_class></span>
                     <span class="muted text-xs">
-                        {move || active_jobs.get().to_string()}
+                        {move || running_count().to_string()}
                     </span>
                 </button>
                 <A href="/settings" attr:class="btn-ghost btn" attr:title="Settings">
@@ -111,38 +92,4 @@ pub fn AppNav() -> impl IntoView {
             </div>
         </header>
     }
-}
-
-/// Update the in-flight job counter based on an observed event.
-///
-/// Started: increments. Completed/failed/removed: decrements (saturating).
-/// Unknown events are ignored — the activity counter is best-effort UX, not
-/// authoritative state.
-fn apply_event_to_counter(event: &PublishedEvent, set_count: WriteSignal<u32>) {
-    let delta: i32 = match (event.aggregate_type.as_str(), event.event_type.as_str()) {
-        (aggregate_type::INDEXING, "IngestRequested") => 1,
-        (aggregate_type::INDEXING, "IndexingCompleted" | "IngestionFailed" | "IndexingRemoved") => {
-            -1
-        }
-        (aggregate_type::EVALUATION_RUN, "RunRequested") => 1,
-        (aggregate_type::EVALUATION_RUN, "RunCompleted" | "RunFailed") => -1,
-        (aggregate_type::EVALUATION_DATASET, "DatasetGenerationRequested") => 1,
-        (
-            aggregate_type::EVALUATION_DATASET,
-            "DatasetGenerationCompleted" | "DatasetGenerationFailed",
-        ) => -1,
-        _ => 0,
-    };
-
-    if delta == 0 {
-        return;
-    }
-
-    set_count.update(|c| {
-        if delta > 0 {
-            *c = c.saturating_add(delta as u32);
-        } else {
-            *c = c.saturating_sub((-delta) as u32);
-        }
-    });
 }

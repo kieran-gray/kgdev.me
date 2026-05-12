@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tracing::{error, info};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::server::application::chunking::ChunkerRegistry;
@@ -12,7 +12,7 @@ use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::ports::{
     BlobStore, ChunkSetRepository, EmbeddingSetRepository,
 };
-use crate::server::application::AppError;
+use crate::server::application::{ActivityRegistry, AppError, InternalLogEvent, Job, JobRegistry};
 use crate::server::domain::chunk_set::entity::{Chunk, ChunkSet};
 use crate::server::domain::embedding_set::entity::{ChunkEmbedding, EmbeddingSet};
 use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
@@ -42,6 +42,8 @@ pub struct EvaluationRunEffectExecutor {
     retriever: Arc<dyn Retriever>,
     command_processor: Arc<CommandProcessor<EvaluationRun>>,
     pipeline_resolver: Arc<PipelineResolver>,
+    job_registry: Arc<JobRegistry>,
+    activity_registry: Arc<ActivityRegistry>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
 }
@@ -59,6 +61,8 @@ impl EvaluationRunEffectExecutor {
         retriever: Arc<dyn Retriever>,
         command_processor: Arc<CommandProcessor<EvaluationRun>>,
         pipeline_resolver: Arc<PipelineResolver>,
+        job_registry: Arc<JobRegistry>,
+        activity_registry: Arc<ActivityRegistry>,
         clock: Arc<dyn Clock>,
         id_generator: Arc<dyn IdGenerator>,
     ) -> Arc<Self> {
@@ -73,22 +77,25 @@ impl EvaluationRunEffectExecutor {
             retriever,
             command_processor,
             pipeline_resolver,
+            job_registry,
+            activity_registry,
             clock,
             id_generator,
         })
     }
 
     async fn run(&self, effect: &ExecuteRunEffect) -> Result<(), AppError> {
-        if let Err(e) = self.run_inner(effect).await {
-            error!(
-                run_id = %effect.run_id,
-                dataset_id = %effect.dataset_id,
-                error = %e,
-                "evaluation run failed"
-            );
-            // Best-effort: tell the run aggregate we failed so the read model
-            // and process manager stop waiting on us. Swallow the secondary
-            // error so we still surface the original `e` to the ledger.
+        let (job_id, job) = self.job_registry.create().await;
+        let stream_url = format!("/api/job/logs/{job_id}");
+        // Activity rows are keyed by aggregate stream id, which for the run
+        // executor is `run_id` — the dataset has its own row.
+        self.activity_registry
+            .attach_stream(effect.run_id, stream_url)
+            .await;
+
+        let result = self.run_inner(effect, job.clone()).await;
+        if let Err(e) = &result {
+            job.error(&format!("Evaluation run failed: {e}")).await;
             let _ = self
                 .command_processor
                 .handle(
@@ -100,12 +107,12 @@ impl EvaluationRunEffectExecutor {
                     }),
                 )
                 .await;
-            return Err(e);
         }
-        Ok(())
+        job.finish().await;
+        result
     }
 
-    async fn run_inner(&self, effect: &ExecuteRunEffect) -> Result<(), AppError> {
+    async fn run_inner(&self, effect: &ExecuteRunEffect, job: Arc<Job>) -> Result<(), AppError> {
         if effect.autotune_request.is_some() {
             return Err(AppError::Validation(
                 "autotune is not yet implemented in the new evaluation path".into(),
@@ -151,15 +158,22 @@ impl EvaluationRunEffectExecutor {
 
         let question_texts: Vec<String> = questions.iter().map(|q| q.question.clone()).collect();
 
-        info!(
-            run_id = %effect.run_id,
-            dataset_id = %effect.dataset_id,
-            questions = question_texts.len(),
-            variants = effect.variants.len(),
-            options = effect.options.len(),
-            embedding_model = %embedding_model.model,
-            "starting evaluation run"
-        );
+        job.emit(
+            InternalLogEvent::info(format!(
+                "Starting evaluation run: {} variants × {} options across {} questions ({})",
+                effect.variants.len(),
+                effect.options.len(),
+                question_texts.len(),
+                embedding_model.model,
+            ))
+            .with_meta("run_id", json!(effect.run_id.to_string()))
+            .with_meta("dataset_id", json!(effect.dataset_id.to_string()))
+            .with_meta("question_count", json!(question_texts.len()))
+            .with_meta("variant_count", json!(effect.variants.len()))
+            .with_meta("option_count", json!(effect.options.len()))
+            .with_meta("embedding_model", json!(embedding_model.model)),
+        )
+        .await;
 
         let question_embeddings = self
             .embedding_service
@@ -167,11 +181,11 @@ impl EvaluationRunEffectExecutor {
             .await?;
 
         for variant in &effect.variants {
-            info!(
-                run_id = %effect.run_id,
-                variant = %variant.label,
-                "preparing variant"
-            );
+            job.emit(
+                InternalLogEvent::info(format!("Preparing variant '{}'…", variant.label))
+                    .with_meta("variant_label", json!(variant.label)),
+            )
+            .await;
 
             let (chunk_set_id, chunks) = self
                 .find_or_create_chunk_set(
@@ -199,14 +213,18 @@ impl EvaluationRunEffectExecutor {
                 )
                 .await?;
 
-            info!(
-                run_id = %effect.run_id,
-                variant = %variant.label,
-                chunks = chunks.len(),
-                %chunk_set_id,
-                %embedding_set_id,
-                "variant prepared"
-            );
+            job.emit(
+                InternalLogEvent::info(format!(
+                    "Variant '{}' prepared: {} chunks",
+                    variant.label,
+                    chunks.len(),
+                ))
+                .with_meta("variant_label", json!(variant.label))
+                .with_meta("chunk_count", json!(chunks.len()))
+                .with_meta("chunk_set_id", json!(chunk_set_id.to_string()))
+                .with_meta("embedding_set_id", json!(embedding_set_id.to_string())),
+            )
+            .await;
 
             let splits = vec![EvaluationResultSplit::Full];
 
@@ -222,16 +240,29 @@ impl EvaluationRunEffectExecutor {
                         )
                         .await?;
 
-                    info!(
-                        run_id = %effect.run_id,
-                        variant = %variant.label,
-                        split = split.as_str(),
-                        top_k = options.top_k,
-                        recall_mean = format!("{:.3}", metrics.recall_mean),
-                        precision_mean = format!("{:.3}", metrics.precision_mean),
-                        iou_mean = format!("{:.3}", metrics.iou_mean),
-                        "variant scored"
-                    );
+                    job.emit(
+                        InternalLogEvent::info(format!(
+                            "Scored variant '{}' (top_k={}, split={}): recall={:.3} precision={:.3} iou={:.3}",
+                            variant.label,
+                            options.top_k,
+                            split.as_str(),
+                            metrics.recall_mean,
+                            metrics.precision_mean,
+                            metrics.iou_mean,
+                        ))
+                        .with_meta("variant_label", json!(variant.label))
+                        .with_meta("split", json!(split.as_str()))
+                        .with_meta("top_k", json!(options.top_k))
+                        .with_meta("min_score_milli", json!(options.min_score_milli))
+                        .with_meta("recall_mean", json!(metrics.recall_mean))
+                        .with_meta("recall_std", json!(metrics.recall_std))
+                        .with_meta("precision_mean", json!(metrics.precision_mean))
+                        .with_meta("precision_std", json!(metrics.precision_std))
+                        .with_meta("iou_mean", json!(metrics.iou_mean))
+                        .with_meta("iou_std", json!(metrics.iou_std))
+                        .with_meta("precision_omega_mean", json!(metrics.precision_omega_mean)),
+                    )
+                    .await;
 
                     self.command_processor
                         .handle(
@@ -265,11 +296,17 @@ impl EvaluationRunEffectExecutor {
             )
             .await?;
 
-        info!(
-            run_id = %effect.run_id,
-            variants = effect.variants.len(),
-            "evaluation run complete"
-        );
+        job.emit(
+            InternalLogEvent::success(format!(
+                "Evaluation run complete · {} variants × {} options scored",
+                effect.variants.len(),
+                effect.options.len(),
+            ))
+            .with_meta("run_id", json!(effect.run_id.to_string()))
+            .with_meta("variant_count", json!(effect.variants.len()))
+            .with_meta("option_count", json!(effect.options.len())),
+        )
+        .await;
 
         Ok(())
     }

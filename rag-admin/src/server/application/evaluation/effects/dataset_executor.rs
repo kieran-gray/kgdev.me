@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tracing::{debug, info, warn};
+use serde_json::json;
 
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::generator::build_question_prompt;
@@ -11,7 +11,7 @@ use crate::server::application::evaluation::question_filter::{
 };
 use crate::server::application::evaluation::reference_locator::ReferenceLocator;
 use crate::server::application::source_document::ports::BlobStore;
-use crate::server::application::AppError;
+use crate::server::application::{ActivityRegistry, AppError, InternalLogEvent, JobRegistry};
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::dataset::commands::{
     AcceptQuestion, CompleteDatasetGeneration, EvaluationDatasetCommand, FailDatasetGeneration,
@@ -36,16 +36,21 @@ pub struct EvaluationDatasetEffectExecutor {
     generator: Arc<dyn EvaluationGenerator>,
     embedding_service: Arc<EmbeddingService>,
     command_processor: Arc<CommandProcessor<EvaluationDataset>>,
+    job_registry: Arc<JobRegistry>,
+    activity_registry: Arc<ActivityRegistry>,
     clock: Arc<dyn Clock>,
 }
 
 impl EvaluationDatasetEffectExecutor {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         source_document_repository: Arc<dyn SourceDocumentRepository>,
         blob_store: Arc<dyn BlobStore>,
         generator: Arc<dyn EvaluationGenerator>,
         embedding_service: Arc<EmbeddingService>,
         command_processor: Arc<CommandProcessor<EvaluationDataset>>,
+        job_registry: Arc<JobRegistry>,
+        activity_registry: Arc<ActivityRegistry>,
         clock: Arc<dyn Clock>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -54,6 +59,8 @@ impl EvaluationDatasetEffectExecutor {
             generator,
             embedding_service,
             command_processor,
+            job_registry,
+            activity_registry,
             clock,
         })
     }
@@ -88,14 +95,30 @@ impl EvaluationDatasetEffectExecutor {
         let mut rejection_attempt: u32 = 0;
         let mut accepted_sequence: u32 = 0;
 
-        info!(
-            dataset_id = %effect.dataset_id,
-            document_id = %effect.document_id,
-            target,
-            max_attempts,
-            generation_model_id = %effect.generation_model_id,
-            "starting dataset generation"
-        );
+        let (job_id, job) = self.job_registry.create().await;
+        let stream_url = format!("/api/job/logs/{job_id}");
+
+        self.activity_registry
+            .attach_stream(effect.dataset_id, stream_url)
+            .await;
+
+        job.emit(
+            InternalLogEvent::info(format!(
+                "Starting dataset generation · target {target} questions ({} attempts max)",
+                max_attempts,
+            ))
+            .with_meta("dataset_id", json!(effect.dataset_id.to_string()))
+            .with_meta("document_id", json!(effect.document_id.to_string()))
+            .with_meta("target", json!(target))
+            .with_meta("max_attempts", json!(max_attempts))
+            .with_meta(
+                "generation_model_id",
+                json!(effect.generation_model_id.to_string()),
+            )
+            .with_meta("excerpt_threshold", json!(excerpt_threshold))
+            .with_meta("duplicate_threshold", json!(duplicate_threshold)),
+        )
+        .await;
 
         for attempt in 0..max_attempts {
             if gate.kept_count() >= target {
@@ -112,12 +135,15 @@ impl EvaluationDatasetEffectExecutor {
             let generated = match generated_result {
                 Ok(g) => g,
                 Err(e) => {
-                    warn!(
-                        dataset_id = %effect.dataset_id,
-                        attempt = attempt + 1,
-                        error = %e,
-                        "generation attempt failed"
-                    );
+                    job.emit(
+                        InternalLogEvent::warn(format!(
+                            "Generation attempt {} failed",
+                            attempt + 1,
+                        ))
+                        .with_meta("attempt", json!(attempt + 1))
+                        .with_meta("error", json!(e.to_string())),
+                    )
+                    .await;
                     continue;
                 }
             };
@@ -126,12 +152,15 @@ impl EvaluationDatasetEffectExecutor {
                 match ReferenceLocator::generated_to_question(&generated, &plain_text) {
                     Ok(q) => q,
                     Err(e) => {
-                        debug!(
-                            dataset_id = %effect.dataset_id,
-                            attempt = attempt + 1,
-                            error = %e,
-                            "discarded generated question (reference locator)"
-                        );
+                        job.emit(
+                            InternalLogEvent::info(format!(
+                                "Discarded generated question (reference locator) on attempt {}",
+                                attempt + 1,
+                            ))
+                            .with_meta("attempt", json!(attempt + 1))
+                            .with_meta("error", json!(e.to_string())),
+                        )
+                        .await;
                         continue;
                     }
                 };
@@ -166,24 +195,34 @@ impl EvaluationDatasetEffectExecutor {
                             }),
                         )
                         .await?;
-                    info!(
-                        dataset_id = %effect.dataset_id,
-                        sequence = accepted_sequence,
-                        kept = gate.kept_count(),
-                        target,
-                        "accepted question"
-                    );
+
+                    job.emit(
+                        InternalLogEvent::info(format!(
+                            "Accepted question {}/{}",
+                            gate.kept_count(),
+                            target,
+                        ))
+                        .with_meta("sequence", json!(accepted_sequence))
+                        .with_meta("kept", json!(gate.kept_count()))
+                        .with_meta("target", json!(target))
+                        .with_meta("question_preview", json!(truncate_str(&q.question, 200))),
+                    )
+                    .await;
                     accepted_sequence += 1;
                     previous_coverage.push(question_coverage_entry(q));
                 }
                 QuestionFilterDecision::RejectedLowExcerptSimilarity { similarity } => {
                     rejection_attempt += 1;
-                    debug!(
-                        dataset_id = %effect.dataset_id,
-                        attempt = rejection_attempt,
-                        similarity = format!("{:.3}", similarity),
-                        "rejected: low excerpt similarity"
-                    );
+                    job.emit(
+                        InternalLogEvent::info(format!(
+                            "Rejected: low excerpt similarity ({:.1}%)",
+                            similarity * 100.0,
+                        ))
+                        .with_meta("reason", json!("low_excerpt_similarity"))
+                        .with_meta("attempt", json!(rejection_attempt))
+                        .with_meta("similarity", json!(similarity)),
+                    )
+                    .await;
                     self.command_processor
                         .handle(
                             effect.dataset_id,
@@ -201,12 +240,16 @@ impl EvaluationDatasetEffectExecutor {
                 }
                 QuestionFilterDecision::RejectedDuplicate { similarity } => {
                     rejection_attempt += 1;
-                    debug!(
-                        dataset_id = %effect.dataset_id,
-                        attempt = rejection_attempt,
-                        similarity = format!("{:.3}", similarity),
-                        "rejected: duplicate"
-                    );
+                    job.emit(
+                        InternalLogEvent::info(format!(
+                            "Rejected: duplicate ({:.1}% similar to a previous question)",
+                            similarity * 100.0,
+                        ))
+                        .with_meta("reason", json!("duplicate"))
+                        .with_meta("attempt", json!(rejection_attempt))
+                        .with_meta("similarity", json!(similarity)),
+                    )
+                    .await;
                     self.command_processor
                         .handle(
                             effect.dataset_id,
@@ -223,11 +266,12 @@ impl EvaluationDatasetEffectExecutor {
         }
 
         if gate.kept_count() == 0 {
-            warn!(
-                dataset_id = %effect.dataset_id,
-                rejection_attempts = rejection_attempt,
-                "dataset generation produced no usable questions"
-            );
+            job.emit(
+                InternalLogEvent::warn("Dataset generation produced no usable questions")
+                    .with_meta("rejection_attempts", json!(rejection_attempt))
+                    .with_meta("max_attempts", json!(max_attempts)),
+            )
+            .await;
             self.command_processor
                 .handle(
                     effect.dataset_id,
@@ -250,13 +294,14 @@ impl EvaluationDatasetEffectExecutor {
                 target,
                 max_attempts
             );
-            warn!(
-                dataset_id = %effect.dataset_id,
-                kept = gate.kept_count(),
-                target,
-                max_attempts,
-                "dataset generation under-target"
-            );
+            job.emit(
+                InternalLogEvent::warn(reason.clone())
+                    .with_meta("kept", json!(gate.kept_count()))
+                    .with_meta("target", json!(target))
+                    .with_meta("max_attempts", json!(max_attempts))
+                    .with_meta("rejection_attempts", json!(rejection_attempt)),
+            )
+            .await;
             self.command_processor
                 .handle(
                     effect.dataset_id,
@@ -280,12 +325,19 @@ impl EvaluationDatasetEffectExecutor {
             )
             .await?;
 
-        info!(
-            dataset_id = %effect.dataset_id,
-            accepted = gate.kept_count(),
-            rejected = rejection_attempt,
-            "dataset generation complete"
-        );
+        job.emit(
+            InternalLogEvent::success(format!(
+                "Dataset generation complete · {} accepted, {} rejected",
+                gate.kept_count(),
+                rejection_attempt,
+            ))
+            .with_meta("accepted", json!(gate.kept_count()))
+            .with_meta("rejected", json!(rejection_attempt))
+            .with_meta("target", json!(target)),
+        )
+        .await;
+
+        job.finish().await;
 
         Ok(())
     }

@@ -3,6 +3,7 @@ pub mod configuration;
 pub mod embed;
 pub mod error;
 pub mod evaluation;
+pub mod jobs;
 pub mod schema;
 pub mod settings;
 pub mod source_document;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::server::application::ingest::ports::VectorIndex;
+use crate::server::application::indexing::ports::VectorIndex;
 use crate::server::application::source_document::ports::VectorIndexProvider;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::aggregate::Configuration;

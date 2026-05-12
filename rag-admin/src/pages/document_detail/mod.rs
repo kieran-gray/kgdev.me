@@ -238,10 +238,10 @@ fn derive_status(indexings: &[crate::shared::IndexingDto]) -> (Status, String) {
         return (Status::Fail, "Failed".to_string());
     }
     if indexings.iter().any(|i| i.status.contains("Embedding")) {
-        return (Status::Pending, "Embedding".to_string());
+        return (Status::Info, "Embedded".to_string());
     }
     if indexings.iter().any(|i| i.status.contains("Chunking")) {
-        return (Status::Pending, "Chunking".to_string());
+        return (Status::Info, "Chunked".to_string());
     }
     (Status::Pending, "Pending".to_string())
 }

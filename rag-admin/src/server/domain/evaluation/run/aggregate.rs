@@ -62,6 +62,7 @@ impl EvaluationRunStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ScoredVariantKey {
     pub variant_label: String,
+    pub options: EvaluationRunOptions,
     pub split: EvaluationResultSplit,
 }
 
@@ -150,6 +151,7 @@ impl Aggregate for EvaluationRun {
             Self::Event::VariantScored(e) => {
                 self.scored_keys.insert(ScoredVariantKey {
                     variant_label: e.variant_label.clone(),
+                    options: e.options.clone(),
                     split: e.split,
                 });
                 self.status = EvaluationRunStatus::Running {
@@ -224,6 +226,7 @@ impl Aggregate for EvaluationRun {
                 let run = state.ok_or(EvaluationRunError::NotFound)?;
                 let key = ScoredVariantKey {
                     variant_label: cmd.variant_label.clone(),
+                    options: cmd.options.clone(),
                     split: cmd.split,
                 };
                 if run.scored_keys.contains(&key) {

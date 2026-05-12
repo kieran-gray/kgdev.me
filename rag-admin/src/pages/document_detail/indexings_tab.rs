@@ -2,25 +2,23 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use uuid::Uuid;
 
+use crate::components::activity::toggle_drawer;
 use crate::components::event_bus::use_invalidator;
-use crate::components::log_panel::LogPanel;
 use crate::components::primitives::{EmptyState, Status, StatusPill, Surface};
 use crate::server_functions::source_document::{
-    request_indexing, start_chunking_stage, start_embedding_stage, start_source_document_ingest,
-    start_upsert_stage,
+    request_indexing, requeue_chunking, requeue_embedding, requeue_indexing,
+    start_source_document_ingest,
 };
 use crate::shared::{
-    aggregate_type, ChunkingConfig, ChunkingConfigurationDto, IndexingDto, IngestJobInfo, LogEvent,
-    LogLevel, PipelineConfigurationDto, SourceDocumentDetailDto,
+    aggregate_type, ChunkingConfig, ChunkingConfigurationDto, IndexingDto,
+    PipelineConfigurationDto, SourceDocumentDetailDto,
 };
 
-use super::utils::open_event_stream;
-
 /// "Indexings" tab — table of all indexing aggregates for this document plus
-/// an inline launcher for a new one. Each row exposes manual per-stage
-/// controls (Chunk → Embed → Upsert) so the operator can advance the pipeline
-/// step by step, or use the one-shot "Run full" button on the new-indexing
-/// panel to do everything in one go.
+/// an inline launcher for a new one. Each row exposes per-stage requeue
+/// buttons (Chunk → Embed → Index) so the operator can re-run a stage in
+/// stepwise mode, or use the "Run full ingest" button on the new-indexing
+/// panel to let the process manager chain stages automatically.
 #[component]
 pub fn IndexingsTab(
     detail: Option<SourceDocumentDetailDto>,
@@ -116,15 +114,16 @@ fn IndexingsTable(indexings: Vec<IndexingDto>) -> impl IntoView {
     }
 }
 
-/// Per-row stage advancers. Each button calls the corresponding server fn
-/// and opens a log stream inline. Enabled/disabled state is driven by the
-/// IndexingDto status string from the read model.
+/// Per-row stage requeue buttons. Each click issues the corresponding
+/// `Requeue*` command, which emits a marker event that the process manager
+/// turns into the matching effect. The button pops the drawer open so the
+/// operator can watch the SSE feed.
 #[component]
 fn StageControls(ix: IndexingDto) -> impl IntoView {
     let indexing_id = ix.indexing_id;
     let status = ix.status.clone();
     let (running_stage, set_running_stage) = signal::<Option<&'static str>>(None);
-    let (log_events, set_log_events) = signal::<Vec<LogEvent>>(Vec::new());
+    let (error, set_error) = signal::<Option<String>>(None);
 
     let make_runner = move |stage: &'static str, runner: fn(Uuid) -> _| {
         move |_| {
@@ -132,30 +131,17 @@ fn StageControls(ix: IndexingDto) -> impl IntoView {
                 return;
             }
             set_running_stage.set(Some(stage));
-            set_log_events.set(vec![]);
+            set_error.set(None);
             let fut = runner(indexing_id);
             spawn_local(async move {
                 match fut.await {
-                    Ok(IngestJobInfo { stream_url, .. }) => {
-                        // open_event_stream flips set_running back to false on
-                        // job completion; we mirror that into running_stage.
-                        let (proxy_running, set_proxy_running) = signal(true);
-                        open_event_stream(stream_url, set_log_events, set_proxy_running);
-                        // Watch proxy_running and clear running_stage when done.
-                        Effect::new(move |_| {
-                            if !proxy_running.get() {
-                                set_running_stage.set(None);
-                            }
-                        });
+                    Ok(()) => {
+                        toggle_drawer(true);
+                        set_running_stage.set(None);
                     }
                     Err(e) => {
                         set_running_stage.set(None);
-                        set_log_events.update(|evs| {
-                            evs.push(LogEvent {
-                                level: LogLevel::Error,
-                                message: format!("{e}"),
-                            });
-                        });
+                        set_error.set(Some(format!("{e}")));
                     }
                 }
             });
@@ -173,32 +159,29 @@ fn StageControls(ix: IndexingDto) -> impl IntoView {
     let any_busy = move || running_stage.get().is_some();
 
     let on_chunk = make_runner("chunk", |id| {
-        Box::pin(start_chunking_stage(id))
+        Box::pin(requeue_chunking(id))
             as std::pin::Pin<
                 Box<
-                    dyn std::future::Future<
-                            Output = Result<IngestJobInfo, leptos::prelude::ServerFnError>,
-                        > + Send,
+                    dyn std::future::Future<Output = Result<(), leptos::prelude::ServerFnError>>
+                        + Send,
                 >,
             >
     });
     let on_embed = make_runner("embed", |id| {
-        Box::pin(start_embedding_stage(id))
+        Box::pin(requeue_embedding(id))
             as std::pin::Pin<
                 Box<
-                    dyn std::future::Future<
-                            Output = Result<IngestJobInfo, leptos::prelude::ServerFnError>,
-                        > + Send,
+                    dyn std::future::Future<Output = Result<(), leptos::prelude::ServerFnError>>
+                        + Send,
                 >,
             >
     });
     let on_upsert = make_runner("upsert", |id| {
-        Box::pin(start_upsert_stage(id))
+        Box::pin(requeue_indexing(id))
             as std::pin::Pin<
                 Box<
-                    dyn std::future::Future<
-                            Output = Result<IngestJobInfo, leptos::prelude::ServerFnError>,
-                        > + Send,
+                    dyn std::future::Future<Output = Result<(), leptos::prelude::ServerFnError>>
+                        + Send,
                 >,
             >
     });
@@ -230,10 +213,8 @@ fn StageControls(ix: IndexingDto) -> impl IntoView {
                     on_click=Box::new(on_upsert)
                 />
             </div>
-            {move || (!log_events.with(|e| e.is_empty())).then(|| view! {
-                <div class="h-32 overflow-y-auto border border-[var(--color-border)] rounded">
-                    <LogPanel events=log_events />
-                </div>
+            {move || error.get().map(|e| view! {
+                <div class="log-line-error text-xs px-1">{e}</div>
             })}
         </div>
     }
@@ -290,7 +271,6 @@ fn NewIndexingPanel(
     let (active_pipeline, set_active_pipeline) = signal::<Option<Uuid>>(None);
     let (active_chunking, set_active_chunking) = signal::<Option<Uuid>>(None);
     let (running, set_running) = signal(false);
-    let (log_events, set_log_events) = signal::<Vec<LogEvent>>(Vec::new());
     let (error, set_error) = signal::<Option<String>>(None);
 
     // Pre-select first chunking config on mount so the form has a sane default.
@@ -317,7 +297,7 @@ fn NewIndexingPanel(
         active_pipeline.get().is_some() && active_chunking.get().is_some() && !running.get()
     };
 
-    let on_create_pending = move |_| {
+    let on_create_stepwise = move |_| {
         let (Some(pipeline_id), Some(config)) = (active_pipeline.get(), resolve_chunking_config())
         else {
             return;
@@ -325,12 +305,10 @@ fn NewIndexingPanel(
         let slug = source_ref.get_value();
         set_running.set(true);
         set_error.set(None);
-        set_log_events.set(vec![]);
         spawn_local(async move {
-            match request_indexing(slug, pipeline_id, config).await {
+            match request_indexing(slug, pipeline_id, config, false).await {
                 Ok(_indexing_id) => {
-                    // Indexing event invalidates the document detail Resource
-                    // upstream; the new row appears automatically.
+                    toggle_drawer(true);
                     set_running.set(false);
                 }
                 Err(e) => {
@@ -349,11 +327,11 @@ fn NewIndexingPanel(
         let slug = source_ref.get_value();
         set_running.set(true);
         set_error.set(None);
-        set_log_events.set(vec![]);
         spawn_local(async move {
             match start_source_document_ingest(slug, pipeline_id, config).await {
-                Ok(IngestJobInfo { stream_url, .. }) => {
-                    open_event_stream(stream_url, set_log_events, set_running);
+                Ok(_indexing_id) => {
+                    toggle_drawer(true);
+                    set_running.set(false);
                 }
                 Err(e) => {
                     set_running.set(false);
@@ -439,7 +417,7 @@ fn NewIndexingPanel(
                         type="button"
                         class="btn btn-primary w-full justify-center"
                         disabled=move || !can_start()
-                        on:click=on_create_pending
+                        on:click=on_run_full
                     >
                         {move || if running.get() {
                             "Working…"
@@ -448,34 +426,25 @@ fn NewIndexingPanel(
                         } else if active_chunking.get().is_none() {
                             "Select a chunking config"
                         } else {
-                            "Create — manual stages"
+                            "Run full ingest"
                         }}
                     </button>
                     <button
                         type="button"
                         class="btn w-full justify-center"
                         disabled=move || !can_start()
-                        on:click=on_run_full
+                        on:click=on_create_stepwise
                     >
-                        "Run full ingest"
+                        "Chunk only (stepwise)"
                     </button>
                     <p class="text-xs faint">
-                        "Manual stages registers the indexing in Pending so you can run chunk · embed · index step by step.
-                         Run full does everything in one go."
+                        "Run full does chunk → embed → index automatically.
+                         Stepwise chunks now and stops; advance with the per-row buttons when you're happy with the chunks."
                     </p>
                 </div>
 
                 {move || error.get().map(|e| view! {
                     <div class="log-line-error text-sm">{e}</div>
-                })}
-
-                {move || (running.get() || !log_events.with(|e| e.is_empty())).then(|| view! {
-                    <div class="mt-2">
-                        <div class="eyebrow mb-1">"Live log"</div>
-                        <div class="h-44 overflow-y-auto">
-                            <LogPanel events=log_events />
-                        </div>
-                    </div>
                 })}
             </div>
         </Surface>
@@ -488,9 +457,9 @@ fn status_display(status: &str) -> (Status, &'static str) {
     } else if status.contains("Failed") {
         (Status::Fail, "Failed")
     } else if status.contains("Embedding") {
-        (Status::Pending, "Embedded")
+        (Status::Info, "Embedded")
     } else if status.contains("Chunking") {
-        (Status::Pending, "Chunked")
+        (Status::Info, "Chunked")
     } else {
         (Status::Pending, "Pending")
     }

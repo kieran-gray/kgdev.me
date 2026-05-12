@@ -91,20 +91,22 @@ pub fn PipelinesPage() -> impl IntoView {
             </Transition>
 
             // ── Add / Edit dialog ─────────────────────────────────────────
-            {move || configuration.get().map(|res| match res {
-                Ok(cfg) => view! {
-                    <PipelineFormDialog
-                        config=cfg
-                        form_mode=form_mode
-                        set_form_mode=set_form_mode
-                        busy=busy
-                        set_busy=set_busy
-                        set_status=set_status
-                        set_refresh=set_refresh
-                    />
-                }.into_any(),
-                Err(_) => ().into_any(),
-            })}
+            <Transition fallback=|| ()>
+                {move || configuration.get().map(|res| match res {
+                    Ok(cfg) => view! {
+                        <PipelineFormDialog
+                            config=cfg
+                            form_mode=form_mode
+                            set_form_mode=set_form_mode
+                            busy=busy
+                            set_busy=set_busy
+                            set_status=set_status
+                            set_refresh=set_refresh
+                        />
+                    }.into_any(),
+                    Err(_) => ().into_any(),
+                })}
+            </Transition>
 
             // ── Delete confirmation ───────────────────────────────────────
             <DeleteConfirmDialog
