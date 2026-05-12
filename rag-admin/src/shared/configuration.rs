@@ -109,3 +109,11 @@ pub struct ChunkingConfigurationDto {
     pub name: String,
     pub config: ChunkingConfig,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SweepTemplateDto {
+    pub sweep_template_id: Uuid,
+    pub name: String,
+    pub members: Vec<Uuid>,
+    pub is_default: bool,
+}

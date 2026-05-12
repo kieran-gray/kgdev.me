@@ -22,14 +22,17 @@ pub use chunking::{
 };
 pub use configuration::{
     AiProviderKindDto, ChunkingConfigurationDto, ConfigurationDto, EmbeddingModelDto,
-    GenerationModelDto, PipelineConfigurationDto, VectorIndexDto, VectorStoreKindDto,
+    GenerationModelDto, PipelineConfigurationDto, SweepTemplateDto, VectorIndexDto,
+    VectorStoreKindDto,
 };
 pub use configuration_commands::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto, ConfigurationCommandDto,
-    CreateChunkingConfigurationDto, CreatePipelineConfigurationDto, DeleteChunkingConfigurationDto,
-    DeletePipelineConfigurationDto, RemoveEmbeddingModelDto, RemoveGenerationModelDto,
-    RemoveVectorIndexDto, UpdateChunkingConfigurationDto, UpdateEmbeddingModelDto,
-    UpdateGenerationModelDto, UpdatePipelineConfigurationDto, UpdateVectorIndexDto,
+    CreateChunkingConfigurationDto, CreatePipelineConfigurationDto, CreateSweepTemplateDto,
+    DeleteChunkingConfigurationDto, DeletePipelineConfigurationDto, DeleteSweepTemplateDto,
+    RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto,
+    SetDefaultSweepTemplateDto, UpdateChunkingConfigurationDto, UpdateEmbeddingModelDto,
+    UpdateGenerationModelDto, UpdatePipelineConfigurationDto, UpdateSweepTemplateDto,
+    UpdateVectorIndexDto,
 };
 pub use embedding::{
     catalog_for_backend, CatalogEntry, EmbedResult, EmbedderBackend, EmbeddingModel,

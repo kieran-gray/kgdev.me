@@ -102,6 +102,29 @@ pub struct DeleteChunkingConfigurationDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateSweepTemplateDto {
+    pub name: String,
+    pub members: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateSweepTemplateDto {
+    pub sweep_template_id: Uuid,
+    pub name: String,
+    pub members: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteSweepTemplateDto {
+    pub sweep_template_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetDefaultSweepTemplateDto {
+    pub sweep_template_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum ConfigurationCommandDto {
     AddEmbeddingModel(AddEmbeddingModelDto),
@@ -119,4 +142,8 @@ pub enum ConfigurationCommandDto {
     CreateChunkingConfiguration(CreateChunkingConfigurationDto),
     UpdateChunkingConfiguration(UpdateChunkingConfigurationDto),
     DeleteChunkingConfiguration(DeleteChunkingConfigurationDto),
+    CreateSweepTemplate(CreateSweepTemplateDto),
+    UpdateSweepTemplate(UpdateSweepTemplateDto),
+    DeleteSweepTemplate(DeleteSweepTemplateDto),
+    SetDefaultSweepTemplate(SetDefaultSweepTemplateDto),
 }

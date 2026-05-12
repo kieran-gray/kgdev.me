@@ -4,12 +4,16 @@ use uuid::Uuid;
 
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ConfigurationCommandHandler, ConfigurationQueryService,
+    SweepTemplateQueryService,
 };
 use crate::shared::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto, AiProviderKindDto,
     BertChunkingConfig, ChunkingConfig, ConfigurationCommandDto, CreateChunkingConfigurationDto,
-    LlmChunkingConfig, SectionChunkingConfig, VectorStoreKindDto,
+    CreateSweepTemplateDto, LlmChunkingConfig, SectionChunkingConfig,
+    SetDefaultSweepTemplateDto, VectorStoreKindDto,
 };
+
+const DEFAULT_SWEEP_NAME: &str = "default-sweep";
 
 pub struct ChunkingSeed {
     pub name: &'static str,
@@ -117,6 +121,7 @@ fn leak_name(s: String) -> &'static str {
 
 pub async fn seed_if_empty(
     chunking_query: &Arc<ChunkingConfigurationQueryService>,
+    sweep_template_query: &Arc<SweepTemplateQueryService>,
     configuration_query: &Arc<ConfigurationQueryService>,
     command_handler: &Arc<ConfigurationCommandHandler>,
 ) -> Result<(), String> {
@@ -124,6 +129,65 @@ pub async fn seed_if_empty(
     seed_vector_indexes_if_empty(configuration_query, command_handler).await?;
     seed_chunking_configurations_if_empty(chunking_query, configuration_query, command_handler)
         .await?;
+    seed_default_sweep_template_if_empty(
+        chunking_query,
+        sweep_template_query,
+        command_handler,
+    )
+    .await?;
+    Ok(())
+}
+
+async fn seed_default_sweep_template_if_empty(
+    chunking_query: &Arc<ChunkingConfigurationQueryService>,
+    sweep_template_query: &Arc<SweepTemplateQueryService>,
+    command_handler: &Arc<ConfigurationCommandHandler>,
+) -> Result<(), String> {
+    let existing = sweep_template_query
+        .list()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !existing.is_empty() {
+        return Ok(());
+    }
+
+    let chunking_configs = chunking_query.list().await.map_err(|e| e.to_string())?;
+    if chunking_configs.is_empty() {
+        return Ok(());
+    }
+
+    let members: Vec<_> = chunking_configs
+        .into_iter()
+        .map(|cc| cc.chunking_configuration_id)
+        .collect();
+
+    let cmd = ConfigurationCommandDto::CreateSweepTemplate(CreateSweepTemplateDto {
+        name: DEFAULT_SWEEP_NAME.to_string(),
+        members,
+    });
+    command_handler
+        .handle_dto(cmd)
+        .await
+        .map_err(|e| format!("seed default sweep: {e}"))?;
+
+    let templates = sweep_template_query
+        .list()
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(t) = templates
+        .into_iter()
+        .find(|t| t.name == DEFAULT_SWEEP_NAME)
+    {
+        let set_default = ConfigurationCommandDto::SetDefaultSweepTemplate(
+            SetDefaultSweepTemplateDto {
+                sweep_template_id: t.sweep_template_id,
+            },
+        );
+        command_handler
+            .handle_dto(set_default)
+            .await
+            .map_err(|e| format!("set default sweep: {e}"))?;
+    }
     Ok(())
 }
 

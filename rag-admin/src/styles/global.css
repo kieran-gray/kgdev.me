@@ -292,6 +292,12 @@ a:hover {
     display: none;
 }
 
+.pill-accent {
+    color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
+    background-color: var(--color-accent-soft);
+}
+
 @keyframes pill-pulse {
     0%, 100% { opacity: 0.4; }
     50% { opacity: 1; }

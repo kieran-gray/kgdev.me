@@ -2,8 +2,10 @@ pub mod file_evaluation_defaults_store;
 pub mod postgres_chunking_configuration_repository;
 pub mod postgres_configuration_repository;
 pub mod postgres_pipeline_configuration_repository;
+pub mod postgres_sweep_template_repository;
 
 pub use file_evaluation_defaults_store::FileEvaluationDefaultsStore;
 pub use postgres_chunking_configuration_repository::PostgresChunkingConfigurationRepository;
 pub use postgres_configuration_repository::PostgresConfigurationRepository;
 pub use postgres_pipeline_configuration_repository::PostgresPipelineConfigurationRepository;
+pub use postgres_sweep_template_repository::PostgresSweepTemplateRepository;

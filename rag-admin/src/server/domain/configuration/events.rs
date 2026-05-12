@@ -2,6 +2,7 @@ use crate::server::domain::configuration::chunking_configuration::events::*;
 pub use crate::server::domain::configuration::embedding_model::events::*;
 pub use crate::server::domain::configuration::generation_model::events::*;
 use crate::server::domain::configuration::pipeline_configuration::events::*;
+use crate::server::domain::configuration::sweep_template::events::*;
 pub use crate::server::domain::configuration::vector_index::events::*;
 
 use serde::{Deserialize, Serialize};
@@ -36,4 +37,9 @@ pub enum ConfigurationEvent {
     ChunkingConfigurationCreated(ChunkingConfigurationCreated),
     ChunkingConfigurationUpdated(ChunkingConfigurationUpdated),
     ChunkingConfigurationDeleted(ChunkingConfigurationDeleted),
+
+    SweepTemplateCreated(SweepTemplateCreated),
+    SweepTemplateUpdated(SweepTemplateUpdated),
+    SweepTemplateDeleted(SweepTemplateDeleted),
+    SweepTemplateDefaultSet(SweepTemplateDefaultSet),
 }

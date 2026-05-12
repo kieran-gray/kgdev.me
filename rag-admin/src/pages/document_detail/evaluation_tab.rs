@@ -1,13 +1,3 @@
-//! Evaluation tab — the primary happy-path of the application.
-//!
-//! Layout:
-//!   1. Dataset selector (compact list + generate form)
-//!   2. Launcher (variants × options × run-mode, see `eval_launcher.rs`)
-//!   3. Runs leaderboard
-//!
-//! Eventful: datasets and runs refetch live as `EvaluationDataset` /
-//! `EvaluationRun` events arrive on the bus.
-
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::components::A;
@@ -22,7 +12,7 @@ use crate::server_functions::evaluation::{
 };
 use crate::shared::{
     aggregate_type, ChunkingConfigurationDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto,
-    PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto,
+    PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto, SweepTemplateDto,
 };
 
 use super::eval_launcher::{EvaluationLauncher, LauncherCallbacks};
@@ -32,10 +22,8 @@ pub fn EvaluationTab(
     detail: Option<SourceDocumentDetailDto>,
     pipelines: Vec<PipelineConfigurationDto>,
     chunking_configurations: Vec<ChunkingConfigurationDto>,
+    sweep_templates: Vec<SweepTemplateDto>,
 ) -> impl IntoView {
-    // The parent guards against unregistered documents and only mounts this
-    // tab once the document exists — but keep a defensive surface in case
-    // something upstream changes.
     let Some(detail) = detail else {
         return view! {
             <Surface>
@@ -49,12 +37,14 @@ pub fn EvaluationTab(
     let document_id = detail.document.document_id;
     let pipelines_stored = StoredValue::new(pipelines);
     let chunking_stored = StoredValue::new(chunking_configurations);
+    let sweep_templates_stored = StoredValue::new(sweep_templates);
 
     view! {
         <EvaluationWorkspace
             document_id=document_id
             pipelines=pipelines_stored
             chunking_configurations=chunking_stored
+            sweep_templates=sweep_templates_stored
         />
     }
     .into_any()
@@ -65,8 +55,8 @@ fn EvaluationWorkspace(
     document_id: Uuid,
     pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
     chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
+    sweep_templates: StoredValue<Vec<SweepTemplateDto>>,
 ) -> impl IntoView {
-    // ── Eventful Resources ─────────────────────────────────────────────────
     let dataset_invalidator =
         use_invalidator(|e| e.from_any(&[aggregate_type::EVALUATION_DATASET]));
     let datasets = Resource::new(
@@ -84,11 +74,9 @@ fn EvaluationWorkspace(
         move |_| async move { get_runs_for_document(document_id).await.unwrap_or_default() },
     );
 
-    // ── Selection state ────────────────────────────────────────────────────
     let (active_dataset, set_active_dataset) = signal::<Option<Uuid>>(None);
     let (active_pipeline, set_active_pipeline) = signal::<Option<Uuid>>(None);
 
-    // Auto-select the first dataset / pipeline once they load.
     Effect::new(move |_| {
         if active_dataset.get_untracked().is_none() {
             if let Some(list) = datasets.get() {
@@ -107,13 +95,6 @@ fn EvaluationWorkspace(
         }
     });
 
-    // ── Job lifecycle ─────────────────────────────────────────────────────
-    //
-    // Per the UX plan, per-screen log panels are gone — every job's progress
-    // is the activity drawer's job. We still need a local "running" flag for
-    // the launcher button to disable itself between click and the first
-    // event, plus a small error surface when the *kick-off* fails before any
-    // events were published.
     let (job_running, set_job_running) = signal(false);
     let (launch_error, set_launch_error) = signal::<Option<String>>(None);
     let (dataset_label, set_dataset_label) = signal("synthetic-default".to_string());
@@ -135,9 +116,6 @@ fn EvaluationWorkspace(
             {
                 Ok(_job) => {
                     toggle_drawer(true);
-                    // The drawer renders the job from this point on. The
-                    // event bus will flip its terminal state when the
-                    // aggregate publishes `*Completed`/`*Failed`.
                     set_job_running.set(false);
                 }
                 Err(e) => {
@@ -167,7 +145,6 @@ fn EvaluationWorkspace(
 
     view! {
         <div class="space-y-6">
-            // ── Dataset ───────────────────────────────────────────────────
             <Surface title="Dataset".to_string()>
                 <Transition fallback=|| view! { <p class="muted">"Loading datasets…"</p> }>
                     {move || {
@@ -209,10 +186,10 @@ fn EvaluationWorkspace(
                 </Transition>
             </Surface>
 
-            // ── Launcher ──────────────────────────────────────────────────
             <EvaluationLauncher
                 pipelines=pipelines
                 chunking_configurations=chunking_configurations
+                sweep_templates=sweep_templates
                 active_dataset=active_dataset
                 active_pipeline=active_pipeline
                 set_active_pipeline=set_active_pipeline
@@ -220,14 +197,12 @@ fn EvaluationWorkspace(
                 callbacks=LauncherCallbacks { on_start: on_start_run }
             />
 
-            // ── Launch error ──────────────────────────────────────────────
             {move || launch_error.get().map(|err| view! {
                 <Surface>
                     <div class="log-line-error text-sm">{err}</div>
                 </Surface>
             })}
 
-            // ── Runs leaderboard ──────────────────────────────────────────
             <Surface title="Runs".to_string()>
                 <Transition fallback=|| view! { <p class="muted">"Loading runs…"</p> }>
                     {move || {

@@ -4,7 +4,8 @@ use thiserror::Error;
 use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::configuration::{
     chunking_configuration::ChunkingConfigurationRepositoryError, exceptions::ConfigurationError,
-    pipeline_configuration::PipelineConfigurationRepositoryError, ConfigurationRepositoryError,
+    pipeline_configuration::PipelineConfigurationRepositoryError,
+    sweep_template::SweepTemplateRepositoryError, ConfigurationRepositoryError,
 };
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepositoryError;
 use crate::server::domain::evaluation::{
@@ -54,6 +55,12 @@ impl From<PipelineConfigurationRepositoryError> for AppError {
 
 impl From<ChunkingConfigurationRepositoryError> for AppError {
     fn from(value: ChunkingConfigurationRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<SweepTemplateRepositoryError> for AppError {
+    fn from(value: SweepTemplateRepositoryError) -> Self {
         AppError::Internal(value.to_string())
     }
 }

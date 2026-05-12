@@ -11,6 +11,9 @@ use crate::{
         pipeline_configuration::{
             CreatePipelineConfiguration, DeletePipelineConfiguration, UpdatePipelineConfiguration,
         },
+        sweep_template::{
+            CreateSweepTemplate, DeleteSweepTemplate, SetDefaultSweepTemplate, UpdateSweepTemplate,
+        },
     },
     shared::{AiProviderKindDto, ConfigurationCommandDto, VectorStoreKindDto},
 };
@@ -39,6 +42,11 @@ pub enum ConfigurationCommand {
     CreateChunkingConfiguration(CreateChunkingConfiguration),
     UpdateChunkingConfiguration(UpdateChunkingConfiguration),
     DeleteChunkingConfiguration(DeleteChunkingConfiguration),
+
+    CreateSweepTemplate(CreateSweepTemplate),
+    UpdateSweepTemplate(UpdateSweepTemplate),
+    DeleteSweepTemplate(DeleteSweepTemplate),
+    SetDefaultSweepTemplate(SetDefaultSweepTemplate),
 }
 
 impl From<ConfigurationCommandDto> for ConfigurationCommand {
@@ -140,6 +148,29 @@ impl From<ConfigurationCommandDto> for ConfigurationCommand {
             ConfigurationCommandDto::DeleteChunkingConfiguration(dto) => {
                 ConfigurationCommand::DeleteChunkingConfiguration(DeleteChunkingConfiguration {
                     chunking_configuration_id: dto.chunking_configuration_id,
+                })
+            }
+            ConfigurationCommandDto::CreateSweepTemplate(dto) => {
+                ConfigurationCommand::CreateSweepTemplate(CreateSweepTemplate {
+                    name: dto.name,
+                    members: dto.members,
+                })
+            }
+            ConfigurationCommandDto::UpdateSweepTemplate(dto) => {
+                ConfigurationCommand::UpdateSweepTemplate(UpdateSweepTemplate {
+                    sweep_template_id: dto.sweep_template_id,
+                    name: dto.name,
+                    members: dto.members,
+                })
+            }
+            ConfigurationCommandDto::DeleteSweepTemplate(dto) => {
+                ConfigurationCommand::DeleteSweepTemplate(DeleteSweepTemplate {
+                    sweep_template_id: dto.sweep_template_id,
+                })
+            }
+            ConfigurationCommandDto::SetDefaultSweepTemplate(dto) => {
+                ConfigurationCommand::SetDefaultSweepTemplate(SetDefaultSweepTemplate {
+                    sweep_template_id: dto.sweep_template_id,
                 })
             }
         }

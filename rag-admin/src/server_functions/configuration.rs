@@ -2,6 +2,7 @@ use leptos::prelude::*;
 
 use crate::shared::{
     ChunkingConfigurationDto, ConfigurationCommandDto, ConfigurationDto, PipelineConfigurationDto,
+    SweepTemplateDto,
 };
 
 #[server(
@@ -59,6 +60,26 @@ pub async fn get_chunking_configurations() -> Result<Vec<ChunkingConfigurationDt
 
     state
         .chunking_configuration_query_service
+        .list()
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = GetSweepTemplates,
+    prefix = "/api",
+    endpoint = "get_sweep_templates"
+)]
+pub async fn get_sweep_templates() -> Result<Vec<SweepTemplateDto>, ServerFnError> {
+    use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .sweep_template_query_service
         .list()
         .await
         .map_err(map_app_error)

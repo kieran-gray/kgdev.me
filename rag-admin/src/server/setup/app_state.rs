@@ -13,7 +13,7 @@ use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::ports::EvaluationDefaultsStore;
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ConfigurationCommandHandler, ConfigurationQueryService,
-    PipelineConfigurationQueryService, PipelineResolver,
+    PipelineConfigurationQueryService, PipelineResolver, SweepTemplateQueryService,
 };
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::embedding::EmbeddingService;
@@ -51,6 +51,9 @@ use crate::server::domain::configuration::pipeline_configuration::{
     PipelineConfigurationProjector, PipelineConfigurationRepository,
 };
 use crate::server::domain::configuration::projector::ConfigurationProjector;
+use crate::server::domain::configuration::sweep_template::{
+    SweepTemplateProjector, SweepTemplateRepository,
+};
 use crate::server::domain::configuration::ConfigurationRepository;
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::dataset::policies::derive_dataset_effects;
@@ -82,6 +85,7 @@ use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::configuration::{
     FileEvaluationDefaultsStore, PostgresChunkingConfigurationRepository,
     PostgresConfigurationRepository, PostgresPipelineConfigurationRepository,
+    PostgresSweepTemplateRepository,
 };
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{
@@ -118,6 +122,7 @@ pub struct AppState {
     pub configuration_query_service: Arc<ConfigurationQueryService>,
     pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
     pub chunking_configuration_query_service: Arc<ChunkingConfigurationQueryService>,
+    pub sweep_template_query_service: Arc<SweepTemplateQueryService>,
     pub configuration_repository: Arc<dyn ConfigurationRepository>,
     pub evaluation_dataset_command_processor: Arc<CommandProcessor<EvaluationDataset>>,
     pub evaluation_run_command_processor: Arc<CommandProcessor<EvaluationRun>>,
@@ -172,6 +177,8 @@ impl AppState {
             Arc::new(PostgresPipelineConfigurationRepository::new(pool.clone()));
         let chunking_configuration_repository: Arc<dyn ChunkingConfigurationRepository> =
             Arc::new(PostgresChunkingConfigurationRepository::new(pool.clone()));
+        let sweep_template_repository: Arc<dyn SweepTemplateRepository> =
+            Arc::new(PostgresSweepTemplateRepository::new(pool.clone()));
         let source_document_repository: Arc<dyn SourceDocumentRepository> =
             Arc::new(PostgresSourceDocumentRepository::new(pool.clone()));
         let indexing_repository: Arc<dyn IndexingRepository> =
@@ -275,6 +282,8 @@ impl AppState {
         );
         let chunking_configuration_query_service =
             ChunkingConfigurationQueryService::new(chunking_configuration_repository.clone());
+        let sweep_template_query_service =
+            SweepTemplateQueryService::new(sweep_template_repository.clone());
         let evaluation_query_service = EvaluationQueryService::new(
             evaluation_dataset_repository.clone(),
             evaluation_run_repository.clone(),
@@ -292,6 +301,9 @@ impl AppState {
                 )),
                 Arc::new(ChunkingConfigurationProjector::new(
                     chunking_configuration_repository.clone(),
+                )),
+                Arc::new(SweepTemplateProjector::new(
+                    sweep_template_repository.clone(),
                 )),
             ],
             None,
@@ -461,6 +473,7 @@ impl AppState {
             configuration_query_service,
             pipeline_configuration_query_service,
             chunking_configuration_query_service,
+            sweep_template_query_service,
             configuration_repository,
             evaluation_dataset_command_processor: dataset_wiring.command_processor,
             evaluation_run_command_processor: run_wiring.command_processor,
@@ -517,12 +530,13 @@ impl AppState {
     async fn run_startup_checks(&self) {
         if let Err(e) = seed_if_empty(
             &self.chunking_configuration_query_service,
+            &self.sweep_template_query_service,
             &self.configuration_query_service,
             &self.configuration_command_handler,
         )
         .await
         {
-            tracing::warn!("chunking configuration seed: {e}");
+            tracing::warn!("configuration seed: {e}");
         }
     }
 }

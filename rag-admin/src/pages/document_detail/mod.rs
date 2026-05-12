@@ -27,14 +27,14 @@ use utils::short_hash;
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 use crate::server_functions::configuration::{
-    get_chunking_configurations, get_pipeline_configurations,
+    get_chunking_configurations, get_pipeline_configurations, get_sweep_templates,
 };
 use crate::server_functions::source_document::{
     get_document_detail_by_source_ref, import_source_document,
 };
 use crate::shared::{
     aggregate_type, ChunkingConfigurationDto, PipelineConfigurationDto, SourceDocumentDetailDto,
-    SourceDocumentDto,
+    SourceDocumentDto, SweepTemplateDto,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,20 +66,12 @@ impl Tab {
     }
 }
 
-/// Document detail page — generic across all source document types.
-///
-/// Route: `/documents/{doc_type}/{source_ref}`
-///
-/// The page has four tabs, defaulting to Evaluation (the primary happy-path
-/// per the UX plan). Adding a new document type only requires registering an
-/// adapter in `AppState` and extending the small label helpers in `utils`.
 #[component]
 pub fn DocumentDetailPage() -> impl IntoView {
     let params = use_params_map();
     let source_ref =
         Memo::new(move |_| params.with(|p| p.get("source_ref").unwrap_or_default().to_string()));
 
-    // Live-refetch the document detail whenever a relevant event arrives.
     let doc_invalidator = use_invalidator(|e| {
         e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
     });
@@ -95,8 +87,6 @@ pub fn DocumentDetailPage() -> impl IntoView {
         },
     );
 
-    // Pipelines are slow-moving config but still eventful — refetch when the
-    // Configuration aggregate or any of its sub-aggregates emits an event.
     let pipeline_invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION]));
     let pipelines = Resource::new(
         move || pipeline_invalidator.get(),
@@ -105,6 +95,10 @@ pub fn DocumentDetailPage() -> impl IntoView {
     let chunking_configurations = Resource::new(
         move || pipeline_invalidator.get(),
         |_| async move { get_chunking_configurations().await.unwrap_or_default() },
+    );
+    let sweep_templates = Resource::new(
+        move || pipeline_invalidator.get(),
+        |_| async move { get_sweep_templates().await.unwrap_or_default() },
     );
 
     view! {
@@ -115,6 +109,7 @@ pub fn DocumentDetailPage() -> impl IntoView {
                 {move || {
                     let pipelines = pipelines.get().unwrap_or_default();
                     let chunking_configurations = chunking_configurations.get().unwrap_or_default();
+                    let sweep_templates = sweep_templates.get().unwrap_or_default();
                     detail.get().map(|res| match res {
                         Err(e) => view! {
                             <Surface>
@@ -129,6 +124,7 @@ pub fn DocumentDetailPage() -> impl IntoView {
                                 detail=existing
                                 pipelines=pipelines
                                 chunking_configurations=chunking_configurations
+                                sweep_templates=sweep_templates
                                 source_ref=source_ref.get()
                             />
                         }.into_any(),
@@ -144,16 +140,14 @@ fn DocumentWorkspace(
     detail: SourceDocumentDetailDto,
     pipelines: Vec<PipelineConfigurationDto>,
     chunking_configurations: Vec<ChunkingConfigurationDto>,
+    sweep_templates: Vec<SweepTemplateDto>,
     source_ref: String,
 ) -> impl IntoView {
     let location = use_location();
     let active_tab = Memo::new(move |_| {
         location
             .query
-            .with(|q| {
-                q.get("tab")
-                    .and_then(|v| Tab::from_slug(v.as_str()))
-            })
+            .with(|q| q.get("tab").and_then(|v| Tab::from_slug(v.as_str())))
             .unwrap_or(Tab::Evaluation)
     });
     let set_tab = move |tab: Tab| {
@@ -177,6 +171,7 @@ fn DocumentWorkspace(
     let detail_stored = StoredValue::new(detail.clone());
     let pipelines_stored = StoredValue::new(pipelines);
     let chunking_stored = StoredValue::new(chunking_configurations);
+    let sweep_templates_stored = StoredValue::new(sweep_templates);
     let source_ref_stored = StoredValue::new(source_ref.clone());
 
     let (header_eyebrow, header_title, header_subtitle, header_status) =
@@ -215,6 +210,7 @@ fn DocumentWorkspace(
                         detail=Some(detail_stored.get_value())
                         pipelines=pipelines_stored.get_value()
                         chunking_configurations=chunking_stored.get_value()
+                        sweep_templates=sweep_templates_stored.get_value()
                     />
                 }.into_any(),
                 Tab::Indexings => view! {
@@ -318,9 +314,6 @@ fn UnregisteredDocument(source_ref: String) -> impl IntoView {
         spawn_local(async move {
             match import_source_document(slug).await {
                 Ok(_) => {
-                    // The detail Resource is keyed on the source_ref signal +
-                    // SourceDocument event invalidator; the import dispatches
-                    // SourceDocument events so the parent will refetch.
                     set_busy.set(false);
                 }
                 Err(e) => {

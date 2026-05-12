@@ -10,6 +10,7 @@ pub mod pipeline_configuration;
 pub mod projector;
 pub mod read_model;
 pub mod repository;
+pub mod sweep_template;
 pub mod vector_index;
 
 pub use kinds::{AiProviderKind, VectorStoreKind};

@@ -1,13 +1,3 @@
-//! The evaluation launcher — three orthogonal axes (chunking variants,
-//! retrieval options, run mode) presented in a single, progressively-disclosed
-//! card. Cross-product cost preview is live so the operator sees what they're
-//! about to run.
-//!
-//! The shape was distilled from the legacy four-tab dialog
-//! (`post_detail/evaluation_dialog.rs`) by reframing the four modes
-//! ("Sweep", "Matrix", "Autotune", "Single") as combinations of those three
-//! axes — the user picks goals, not modes.
-
 use leptos::prelude::*;
 use uuid::Uuid;
 
@@ -15,52 +5,39 @@ use crate::components::primitives::Surface;
 use crate::shared::{
     BertChunkingConfig, ChunkStrategy, ChunkingConfig, ChunkingConfigurationDto, ChunkingVariant,
     EvaluationAutotuneRequest, EvaluationRunOptions, LlmChunkingConfig, PipelineConfigurationDto,
-    RunEvaluationRequestDto, SectionChunkingConfig,
+    RunEvaluationRequestDto, SectionChunkingConfig, SweepTemplateDto,
 };
 
 use super::eval_parser::parse_u32_values;
 
-// ── Modes ──────────────────────────────────────────────────────────────────
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum VariantsMode {
-    /// One variant. Strategy + that strategy's parameter values.
     Single,
-    /// The mixed default sweep (section / bert / llm presets).
-    DefaultSweep,
-    /// One strategy swept across parameter values.
+    SweepTemplate,
     StrategySweep,
-    /// Operator-built explicit list.
     Custom,
 }
 
+#[allow(dead_code)]
+const SWEEP_TEMPLATE_STORAGE_KEY: &str = "eval_launcher.sweep_template_id";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OptionsMode {
-    /// One options set.
     Single,
-    /// Cross-product of value vectors per option.
     Sweep,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RunMode {
-    /// Score every variant × options combination directly.
     ScoreAll,
-    /// Tuning/holdout split, automated winner selection.
     Autotune,
 }
 
-/// Quick-presets that drive all three axes at once. Mirrors the user goals,
-/// not the underlying knobs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Preset {
-    /// Default variants × single default options.
     FindBestChunking,
-    /// Single variant × options sweep.
     TuneRetrieval,
-    /// Default variants × options sweep — exhaustive.
     FullSweep,
-    /// Single variant × single options — sanity check / baseline.
     TestOne,
 }
 
@@ -75,8 +52,6 @@ impl Preset {
     }
 }
 
-// ── Launcher props ─────────────────────────────────────────────────────────
-
 #[derive(Clone)]
 pub struct LauncherCallbacks {
     pub on_start: Callback<RunEvaluationRequestDto>,
@@ -86,14 +61,14 @@ pub struct LauncherCallbacks {
 pub fn EvaluationLauncher(
     pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
     chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
+    sweep_templates: StoredValue<Vec<SweepTemplateDto>>,
     active_dataset: ReadSignal<Option<Uuid>>,
     active_pipeline: ReadSignal<Option<Uuid>>,
     set_active_pipeline: WriteSignal<Option<Uuid>>,
     running: ReadSignal<bool>,
     callbacks: LauncherCallbacks,
 ) -> impl IntoView {
-    // ── Variants state ─────────────────────────────────────────────────────
-    let (variants_mode, set_variants_mode) = signal(VariantsMode::DefaultSweep);
+    let (variants_mode, set_variants_mode) = signal(VariantsMode::SweepTemplate);
     let (variants_expanded, set_variants_expanded) = signal(false);
     let (single_strategy, set_single_strategy) = signal(ChunkStrategy::Section);
     let (section_tokens, set_section_tokens) = signal(512u32);
@@ -111,7 +86,21 @@ pub fn EvaluationLauncher(
 
     let (custom_variants, set_custom_variants) = signal::<Vec<ChunkingVariant>>(Vec::new());
 
-    // ── Options state ──────────────────────────────────────────────────────
+    let initial_sweep_template_id = sweep_templates.with_value(|tpls| {
+        let stored = load_sweep_template_pref()
+            .and_then(|id| tpls.iter().find(|t| t.sweep_template_id == id))
+            .map(|t| t.sweep_template_id);
+        stored
+            .or_else(|| tpls.iter().find(|t| t.is_default).map(|t| t.sweep_template_id))
+            .or_else(|| tpls.first().map(|t| t.sweep_template_id))
+    });
+    let (selected_sweep_template, set_selected_sweep_template) =
+        signal::<Option<Uuid>>(initial_sweep_template_id);
+    Effect::new(move |_| {
+        let id = selected_sweep_template.get();
+        store_sweep_template_pref(id);
+    });
+
     let (options_mode, set_options_mode) = signal(OptionsMode::Single);
     let (options_expanded, set_options_expanded) = signal(false);
     let (single_top_k, set_single_top_k) = signal(5u32);
@@ -119,13 +108,11 @@ pub fn EvaluationLauncher(
     let (sweep_top_k_input, set_sweep_top_k_input) = signal("2,3,5,8".to_string());
     let (sweep_min_score_input, set_sweep_min_score_input) = signal("0,200,500,800".to_string());
 
-    // ── Run mode state ─────────────────────────────────────────────────────
     let (run_mode, set_run_mode) = signal(RunMode::ScoreAll);
 
-    // ── Preset chooser ─────────────────────────────────────────────────────
     let apply_preset = move |p: Preset| match p {
         Preset::FindBestChunking => {
-            set_variants_mode.set(VariantsMode::DefaultSweep);
+            set_variants_mode.set(VariantsMode::SweepTemplate);
             set_options_mode.set(OptionsMode::Single);
             set_run_mode.set(RunMode::ScoreAll);
         }
@@ -135,7 +122,7 @@ pub fn EvaluationLauncher(
             set_run_mode.set(RunMode::ScoreAll);
         }
         Preset::FullSweep => {
-            set_variants_mode.set(VariantsMode::DefaultSweep);
+            set_variants_mode.set(VariantsMode::SweepTemplate);
             set_options_mode.set(OptionsMode::Sweep);
             set_run_mode.set(RunMode::ScoreAll);
         }
@@ -146,7 +133,6 @@ pub fn EvaluationLauncher(
         }
     };
 
-    // ── Derived: variants list ─────────────────────────────────────────────
     let variants_computed = Memo::new(move |_| match variants_mode.get() {
         VariantsMode::Single => build_single_variant(
             single_strategy.get(),
@@ -157,12 +143,34 @@ pub fn EvaluationLauncher(
         )
         .map(|v| vec![v])
         .map_err(|e| format!("variant error: {e}")),
-        VariantsMode::DefaultSweep => {
-            let seeded = chunking_configurations.with_value(|c| default_sweep_variants(c));
-            if seeded.is_empty() {
-                Err("No chunking configurations in the registry. Create some on /chunking or restart for the seed library.".into())
+        VariantsMode::SweepTemplate => {
+            let templates = sweep_templates.with_value(|t| t.clone());
+            let configs = chunking_configurations.with_value(|c| c.clone());
+            if templates.is_empty() {
+                let seeded = default_sweep_variants(&configs);
+                if seeded.is_empty() {
+                    Err("No sweep templates or chunking configurations in the registry. Create some on /chunking.".into())
+                } else {
+                    Ok(seeded)
+                }
             } else {
-                Ok(seeded)
+                let id = selected_sweep_template.get();
+                let template = id
+                    .and_then(|id| templates.iter().find(|t| t.sweep_template_id == id))
+                    .or_else(|| templates.iter().find(|t| t.is_default))
+                    .or_else(|| templates.first());
+                let Some(template) = template else {
+                    return Err("Pick a sweep template.".into());
+                };
+                let variants = template_variants(template, &configs);
+                if variants.is_empty() {
+                    Err(format!(
+                        "Sweep template '{}' has no resolvable chunking configurations. Edit it on /chunking.",
+                        template.name
+                    ))
+                } else {
+                    Ok(variants)
+                }
             }
         }
         VariantsMode::StrategySweep => match sweep_strategy.get() {
@@ -194,7 +202,6 @@ pub fn EvaluationLauncher(
         }
     });
 
-    // ── Derived: options list ──────────────────────────────────────────────
     let options_computed: Memo<Result<Vec<EvaluationRunOptions>, String>> =
         Memo::new(move |_| match options_mode.get() {
             OptionsMode::Single => Ok(vec![EvaluationRunOptions {
@@ -220,7 +227,6 @@ pub fn EvaluationLauncher(
             }
         });
 
-    // ── Derived: cost preview ──────────────────────────────────────────────
     let cost_summary = Memo::new(move |_| {
         let vc: Result<usize, String> = variants_computed.with(|r| match r {
             Ok(v) => Ok(v.len()),
@@ -236,7 +242,6 @@ pub fn EvaluationLauncher(
         }
     });
 
-    // ── Submit ─────────────────────────────────────────────────────────────
     let on_submit = move || {
         let Some(dataset_id) = active_dataset.get() else {
             return;
@@ -284,8 +289,6 @@ pub fn EvaluationLauncher(
     view! {
         <Surface title="Tune for best chunking".to_string()>
             <div class="space-y-5">
-
-                // ── Quick presets ──────────────────────────────────────────
                 <div class="flex items-center gap-2 flex-wrap">
                     <span class="eyebrow shrink-0">"Presets"</span>
                     {[Preset::FindBestChunking, Preset::TuneRetrieval, Preset::FullSweep, Preset::TestOne]
@@ -300,14 +303,12 @@ pub fn EvaluationLauncher(
                         }).collect_view()}
                 </div>
 
-                // ── Pipeline ───────────────────────────────────────────────
                 <PipelineRow
                     pipelines=pipelines
                     active_pipeline=active_pipeline
                     set_active_pipeline=set_active_pipeline
                 />
 
-                // ── Variants ───────────────────────────────────────────────
                 <Section
                     title="Chunking variants".to_string()
                     summary=Signal::derive(move || variants_summary(variants_computed))
@@ -339,11 +340,13 @@ pub fn EvaluationLauncher(
                         set_sweep_llm_micro_input=set_sweep_llm_micro_input
                         custom_variants=custom_variants
                         set_custom_variants=set_custom_variants
+                        sweep_templates=sweep_templates
+                        selected_sweep_template=selected_sweep_template
+                        set_selected_sweep_template=set_selected_sweep_template
                         variants_computed=variants_computed
                     />
                 </Section>
 
-                // ── Options ────────────────────────────────────────────────
                 <Section
                     title="Retrieval options".to_string()
                     summary=Signal::derive(move || options_summary(options_computed))
@@ -365,10 +368,8 @@ pub fn EvaluationLauncher(
                     />
                 </Section>
 
-                // ── Run mode ───────────────────────────────────────────────
                 <RunModePicker run_mode=run_mode set_run_mode=set_run_mode />
 
-                // ── Cost summary + submit ──────────────────────────────────
                 <div class="flex items-center justify-between gap-4 pt-3 border-t border-[var(--color-border)]">
                     <CostSummary cost=cost_summary />
                     <button
@@ -394,8 +395,6 @@ pub fn EvaluationLauncher(
         </Surface>
     }
 }
-
-// ── Section wrapper ────────────────────────────────────────────────────────
 
 #[component]
 fn Section(
@@ -427,8 +426,6 @@ fn Section(
         </div>
     }
 }
-
-// ── Pipeline row ───────────────────────────────────────────────────────────
 
 #[component]
 fn PipelineRow(
@@ -468,8 +465,6 @@ fn PipelineRow(
     }
 }
 
-// ── Variants picker ────────────────────────────────────────────────────────
-
 #[component]
 fn VariantsPicker(
     variants_mode: ReadSignal<VariantsMode>,
@@ -496,6 +491,9 @@ fn VariantsPicker(
     set_sweep_llm_micro_input: WriteSignal<String>,
     custom_variants: ReadSignal<Vec<ChunkingVariant>>,
     set_custom_variants: WriteSignal<Vec<ChunkingVariant>>,
+    sweep_templates: StoredValue<Vec<SweepTemplateDto>>,
+    selected_sweep_template: ReadSignal<Option<Uuid>>,
+    set_selected_sweep_template: WriteSignal<Option<Uuid>>,
     variants_computed: Memo<Result<Vec<ChunkingVariant>, String>>,
 ) -> impl IntoView {
     view! {
@@ -506,7 +504,7 @@ fn VariantsPicker(
                 options=vec![
                     (VariantsMode::Single, "Single"),
                     (VariantsMode::StrategySweep, "Sweep one strategy"),
-                    (VariantsMode::DefaultSweep, "Default sweep"),
+                    (VariantsMode::SweepTemplate, "Sweep template"),
                     (VariantsMode::Custom, "Custom list"),
                 ]
             />
@@ -540,10 +538,12 @@ fn VariantsPicker(
                         set_llm_micro_input=set_sweep_llm_micro_input
                     />
                 }.into_any(),
-                VariantsMode::DefaultSweep => view! {
-                    <p class="text-sm muted">
-                        "Mixed sweep across section, bert, and llm strategies with sensible parameter values."
-                    </p>
+                VariantsMode::SweepTemplate => view! {
+                    <SweepTemplatePicker
+                        sweep_templates=sweep_templates
+                        selected=selected_sweep_template
+                        set_selected=set_selected_sweep_template
+                    />
                 }.into_any(),
                 VariantsMode::Custom => view! {
                     <CustomVariantsList
@@ -553,8 +553,6 @@ fn VariantsPicker(
                 }.into_any(),
             }}
 
-            // Preview the resolved variants (chips). Helps the operator verify
-            // that the parsed config actually produced what they expected.
             {move || match variants_computed.get() {
                 Ok(list) => view! {
                     <div class="flex flex-wrap gap-1.5">
@@ -751,8 +749,6 @@ fn CustomVariantsList(
     }
 }
 
-// ── Options picker ─────────────────────────────────────────────────────────
-
 #[component]
 fn OptionsPicker(
     options_mode: ReadSignal<OptionsMode>,
@@ -810,8 +806,6 @@ fn OptionsPicker(
         </div>
     }
 }
-
-// ── Run mode picker ────────────────────────────────────────────────────────
 
 #[component]
 fn RunModePicker(
@@ -876,8 +870,6 @@ fn RunModeOption(
     }
 }
 
-// ── Cost summary ───────────────────────────────────────────────────────────
-
 #[component]
 fn CostSummary(cost: Memo<Result<(usize, usize, usize), String>>) -> impl IntoView {
     view! {
@@ -900,8 +892,6 @@ fn CostSummary(cost: Memo<Result<(usize, usize, usize), String>>) -> impl IntoVi
         </div>
     }
 }
-
-// ── Small shared widgets ───────────────────────────────────────────────────
 
 #[component]
 fn ModeRadio<T>(
@@ -1008,8 +998,6 @@ fn TextField(
     }
 }
 
-// ── Summary helpers ────────────────────────────────────────────────────────
-
 fn variants_summary(computed: Memo<Result<Vec<ChunkingVariant>, String>>) -> String {
     match computed.get() {
         Ok(list) => {
@@ -1047,8 +1035,6 @@ fn options_summary(computed: Memo<Result<Vec<EvaluationRunOptions>, String>>) ->
     }
 }
 
-// ── Variant builders ───────────────────────────────────────────────────────
-
 fn build_single_variant(
     strategy: ChunkStrategy,
     section: u32,
@@ -1082,9 +1068,6 @@ fn build_single_variant(
     })
 }
 
-/// "Default sweep" is now whatever the registry has on it. The seed job
-/// (`server/setup/seed_chunking.rs`) populates a starter library on first run;
-/// after that, the operator curates it on `/chunking`.
 fn default_sweep_variants(seeds: &[ChunkingConfigurationDto]) -> Vec<ChunkingVariant> {
     seeds
         .iter()
@@ -1094,6 +1077,107 @@ fn default_sweep_variants(seeds: &[ChunkingConfigurationDto]) -> Vec<ChunkingVar
         })
         .collect()
 }
+
+fn template_variants(
+    template: &SweepTemplateDto,
+    configs: &[ChunkingConfigurationDto],
+) -> Vec<ChunkingVariant> {
+    template
+        .members
+        .iter()
+        .filter_map(|id| {
+            configs
+                .iter()
+                .find(|cc| cc.chunking_configuration_id == *id)
+                .map(|cc| ChunkingVariant {
+                    label: cc.name.clone(),
+                    config: cc.config,
+                })
+        })
+        .collect()
+}
+
+#[component]
+fn SweepTemplatePicker(
+    sweep_templates: StoredValue<Vec<SweepTemplateDto>>,
+    selected: ReadSignal<Option<Uuid>>,
+    set_selected: WriteSignal<Option<Uuid>>,
+) -> impl IntoView {
+    let templates = sweep_templates.with_value(|t| t.clone());
+    if templates.is_empty() {
+        return view! {
+            <p class="text-sm muted">
+                "No sweep templates defined. Falling back to every chunking configuration in the registry. Create a template on /chunking to scope the sweep."
+            </p>
+        }
+        .into_any();
+    }
+
+    view! {
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="eyebrow shrink-0">"Template"</span>
+            <select
+                class="input max-w-md"
+                on:change=move |ev| {
+                    let v = event_target_value(&ev);
+                    if let Ok(id) = v.parse::<Uuid>() {
+                        set_selected.set(Some(id));
+                    }
+                }
+            >
+                {templates.into_iter().map(|t| {
+                    let id = t.sweep_template_id;
+                    let is_selected = move || selected.get() == Some(id);
+                    let label = if t.is_default {
+                        format!("{} (default) · {} configs", t.name, t.members.len())
+                    } else {
+                        format!("{} · {} configs", t.name, t.members.len())
+                    };
+                    view! {
+                        <option value=id.to_string() selected=is_selected>
+                            {label}
+                        </option>
+                    }
+                }).collect_view()}
+            </select>
+        </div>
+    }
+    .into_any()
+}
+
+#[cfg(feature = "hydrate")]
+fn load_sweep_template_pref() -> Option<Uuid> {
+    let window = web_sys::window()?;
+    let storage = window.local_storage().ok().flatten()?;
+    let raw = storage.get_item(SWEEP_TEMPLATE_STORAGE_KEY).ok().flatten()?;
+    Uuid::parse_str(&raw).ok()
+}
+
+#[cfg(not(feature = "hydrate"))]
+fn load_sweep_template_pref() -> Option<Uuid> {
+    None
+}
+
+#[cfg(feature = "hydrate")]
+fn store_sweep_template_pref(id: Option<Uuid>) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Some(storage) = window.local_storage().ok().flatten() else {
+        return;
+    };
+    match id {
+        Some(id) => {
+            let _ = storage.set_item(SWEEP_TEMPLATE_STORAGE_KEY, &id.to_string());
+        }
+        None => {
+            let _ = storage.remove_item(SWEEP_TEMPLATE_STORAGE_KEY);
+        }
+    }
+}
+
+#[cfg(not(feature = "hydrate"))]
+fn store_sweep_template_pref(_: Option<Uuid>) {}
 
 fn build_section_sweep(values: Vec<u32>) -> Vec<ChunkingVariant> {
     values

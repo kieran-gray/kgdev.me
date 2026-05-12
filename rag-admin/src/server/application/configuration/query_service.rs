@@ -7,8 +7,13 @@ use crate::server::domain::configuration::chunking_configuration::{
 use crate::server::domain::configuration::pipeline_configuration::{
     PipelineConfigurationRepository, PipelineConfigurationRepositoryError,
 };
+use crate::server::domain::configuration::sweep_template::{
+    SweepTemplateRepository, SweepTemplateRepositoryError,
+};
 use crate::server::domain::configuration::{ConfigurationRepository, ConfigurationRepositoryError};
-use crate::shared::{ChunkingConfigurationDto, ConfigurationDto, PipelineConfigurationDto};
+use crate::shared::{
+    ChunkingConfigurationDto, ConfigurationDto, PipelineConfigurationDto, SweepTemplateDto,
+};
 
 pub struct ConfigurationQueryService {
     repository: Arc<dyn ConfigurationRepository>,
@@ -90,6 +95,32 @@ impl ChunkingConfigurationQueryService {
                 chunking_configuration_id: cc.chunking_configuration_id,
                 name: cc.name,
                 config: cc.config,
+            })
+            .collect())
+    }
+}
+
+pub struct SweepTemplateQueryService {
+    repository: Arc<dyn SweepTemplateRepository>,
+}
+
+impl SweepTemplateQueryService {
+    pub fn new(repository: Arc<dyn SweepTemplateRepository>) -> Arc<Self> {
+        Arc::new(Self { repository })
+    }
+
+    pub async fn list(&self) -> Result<Vec<SweepTemplateDto>, AppError> {
+        let read_models = self.repository.load_all().await.map_err(|e| match e {
+            SweepTemplateRepositoryError::Internal(m) => AppError::Internal(m),
+        })?;
+
+        Ok(read_models
+            .into_iter()
+            .map(|st| SweepTemplateDto {
+                sweep_template_id: st.sweep_template_id,
+                name: st.name,
+                members: st.members,
+                is_default: st.is_default,
             })
             .collect())
     }
