@@ -4,9 +4,6 @@ use uuid::Uuid;
 
 use crate::server::application::AppError;
 
-/// Idempotency key for an effect. Built from `(stream_id, event_log_position,
-/// discriminator)` so a retried policy producing the same effect is rejected by
-/// the ledger's `UNIQUE` constraint.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IdempotencyKey(pub String);
 
@@ -48,8 +45,6 @@ impl EffectStatus {
     }
 }
 
-/// A typed effect on its way into the ledger. The payload is whatever the
-/// process manager wants to execute later; it must round-trip through JSON.
 #[derive(Debug, Clone)]
 pub struct PendingEffect<R> {
     pub stream_id: Uuid,
@@ -59,7 +54,6 @@ pub struct PendingEffect<R> {
     pub payload: R,
 }
 
-/// A row read back from the ledger, ready to be dispatched.
 #[derive(Debug, Clone)]
 pub struct EffectRecord<R> {
     pub effect_id: Uuid,
@@ -76,16 +70,12 @@ pub trait EffectLedger<R>: Send + Sync
 where
     R: Serialize + for<'de> Deserialize<'de> + Send + Sync,
 {
-    /// Insert effects keyed by `aggregate_type` (so different process managers
-    /// share one table). Duplicates by `idempotency_key` are silently dropped.
     async fn insert(
         &self,
         aggregate_type: &str,
         effects: &[PendingEffect<R>],
     ) -> Result<(), AppError>;
 
-    /// Return ledger rows that haven't yet succeeded and have attempts below
-    /// `max_attempts`. Caller marks them dispatched before executing.
     async fn pending(
         &self,
         aggregate_type: &str,

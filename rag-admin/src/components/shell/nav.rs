@@ -5,8 +5,6 @@ use leptos_router::hooks::use_location;
 use crate::components::activity::{toggle_drawer, use_activity_state};
 use crate::components::event_bus::{use_event_bus, ConnectionState};
 
-/// Top navigation bar. One row, five destinations, an activity button on the
-/// right that toggles the activity drawer.
 #[component]
 pub fn AppNav() -> impl IntoView {
     let location = use_location();
@@ -30,8 +28,6 @@ pub fn AppNav() -> impl IntoView {
         }
     };
 
-    // Authoritative running-job count: read from ActivityState rather than
-    // counting events. The activity registry is the single source of truth.
     let running_count = move || activity.running_count();
     let drawer_open = activity.open;
 

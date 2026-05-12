@@ -1,12 +1,6 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Client-side mirror of `crate::server::event_sourcing::envelope::PublishedEvent`.
-///
-/// The server-side type uses domain newtypes (`Timestamp`) that are gated behind
-/// the `ssr` feature. This DTO inlines the wire shape so it can be deserialized
-/// on the hydrate target without dragging the server domain in. The two types
-/// must stay in sync.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublishedEvent {
     pub stream_id: Uuid,
@@ -18,12 +12,6 @@ pub struct PublishedEvent {
     pub occurred_at: String,
 }
 
-/// Aggregate-type discriminator strings as published by the server.
-///
-/// These must match the values returned by each aggregate's
-/// `Aggregate::aggregate_type()` impl. They are part of the wire contract for
-/// the event-bus websocket — bumping them is a coordinated server+client
-/// change.
 pub mod aggregate {
     pub const SOURCE_DOCUMENT: &str = "source_document";
     pub const INDEXING: &str = "indexing";

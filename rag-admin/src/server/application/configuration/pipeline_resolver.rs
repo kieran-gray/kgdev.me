@@ -10,8 +10,6 @@ use crate::server::domain::configuration::pipeline_configuration::{
     PipelineConfigurationRepository, PipelineConfigurationRepositoryError,
 };
 
-/// One pipeline configuration, with each referenced model/index already
-/// resolved to its concrete record (kind, name, dims).
 #[derive(Debug, Clone)]
 pub struct ResolvedPipeline {
     pub pipeline_configuration_id: Uuid,
@@ -21,9 +19,6 @@ pub struct ResolvedPipeline {
     pub vector_index: ResolvedVectorIndex,
 }
 
-/// Centralises the (pipeline_id) → (embedding, generation, vector_index)
-/// lookup so call sites in ingest/eval/dataset can ask one service instead of
-/// hand-rolling configuration cross-references.
 pub struct PipelineResolver {
     pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
     embedding_service: Arc<EmbeddingService>,

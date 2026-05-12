@@ -1,29 +1,11 @@
 use leptos::prelude::*;
 
-/// Modal dialog shell.
-///
-/// Visibility is driven by `open` (read signal). Backdrop click and `Esc` are
-/// handled by callers (they'd close via `on_close`). The body is a re-runnable
-/// closure so a single shell can host different forms across opens.
-///
-/// Future evolution: the UX plan calls for right-edge side-panels rather than
-/// centred modals. This primitive intentionally keeps a tight API so swapping
-/// the layout later doesn't ripple through every call site.
 #[component]
 pub fn Dialog(
-    /// Controls visibility. The dialog mounts when `open()` becomes `true`.
-    #[prop(into)]
-    open: Signal<bool>,
-    /// Required heading.
-    #[prop(into)]
-    title: String,
-    /// One-line description rendered below the heading.
-    #[prop(optional, into)]
-    subtitle: Option<String>,
-    /// Called when the operator dismisses the dialog (close button).
+    #[prop(into)] open: Signal<bool>,
+    #[prop(into)] title: String,
+    #[prop(optional, into)] subtitle: Option<String>,
     on_close: Callback<()>,
-    /// Form / content body. `ChildrenFn` so the same dialog can re-render
-    /// when its content depends on signals.
     children: ChildrenFn,
 ) -> impl IntoView {
     let children = StoredValue::new(children);
@@ -32,7 +14,7 @@ pub fn Dialog(
             <div
                 class="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-sm"
                 on:click=move |ev| {
-                    // Click on the backdrop (not its children) closes.
+
                     let target = ev.target();
                     let current = ev.current_target();
                     if target == current {

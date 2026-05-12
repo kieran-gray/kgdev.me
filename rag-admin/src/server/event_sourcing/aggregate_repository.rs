@@ -9,7 +9,6 @@ use crate::server::application::AppError;
 use super::aggregate::Aggregate;
 use super::event_store::EventStore;
 
-/// A persisted snapshot of an aggregate at a given version (= event count).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregateSnapshot<A> {
     pub stream_id: Uuid,
@@ -17,8 +16,6 @@ pub struct AggregateSnapshot<A> {
     pub aggregate: A,
 }
 
-/// Persists and retrieves aggregate snapshots so that command handling does
-/// not need to replay the full event stream every time.
 #[async_trait]
 pub trait SnapshotStore<A>: Send + Sync
 where
@@ -29,9 +26,6 @@ where
     async fn save(&self, snapshot: &AggregateSnapshot<A>) -> Result<(), AppError>;
 }
 
-/// Loads aggregates by combining a snapshot (if any) with the tail of events
-/// written since that snapshot. Mirrors the aggregate caching pattern from
-/// fern-labour's event_sourcing crate.
 pub struct AggregateRepository<A>
 where
     A: Aggregate,
@@ -94,8 +88,6 @@ where
         }))
     }
 
-    /// Save a snapshot of the aggregate. Called after a successful append so
-    /// the next load reads one row instead of replaying the whole stream.
     pub async fn save_snapshot(
         &self,
         stream_id: Uuid,
@@ -116,9 +108,6 @@ where
     }
 }
 
-/// Aggregate state plus the bookkeeping the command processor needs: the
-/// stream version (for optimistic concurrency on append) and how many events
-/// have accumulated since the last snapshot (so we can decide when to re-snap).
 pub struct LoadedAggregate<A> {
     pub stream_id: Uuid,
     pub version: i64,

@@ -8,8 +8,6 @@ use crate::shared::{aggregate_type, DocumentListItemDto};
 
 #[component]
 pub fn PostsListPage() -> impl IntoView {
-    // Refetch whenever a source-document or indexing event arrives, and once on
-    // every websocket reconnect.
     let invalidator = use_invalidator(|e| {
         e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
     });
@@ -24,9 +22,9 @@ pub fn PostsListPage() -> impl IntoView {
                 title="Documents"
                 subtitle="Source documents discovered by the registered adapters.".to_string()
                 actions=Box::new(|| view! {
-                    // Import is a real action; ingest/refresh modals land in a
-                    // follow-up. For now this is a disabled affordance so the
-                    // header layout reflects the final shape.
+
+
+
                     <button class="btn btn-primary" disabled=true title="Coming soon">
                         "+ Import"
                     </button>

@@ -42,8 +42,6 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_event_bus();
-    // ActivityState is provided inside AppShell, which lives under <Router>
-    // and so has access to router hooks (location/navigate).
 
     view! {
         <Title text="rag-admin" />
@@ -80,7 +78,6 @@ pub fn App() -> impl IntoView {
                     <Route path=StaticSegment("chunking") view=ChunkingPage />
                     <Route path=StaticSegment("playground") view=PlaygroundPage />
                     <Route path=StaticSegment("settings") view=SettingsPage />
-                    // Legacy embed-similarity probe; routed for direct links from the chunk cards.
                     <Route path=StaticSegment("embed") view=EmbedTestPage />
                 </Routes>
             </AppShell>

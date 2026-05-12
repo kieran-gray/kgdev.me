@@ -1,7 +1,3 @@
-//! Filesystem layout for runtime artifacts (tokenizer cache, evaluation
-//! defaults, post-chunking config). Replaces the path helpers that used to
-//! live alongside the deleted `Settings` struct.
-
 use std::path::PathBuf;
 
 pub fn data_dir() -> PathBuf {

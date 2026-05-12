@@ -37,8 +37,6 @@ impl Job {
     }
 
     pub async fn emit(&self, event: InternalLogEvent) {
-        // Mirror to tracing so structured metadata still lands in the server
-        // logs even though the UI only ever sees `message`.
         let meta = if event.metadata.is_empty() {
             None
         } else {

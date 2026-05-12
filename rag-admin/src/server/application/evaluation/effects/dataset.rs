@@ -12,11 +12,6 @@ pub struct GenerateDatasetEffect {
     pub duplicate_similarity_threshold_milli: u32,
 }
 
-/// All side-effecting work the dataset process manager can dispatch.
-///
-/// One variant per workflow keeps the command/event/effect map one-to-one
-/// and traceable: each event triggers at most one effect, each effect issues
-/// follow-up commands until the workflow terminates.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum EvaluationDatasetEffect {

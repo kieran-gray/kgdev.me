@@ -21,11 +21,6 @@ const MAX_PROJECTOR_ERROR_COUNT: i64 = 5;
 const POLL_HEARTBEAT: Duration = Duration::from_secs(2);
 const BATCH_SIZE: i64 = 256;
 
-/// Background task that drives all read-side work for one aggregate type:
-/// reads new events from the global log, runs each projector, broadcasts
-/// envelopes onto the event bus, and ticks the process manager.
-///
-/// Mirrors the role of the Cloudflare DO `alarm()` handler in the labour app.
 pub struct ProjectionDriver<A, R>
 where
     A: Aggregate,
@@ -63,8 +58,6 @@ where
         }
     }
 
-    /// Run one tick: pull pending events, run projectors, broadcast, dispatch.
-    /// Returns whether any work was done.
     pub async fn tick(&self) -> Result<bool, AppError> {
         let mut any_work = false;
 
@@ -158,8 +151,6 @@ where
         }
     }
 
-    /// Long-running entry point. Listens for wakeups; falls back to polling
-    /// every `POLL_HEARTBEAT` so a missed notification cannot stall progress.
     pub async fn run(self: Arc<Self>) {
         info!(
             aggregate = A::aggregate_type(),
@@ -167,7 +158,6 @@ where
             "projection driver started"
         );
         loop {
-            // Drain until empty.
             loop {
                 match self.tick().await {
                     Ok(true) => continue,

@@ -12,9 +12,6 @@ use crate::server::application::llm::ChatService;
 use crate::server::application::ports::ChatResponseFormat;
 use crate::server::application::AppError;
 
-/// Generates evaluation questions by dispatching a chat request through the
-/// `ChatService` router (which picks the correct backend for the generation
-/// model's provider kind). Backend-agnostic.
 pub struct ChatBasedEvaluationGenerator {
     chat_service: Arc<ChatService>,
 }

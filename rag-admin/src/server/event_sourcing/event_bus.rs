@@ -6,12 +6,6 @@ use super::envelope::PublishedEvent;
 
 const BUS_CAPACITY: usize = 1024;
 
-/// In-process broadcast bus that the projection driver pushes events into and
-/// WebSocket subscribers consume from.
-///
-/// One bus per process; events from every aggregate type flow through it as
-/// `PublishedEvent` (serialised payload). Filtering by `stream_id` /
-/// `aggregate_type` is the subscriber's job.
 pub struct EventBus {
     sender: broadcast::Sender<Arc<PublishedEvent>>,
 }
@@ -28,8 +22,6 @@ impl EventBus {
         Self { sender }
     }
 
-    /// Publish an event to all current subscribers. Errors mean no subscribers,
-    /// which is normal — projection driver continues regardless.
     pub fn publish(&self, event: Arc<PublishedEvent>) {
         let _ = self.sender.send(event);
     }

@@ -10,10 +10,6 @@ use crate::components::primitives::{
 use crate::server_functions::evaluation::get_run;
 use crate::shared::{aggregate_type, evaluation_score, EvaluationRunDto, EvaluationVariantResult};
 
-/// `/runs/:run_id` — deep-dive into a single evaluation run.
-///
-/// Routes outside the document subtree so a future Evaluations leaderboard can
-/// link here without round-tripping through the document detail page.
 #[component]
 pub fn RunDetailPage() -> impl IntoView {
     let params = use_params_map();
@@ -99,8 +95,6 @@ fn RunView(run: EvaluationRunDto) -> impl IntoView {
     };
     let short = run.run_id.to_string()[..8].to_string();
 
-    // Sort variants by overall score, descending. The first variant (highest
-    // score) gets highlighted as the leader.
     let mut variants = run.variants;
     variants.sort_by(|a, b| {
         evaluation_score(&b.metrics)
@@ -108,9 +102,6 @@ fn RunView(run: EvaluationRunDto) -> impl IntoView {
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    // Per-metric best across all variants, used to draw reference ticks on
-    // every variant's bar so the reader sees how close runner-ups are to the
-    // leader on each dimension.
     let bests = best_per_metric(&variants);
     let leader_score = variants.first().map(|v| evaluation_score(&v.metrics));
 

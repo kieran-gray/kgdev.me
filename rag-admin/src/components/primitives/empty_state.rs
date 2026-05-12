@@ -1,8 +1,5 @@
 use leptos::prelude::*;
 
-/// Empty-state block — used inside `Surface` regions or tables when there's
-/// nothing to render. Calmer than the previous `card-outer p-8 ... opacity-30`
-/// pattern: title, body, optional action.
 #[component]
 pub fn EmptyState(
     #[prop(into)] title: String,

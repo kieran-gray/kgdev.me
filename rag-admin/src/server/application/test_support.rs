@@ -1,9 +1,6 @@
 use crate::server::application::ports::{Tokenized, Tokenizer};
 use crate::server::application::AppError;
 
-/// Whitespace-splitting tokenizer for unit tests that need a `Tokenizer` but
-/// don't care about real subword behaviour. The chunker tests use this so they
-/// don't pull a full HuggingFace tokenizer into the test binary.
 pub struct MockTokenizer;
 
 impl MockTokenizer {

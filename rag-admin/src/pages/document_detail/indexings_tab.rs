@@ -14,11 +14,6 @@ use crate::shared::{
     PipelineConfigurationDto, SourceDocumentDetailDto,
 };
 
-/// "Indexings" tab — table of all indexing aggregates for this document plus
-/// an inline launcher for a new one. Each row exposes per-stage requeue
-/// buttons (Chunk → Embed → Index) so the operator can re-run a stage in
-/// stepwise mode, or use the "Run full ingest" button on the new-indexing
-/// panel to let the process manager chain stages automatically.
 #[component]
 pub fn IndexingsTab(
     detail: Option<SourceDocumentDetailDto>,
@@ -28,8 +23,6 @@ pub fn IndexingsTab(
     let pipelines_stored = StoredValue::new(pipelines);
     let source_ref_stored = StoredValue::new(source_ref);
 
-    // Pull live chunking configurations so the launcher can pick a named
-    // config rather than hard-coded inline params.
     let invalidator =
         use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION, aggregate_type::INDEXING]));
     let chunking_configurations = Resource::new(
@@ -114,10 +107,6 @@ fn IndexingsTable(indexings: Vec<IndexingDto>) -> impl IntoView {
     }
 }
 
-/// Per-row stage requeue buttons. Each click issues the corresponding
-/// `Requeue*` command, which emits a marker event that the process manager
-/// turns into the matching effect. The button pops the drawer open so the
-/// operator can watch the SSE feed.
 #[component]
 fn StageControls(ix: IndexingDto) -> impl IntoView {
     let indexing_id = ix.indexing_id;
@@ -273,7 +262,6 @@ fn NewIndexingPanel(
     let (running, set_running) = signal(false);
     let (error, set_error) = signal::<Option<String>>(None);
 
-    // Pre-select first chunking config on mount so the form has a sane default.
     Effect::new(move |_| {
         if active_chunking.get_untracked().is_none() {
             if let Some(first) = chunking_configurations

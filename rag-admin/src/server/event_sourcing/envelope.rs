@@ -3,7 +3,6 @@ use uuid::Uuid;
 
 use crate::server::domain::shared::Timestamp;
 
-/// Metadata attached to every persisted event, derived from the event store.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EventMetadata {
     pub stream_id: Uuid,
@@ -14,18 +13,12 @@ pub struct EventMetadata {
     pub occurred_at: Timestamp,
 }
 
-/// An event together with its persistence metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventEnvelope<E> {
     pub event: E,
     pub metadata: EventMetadata,
 }
 
-/// Cross-aggregate-type event payload published on the in-process event bus.
-///
-/// This is what reaches WebSocket subscribers. The payload is pre-serialised so
-/// the bus is monomorphic across aggregate types and clients can treat it as
-/// an opaque cache invalidation signal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublishedEvent {
     pub stream_id: Uuid,

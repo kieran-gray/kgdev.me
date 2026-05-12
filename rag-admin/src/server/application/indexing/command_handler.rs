@@ -15,8 +15,6 @@ impl IndexingCommandHandler {
         Arc::new(Self { processor })
     }
 
-    /// Handle a `RequestIngest` command — the only command that can create an
-    /// aggregate. The stream id is derived from `(document_id, pipeline_configuration_id)`.
     pub async fn handle(&self, command: IndexingCommand) -> Result<(), AppError> {
         let stream_id = match &command {
             IndexingCommand::RequestIngest(cmd) => {
@@ -30,7 +28,6 @@ impl IndexingCommandHandler {
         Ok(())
     }
 
-    /// Handle a stage-completion command on a known aggregate stream.
     pub async fn handle_for(
         &self,
         aggregate_id: Uuid,

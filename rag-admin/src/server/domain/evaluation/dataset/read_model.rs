@@ -5,10 +5,6 @@ use crate::server::domain::shared::Timestamp;
 
 use super::aggregate::DatasetGenerationStatus;
 
-/// Read model row for the `evaluation_datasets` table.
-///
-/// Built incrementally by `EvaluationDatasetProjector` from events; never
-/// derived from the write-side aggregate.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationDatasetReadModel {
     pub dataset_id: Uuid,
@@ -29,9 +25,6 @@ pub struct EvaluationDatasetReadModel {
     pub created_at: Timestamp,
 }
 
-/// The subset of dataset fields written when a `DatasetGenerationRequested`
-/// event is first projected. `question_count` and `rejection_count` start at
-/// zero; `status` starts as Generating.
 #[derive(Debug, Clone)]
 pub struct NewDatasetSummary {
     pub dataset_id: Uuid,

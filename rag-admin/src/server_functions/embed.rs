@@ -2,11 +2,6 @@ use leptos::prelude::*;
 
 use crate::shared::EmbedResult;
 
-/// Sandboxed embedding-test endpoint for the SIMILARITY_LAB page.
-/// Takes a free-form model identifier (e.g. `@cf/baai/bge-base-en-v1.5` or
-/// `qwen3-embedding:0.6b`); the server resolves it against the configuration
-/// registry to find the embedding-model id, then routes through
-/// `EmbeddingService` like any other call site.
 #[server(name = EmbedTexts, prefix = "/api", endpoint = "embed_texts")]
 pub async fn embed_texts(
     model: String,

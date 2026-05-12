@@ -1,13 +1,5 @@
 use crate::server::application::AppError;
 
-/// Encode an `f32` slice as the pgvector text literal: `[a,b,c]`.
-///
-/// Used everywhere we bind a vector to a `vector` column or parameter and want
-/// to avoid pulling in the `pgvector` Rust crate just to encode a value. The
-/// literal is cast in SQL with `$N::vector`.
-///
-/// Non-finite values are coerced to zero — pgvector rejects `NaN`/`±Inf` and
-/// would otherwise fail the entire insert or retrieval.
 pub fn format_vector_literal(values: &[f32]) -> String {
     let mut out = String::with_capacity(values.len() * 8 + 2);
     out.push('[');
@@ -22,11 +14,6 @@ pub fn format_vector_literal(values: &[f32]) -> String {
     out
 }
 
-/// Parse a pgvector text literal (`[a,b,c]`) back into an `f32` vector.
-///
-/// Companion to `format_vector_literal`. Read paths select `vec::text` and pass
-/// the result here rather than depending on the `pgvector` Rust crate for the
-/// `Vector` sqlx type.
 pub fn parse_vector_literal(s: &str) -> Result<Vec<f32>, AppError> {
     let trimmed = s.trim();
     let body = trimmed

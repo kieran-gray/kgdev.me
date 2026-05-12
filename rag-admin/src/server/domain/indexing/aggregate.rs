@@ -29,8 +29,6 @@ pub struct Indexing {
     pub attempts: u32,
     pub last_request_id: Option<Uuid>,
     pub removed: bool,
-    /// Whether the process manager should chain stages automatically after
-    /// completion events, or stop and wait for the operator to `RequeueX`.
     pub auto_advance: bool,
 }
 

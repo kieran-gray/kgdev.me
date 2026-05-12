@@ -22,10 +22,6 @@ pub fn PipelinesPage() -> impl IntoView {
     let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION]));
     let (refresh, set_refresh) = signal(0u32);
 
-    // Both Resources track the websocket invalidator AND a manual refresh
-    // counter — `apply_configuration_command` returns success synchronously,
-    // and we bump `refresh` immediately so the UI doesn't wait for the event
-    // round-trip.
     let configuration = Resource::new(
         move || (invalidator.get(), refresh.get()),
         |_| async move { get_configuration().await.map_err(|e| e.to_string()) },
@@ -90,7 +86,7 @@ pub fn PipelinesPage() -> impl IntoView {
                 }}
             </Transition>
 
-            // ── Add / Edit dialog ─────────────────────────────────────────
+
             <Transition fallback=|| ()>
                 {move || configuration.get().map(|res| match res {
                     Ok(cfg) => view! {
@@ -108,7 +104,7 @@ pub fn PipelinesPage() -> impl IntoView {
                 })}
             </Transition>
 
-            // ── Delete confirmation ───────────────────────────────────────
+
             <DeleteConfirmDialog
                 target=delete_target
                 set_target=set_delete_target
@@ -249,7 +245,6 @@ fn PipelineFormDialog(
     let (vector_index_id, set_vector_index_id) = signal::<Option<Uuid>>(None);
     let (dialog_error, set_dialog_error) = signal::<Option<String>>(None);
 
-    // Reset form fields when the mode changes.
     Effect::new(move |_| {
         set_dialog_error.set(None);
         match form_mode.get() {
@@ -463,8 +458,6 @@ fn DeleteConfirmDialog(
         </Dialog>
     }
 }
-
-// ── Small form helpers ─────────────────────────────────────────────────────
 
 #[component]
 fn LabelledInput(

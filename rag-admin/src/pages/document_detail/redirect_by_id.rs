@@ -6,12 +6,6 @@ use uuid::Uuid;
 use crate::components::primitives::{EmptyState, Surface};
 use crate::server_functions::source_document::get_document_detail_by_id;
 
-/// `/documents/by-id/:document_id` — bounce to the canonical
-/// `/documents/{doc_type}/{source_ref}` URL.
-///
-/// Lets internal links (e.g. dataset/run detail back-buttons) navigate to a
-/// document without knowing the current slug. Uses `replace: true` so the
-/// browser back button skips the bounce.
 #[component]
 pub fn DocumentByIdRedirect() -> impl IntoView {
     let params = use_params_map();
@@ -34,8 +28,6 @@ pub fn DocumentByIdRedirect() -> impl IntoView {
         },
     );
 
-    // Once the detail loads, navigate to the canonical URL. `replace: true`
-    // keeps the redirect off the history stack.
     Effect::new(move |_| {
         if let Some(Ok(Some(detail))) = detail.get() {
             let target = format!(

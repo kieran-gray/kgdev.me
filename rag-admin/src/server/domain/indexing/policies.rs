@@ -1,19 +1,3 @@
-//! Reactions: turn indexing events into pending effects.
-//!
-//! Six trigger paths:
-//!
-//!   IngestRequested      → ExecuteChunking
-//!   ChunkingRequeued     → ExecuteChunking
-//!   EmbeddingRequeued    → ExecuteEmbedding
-//!   IndexingRequeued     → ExecuteIndexing
-//!   ChunkingCompleted    → ExecuteEmbedding  (iff state.auto_advance)
-//!   EmbeddingCompleted   → ExecuteIndexing   (iff state.auto_advance)
-//!
-//! The `*Requeued` events are operator-triggered markers — they always fire
-//! the effect regardless of `auto_advance`. The natural chain stops at any
-//! completion event when `auto_advance` is false; the operator decides when
-//! to continue with a `Requeue*` command.
-
 use crate::server::application::indexing::effects::{
     ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, IndexingEffect,
 };

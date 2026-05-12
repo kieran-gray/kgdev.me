@@ -1,14 +1,7 @@
-//! SSE-backed log viewer. Renders a scrollable list of log lines, optionally
-//! filtered by level. Opens its own `EventSource` on the supplied URL and
-//! closes it on drop or when the server sends `__done__`.
-
 use leptos::prelude::*;
 
 use crate::shared::{LogEvent, LogLevel};
 
-/// Renders a log stream for the given URL. When `url` is `None`, the component
-/// shows an empty-state placeholder — used by activity rows that haven't been
-/// matched to an SSE feed (eval/dataset jobs).
 #[component]
 pub fn LogStream(#[prop(into)] url: Signal<Option<String>>) -> impl IntoView {
     let (events, set_events) = signal::<Vec<LogEvent>>(Vec::new());
@@ -16,8 +9,6 @@ pub fn LogStream(#[prop(into)] url: Signal<Option<String>>) -> impl IntoView {
 
     #[cfg(feature = "hydrate")]
     {
-        // Open / re-open the stream when the URL changes; close the previous
-        // stream by dropping its handle.
         let handle = StoredValue::new(None::<self::hydrate::StreamHandle>);
         Effect::new(move |_| {
             if let Some(url) = url.get() {
@@ -80,7 +71,6 @@ mod hydrate {
 
     use crate::shared::{LogEvent, LogLevel};
 
-    /// Owns an open `EventSource`. Dropping it closes the connection.
     pub struct StreamHandle {
         source: EventSource,
     }
@@ -106,15 +96,10 @@ mod hydrate {
                     })
                 });
                 set_running.set(false);
-                // Construct a closed dummy. EventSource::new for the same URL
-                // would race — return a sentinel and let the next Effect run
-                // replace it.
+
                 return StreamHandle {
-                    source: EventSource::new("about:blank").unwrap_or_else(|_| {
-                        // Last-resort: re-attempt the original URL; either way
-                        // Drop will call .close() safely on whatever we got.
-                        EventSource::new(&url).expect("event source")
-                    }),
+                    source: EventSource::new("about:blank")
+                        .unwrap_or_else(|_| EventSource::new(&url).expect("event source")),
                 };
             }
         };

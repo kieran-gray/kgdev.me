@@ -87,8 +87,6 @@ impl EvaluationRunEffectExecutor {
     async fn run(&self, effect: &ExecuteRunEffect) -> Result<(), AppError> {
         let (job_id, job) = self.job_registry.create().await;
         let stream_url = format!("/api/job/logs/{job_id}");
-        // Activity rows are keyed by aggregate stream id, which for the run
-        // executor is `run_id` — the dataset has its own row.
         self.activity_registry
             .attach_stream(effect.run_id, stream_url)
             .await;

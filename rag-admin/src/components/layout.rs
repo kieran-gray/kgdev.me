@@ -4,14 +4,9 @@ use leptos_router::components::A;
 pub fn Layout(children: Children) -> impl IntoView {
     view! {
         <div class="min-h-screen flex flex-col relative bg-[var(--color-page-bg)]">
-            // Structural Framing Lines
             <div class="hidden xl:block">
-                // Main framing lines
                 <div class="framing-line-v left-1/2 -ml-[576px]"></div>
                 <div class="framing-line-v left-1/2 ml-[576px]"></div>
-
-                // Secondary framing lines (approx 1/3 distance to edge)
-                // Calculated as: (100vw - 1152px) / 2 = side margin. 1/3 of that.
                 <div class="framing-line-v" style="left: calc(50% - 576px - (50vw - 576px) / 3)"></div>
                 <div class="framing-line-v" style="left: calc(50% + 576px + (50vw - 576px) / 3)"></div>
             </div>
@@ -41,7 +36,6 @@ pub fn Layout(children: Children) -> impl IntoView {
                             </A>
                         </nav>
                     </div>
-                    // Horizontal framing line for header - 100% width
                     <div class="absolute bottom-0 left-0 right-0 framing-line-h"></div>
                 </div>
             </header>

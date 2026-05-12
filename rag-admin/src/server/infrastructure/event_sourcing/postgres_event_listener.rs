@@ -8,13 +8,6 @@ use tokio::sync::Notify;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
-/// Spawns a background task that listens for `events_appended` notifications
-/// and pings the matching `Notify` per `aggregate_type`.
-///
-/// One listener per process; all projection drivers register their wake-up
-/// `Notify` against the aggregate types they care about. On reconnect the
-/// listener re-establishes; the projection drivers' 2s heartbeat catches any
-/// notifications missed during the gap.
 pub fn spawn_postgres_event_listener(pool: PgPool, wakeups: HashMap<String, Arc<Notify>>) {
     tokio::spawn(async move {
         loop {

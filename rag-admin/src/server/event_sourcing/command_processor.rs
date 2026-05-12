@@ -11,14 +11,6 @@ use super::envelope::EventEnvelope;
 
 const SNAPSHOT_AFTER_EVENTS: usize = 16;
 
-/// Generic command processor. One per aggregate type.
-///
-/// Loads the aggregate (via snapshot + tail-replay), runs `handle_command`,
-/// appends any new events to the store, and refreshes the snapshot when the
-/// tail has grown past `SNAPSHOT_AFTER_EVENTS`.
-///
-/// Returns the appended envelopes so callers can chain follow-up work without
-/// a second load.
 pub struct CommandProcessor<A>
 where
     A: Aggregate,

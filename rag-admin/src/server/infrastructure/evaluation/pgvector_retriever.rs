@@ -8,11 +8,6 @@ use crate::server::application::{
 };
 use crate::server::infrastructure::postgres::pgvector_codec::format_vector_literal;
 
-/// Postgres / pgvector implementation of the evaluation `Retriever` port.
-///
-/// Ranks chunks within a single `embedding_set_id` by cosine similarity against
-/// a query vector. Similarity is `1 - (<=>)` because pgvector's `<=>` operator
-/// returns cosine *distance* in `[0.0, 2.0]`.
 pub struct PgvectorRetriever {
     pool: PgPool,
 }

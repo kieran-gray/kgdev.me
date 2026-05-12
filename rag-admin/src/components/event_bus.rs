@@ -9,24 +9,13 @@ pub enum ConnectionState {
     Closed,
 }
 
-/// Shared bus state. `provide_event_bus` puts a `Copy` handle into context.
 #[derive(Clone, Copy)]
 pub struct EventBus {
-    /// Most recent event received on the socket. `None` until the first event
-    /// arrives. Updates trigger Effects/Memos that depend on it.
     pub last_event: ReadSignal<Option<PublishedEvent>>,
-    /// Increments every time the websocket reconnects. Eventful Resources key
-    /// off this so they refetch once after a reconnect to catch missed events.
     pub epoch: ReadSignal<u32>,
-    /// Current websocket connection state. Used by the nav activity dot.
     pub connection: ReadSignal<ConnectionState>,
 }
 
-/// Initialise the event bus and put it into context. Call once from `App`.
-///
-/// SSR-safe: on the server side, the bus is created but no websocket is opened
-/// (signals stay at their defaults). On hydrate, the websocket is opened from
-/// `Effect::new` so the connection is established after mount.
 pub fn provide_event_bus() {
     let (last_event, set_last_event) = signal::<Option<PublishedEvent>>(None);
     let (epoch, set_epoch) = signal(0u32);
@@ -40,7 +29,6 @@ pub fn provide_event_bus() {
 
     #[cfg(feature = "hydrate")]
     {
-        // Defer the connection until after mount so we have a `window` handle.
         Effect::new(move |prev: Option<()>| {
             if prev.is_none() {
                 self::hydrate::connect(set_last_event, set_epoch, set_connection);
@@ -48,8 +36,6 @@ pub fn provide_event_bus() {
         });
     }
 
-    // `set_last_event`/`set_epoch`/`set_connection` are intentionally captured
-    // by the hydrate module; we also silence unused warnings on the SSR target.
     #[cfg(not(feature = "hydrate"))]
     {
         let _ = (set_last_event, set_epoch, set_connection);
@@ -58,28 +44,10 @@ pub fn provide_event_bus() {
     provide_context(bus);
 }
 
-/// Read the event bus from context. Panics if `provide_event_bus` wasn't called.
 pub fn use_event_bus() -> EventBus {
     use_context::<EventBus>().expect("EventBus context must be provided in App")
 }
 
-/// Returns a memo that increments whenever:
-/// - the websocket reconnects (so dependent Resources refetch once to catch up),
-/// - a published event arrives for which `predicate` returns `true`.
-///
-/// The numeric value is opaque — it's a Resource key, not a count. Wire it as
-/// the source of a `Resource::new` to make that resource eventful.
-///
-/// ```ignore
-/// use crate::shared::aggregate_type;
-/// let invalidator = use_invalidator(|e| {
-///     e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
-/// });
-/// let docs = Resource::new(
-///     move || invalidator.get(),
-///     |_| async move { list_documents_with_status().await },
-/// );
-/// ```
 pub fn use_invalidator<F>(predicate: F) -> Memo<u32>
 where
     F: Fn(&PublishedEvent) -> bool + Send + Sync + 'static,
@@ -91,14 +59,12 @@ where
         let epoch = bus.epoch.get();
         let event = bus.last_event.get();
 
-        // Reconnect: bump once so dependents refetch to catch missed events.
         if let Some(prev) = prev_epoch {
             if prev != epoch {
                 set_count.update(|c| *c = c.wrapping_add(1));
             }
         }
 
-        // Matching event: bump.
         if let Some(ref e) = event {
             if predicate(e) {
                 set_count.update(|c| *c = c.wrapping_add(1));
@@ -160,8 +126,6 @@ mod hydrate {
             }
         };
 
-        // onopen — flip state and bump epoch so eventful Resources refetch once
-        // to catch anything we missed while disconnected.
         let on_open = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
             set_connection.set(ConnectionState::Open);
             set_epoch.update(|e| *e = e.wrapping_add(1));
@@ -169,7 +133,6 @@ mod hydrate {
         ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
         on_open.forget();
 
-        // onmessage — push the deserialized event into the signal.
         let on_message = Closure::<dyn FnMut(MessageEvent)>::new(move |evt: MessageEvent| {
             let data = match evt.data().as_string() {
                 Some(s) => s,
@@ -183,8 +146,6 @@ mod hydrate {
         ws.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
         on_message.forget();
 
-        // onclose / onerror — schedule a reconnect with exponential backoff
-        // capped at 30s. Capture the handlers for both paths.
         let reconnect = move || {
             ACTIVE_SOCKET.with(|socket| {
                 socket.borrow_mut().take();
@@ -199,16 +160,10 @@ mod hydrate {
         ws.set_onclose(Some(on_close.as_ref().unchecked_ref()));
         on_close.forget();
 
-        let on_error = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
-            // Browsers also fire `close` after `error`, so don't double-reconnect.
-            // We rely on the `close` handler.
-        });
+        let on_error = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {});
         ws.set_onerror(Some(on_error.as_ref().unchecked_ref()));
         on_error.forget();
 
-        // Keep the JS WebSocket object rooted after `open_socket` returns.
-        // Without this, browser GC can collect the socket and the client stops
-        // receiving invalidation events even though the handlers were attached.
         ACTIVE_SOCKET.with(|socket| {
             *socket.borrow_mut() = Some(ws);
         });
@@ -220,7 +175,6 @@ mod hydrate {
         set_connection: WriteSignal<ConnectionState>,
         attempt: u32,
     ) {
-        // 0.5s, 1s, 2s, 4s, 8s, 16s, 30s, 30s, …
         let delay_ms = ((1u32 << attempt.min(6)) * 500).min(30_000) as i32;
 
         let window = match web_sys::window() {

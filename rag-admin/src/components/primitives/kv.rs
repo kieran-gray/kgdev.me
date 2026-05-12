@@ -1,7 +1,5 @@
 use leptos::prelude::*;
 
-/// Labelled key/value row used in detail panels. Renders the key as a muted
-/// fixed-width column and the value mono-aligned next to it.
 #[component]
 pub fn Kv(
     #[prop(into)] label: String,

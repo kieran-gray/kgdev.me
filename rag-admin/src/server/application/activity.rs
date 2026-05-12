@@ -1,13 +1,3 @@
-//! In-memory projection of in-flight and recently-completed jobs.
-//!
-//! Drives the activity drawer in the UI. The registry is a side-table fed by
-//! the same `EventBus` that powers cache invalidation, plus a small attach
-//! API used by `SourceDocumentIngestService` to pin an SSE log feed onto its
-//! activity row.
-//!
-//! The registry is process-local and ephemeral. Restarting the server clears
-//! it — the UI tolerates that, because activity is best-effort presentation.
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -19,21 +9,17 @@ use uuid::Uuid;
 use crate::server::event_sourcing::event_bus::EventBus;
 use crate::shared::{classify, ActivityDelta, ActivityJobDto, ActivityStart, ActivityStatus};
 
-/// How long terminal rows hang around after `finished_at` before the GC
-/// removes them from the registry snapshot.
 const TERMINAL_RETENTION: Duration = Duration::from_secs(15 * 60);
 
 struct Row {
     dto: ActivityJobDto,
-    /// Instant the row entered a terminal state; used by the GC to evict
-    /// finished rows after `TERMINAL_RETENTION`.
+
     terminal_at: Option<Instant>,
 }
 
 struct State {
     rows: HashMap<Uuid, Row>,
-    /// Stream URLs attached before their owning row materialised from an
-    /// event. Applied at row-insert time. Drained eagerly when consumed.
+
     pending_streams: HashMap<Uuid, String>,
 }
 
@@ -51,8 +37,6 @@ impl ActivityRegistry {
         }
     }
 
-    /// Snapshot the current registry, evicting terminal rows older than
-    /// `TERMINAL_RETENTION` along the way.
     pub async fn snapshot(&self) -> Vec<ActivityJobDto> {
         let now = Instant::now();
         let mut state = self.state.lock().await;
@@ -74,10 +58,6 @@ impl ActivityRegistry {
         out
     }
 
-    /// Attach an SSE log URL to an activity row. Used by ingest services that
-    /// spawn a stage-level log feed in parallel with publishing
-    /// `IngestRequested`. If the row doesn't exist yet (the event hasn't
-    /// projected), the URL is stashed and applied when the row materialises.
     pub async fn attach_stream(&self, stream_id: Uuid, stream_url: String) {
         let mut state = self.state.lock().await;
         match state.rows.get_mut(&stream_id) {
@@ -112,8 +92,7 @@ impl ActivityRegistry {
                     },
                     terminal_at: None,
                 });
-                // If we'd previously seen a terminal event for the same stream
-                // and a fresh Start arrives (e.g. a retry), reset to running.
+
                 entry.dto.status = ActivityStatus::Running;
                 entry.dto.started_at = started_at;
                 entry.dto.finished_at = None;
@@ -160,8 +139,6 @@ impl Default for ActivityRegistry {
     }
 }
 
-/// Spawn the background task that maintains the registry from the event bus.
-/// Returns immediately; the task runs for the lifetime of the process.
 pub fn spawn_activity_projection(registry: Arc<ActivityRegistry>, event_bus: Arc<EventBus>) {
     tokio::spawn(async move {
         let mut subscription = event_bus.subscribe();

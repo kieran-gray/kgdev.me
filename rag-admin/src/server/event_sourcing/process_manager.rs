@@ -16,9 +16,6 @@ use super::policy::PolicyContext;
 
 const MAX_EFFECT_ATTEMPTS: i32 = 6;
 
-/// Performs an effect against the outside world (chunking, embedding, calling
-/// other services, issuing a follow-up command). Errors are caught by the
-/// process manager and the effect is retried.
 #[async_trait]
 pub trait EffectExecutor<R>: Send + Sync
 where
@@ -27,11 +24,6 @@ where
     async fn execute(&self, effect: &R) -> Result<(), AppError>;
 }
 
-/// Reduces events into effects (via aggregate-attached policies), persists
-/// them to the ledger, and dispatches pending effects through an executor.
-///
-/// One process manager per aggregate type. Driven by `ProjectionDriver` after
-/// each successful projector pass.
 pub struct ProcessManager<A, R>
 where
     A: Aggregate,
@@ -44,9 +36,6 @@ where
     _phantom: PhantomData<R>,
 }
 
-/// Function reducing one envelope + aggregate state into a list of pending effects.
-///
-/// Concrete instances are built per-domain and route by event variant.
 pub type DeriveEffectsFn<A, R> =
     fn(envelope: &EventEnvelope<<A as Aggregate>::Event>, state: &A) -> Vec<PendingEffect<R>>;
 
@@ -71,8 +60,6 @@ where
         }
     }
 
-    /// Step 1 of the alarm-equivalent loop: fold a freshly-projected batch of
-    /// events into the ledger. Pure derivation; no side effects yet.
     pub async fn enqueue_effects_for(
         &self,
         envelopes: &[EventEnvelope<A::Event>],
@@ -81,7 +68,6 @@ where
             return Ok(());
         }
 
-        // Group by stream so we load each aggregate at most once per batch.
         let mut by_stream: std::collections::BTreeMap<Uuid, Vec<&EventEnvelope<A::Event>>> =
             std::collections::BTreeMap::new();
         for env in envelopes {
@@ -119,8 +105,6 @@ where
         Ok(())
     }
 
-    /// Step 2: drain the ledger. Marks each effect dispatched, runs it,
-    /// then marks it completed or (on failure) records the attempt.
     pub async fn dispatch_pending(&self) -> Result<(), AppError> {
         let pending = self
             .ledger
@@ -175,7 +159,6 @@ where
     }
 }
 
-// Stop dead-code warnings for traits surfaced only via the public re-exports.
 #[allow(dead_code)]
 fn _trait_object_safety_assertions() {
     fn _is_object_safe<R: Send + Sync>(_: &dyn EffectExecutor<R>) {}

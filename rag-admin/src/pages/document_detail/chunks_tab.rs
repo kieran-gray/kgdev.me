@@ -5,7 +5,6 @@ use crate::components::primitives::{EmptyState, Surface};
 use crate::server_functions::source_document::get_chunks;
 use crate::shared::SourceDocumentDetailDto;
 
-/// Chunks tab — spot-check the chunks produced by a specific indexing.
 #[component]
 pub fn ChunksTab(detail: Option<SourceDocumentDetailDto>) -> impl IntoView {
     let indexings = detail.map(|d| d.indexings).unwrap_or_default();

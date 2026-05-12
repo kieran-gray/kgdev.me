@@ -1,7 +1,3 @@
-//! HTTP blog adapter — implements `SourceAdapter` directly against an
-//! upstream blog API. Listing hits `/api/posts/index.json`; fetching a
-//! single post hits `/api/posts/{slug}.json`.
-
 use std::sync::Arc;
 
 use async_trait::async_trait;

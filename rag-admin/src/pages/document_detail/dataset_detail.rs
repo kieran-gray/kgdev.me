@@ -14,11 +14,6 @@ use crate::shared::{
 
 use super::utils::short_hash;
 
-/// `/datasets/:dataset_id` — view a generated evaluation dataset.
-///
-/// Shows the generation context (document version, model, status counts) and
-/// the full list of questions with the source references each was generated
-/// from.
 #[component]
 pub fn DatasetDetailPage() -> impl IntoView {
     let params = use_params_map();
@@ -85,7 +80,6 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
     let questions = dataset.questions;
     let label = dataset.label;
 
-    // ── Rename / delete state ──────────────────────────────────────────────
     let (editing, set_editing) = signal(false);
     let (label_input, set_label_input) = signal(label.clone());
     let (busy, set_busy) = signal(false);

@@ -1,17 +1,3 @@
-//! Parsing helpers for the evaluation launcher's range/step text inputs.
-//!
-//! Accepted syntax:
-//!
-//! - `"2,3,5,8"`     — explicit values, comma-separated
-//! - `"4-10"`        — inclusive range, default step
-//! - `"400-700:100"` — inclusive range with explicit step
-//!
-//! Combinations are allowed: `"2, 4-10:2, 12"`. Values are sorted and deduped.
-
-/// Parse a free-text values list into a sorted, deduped `Vec<u32>`.
-///
-/// `min`/`max` clamp the per-value range; `default_step` is used for `a-b`
-/// without an explicit `:step` suffix.
 pub fn parse_u32_values(
     input: &str,
     min: u32,

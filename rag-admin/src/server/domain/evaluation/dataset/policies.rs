@@ -9,8 +9,6 @@ use crate::server::application::evaluation::effects::dataset::{
     EvaluationDatasetEffect, GenerateDatasetEffect,
 };
 
-/// On `DatasetGenerationRequested`, kick off the (single) `GenerateDataset`
-/// effect that runs the question-generation loop.
 fn for_dataset_generation_requested(
     event: &DatasetGenerationRequested,
     ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
@@ -49,7 +47,6 @@ impl HasPolicies<EvaluationDataset, EvaluationDatasetEvent, EvaluationDatasetEff
     }
 }
 
-/// Top-level dispatch from envelope to per-variant policy lists.
 pub fn derive_dataset_effects(
     envelope: &EventEnvelope<EvaluationDatasetEvent>,
     state: &EvaluationDataset,

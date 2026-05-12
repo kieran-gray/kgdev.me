@@ -1,12 +1,3 @@
-//! Right-edge activity drawer.
-//!
-//! Subscribes to the `ActivityState` context, renders one row per job, and
-//! lets the operator expand a row to watch its SSE log feed inline.
-//!
-//! The drawer's open/closed state is held in the URL (`?activity=open`), so
-//! a reload puts the drawer back where it was. The nav button toggles the
-//! same query param.
-
 use leptos::prelude::*;
 
 use crate::components::activity::{toggle_drawer, use_activity_state};
@@ -67,7 +58,7 @@ pub fn ActivityDrawer() -> impl IntoView {
                         let f = filter.get();
                         let mut list = rows.get();
                         list.retain(|row| row_matches_filter(row, f));
-                        // Running first (oldest first), then by finished_at desc.
+
                         list.sort_by(|a, b| match (a.status, b.status) {
                             (ActivityStatus::Running, ActivityStatus::Running) => {
                                 a.started_at.cmp(&b.started_at)
@@ -199,8 +190,6 @@ fn empty_label(filter: Filter) -> &'static str {
 }
 
 fn short_time(ts: &str) -> String {
-    // RFC3339 is always YYYY-MM-DDTHH:MM:SS… — slice safe up to 16 chars
-    // because that prefix is ASCII.
     if ts.len() >= 16 {
         ts[..16].replace('T', " ")
     } else {

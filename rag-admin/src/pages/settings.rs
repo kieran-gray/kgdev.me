@@ -1,14 +1,3 @@
-//! Settings page — registry sections + evaluation defaults.
-//!
-//! ## What lives here
-//!
-//! - **Registry**: Embedding models, Generation models, Vector indexes — the
-//!   shared catalogue that `PipelineConfiguration`s draw from. Each entry
-//!   carries its `kind` (AiProviderKind / VectorStoreKind) directly; there
-//!   are no separate Provider entities to manage anymore.
-//! - **Evaluation defaults**: persisted `EvaluationSettings` used by the
-//!   synthetic-dataset generator.
-
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
@@ -100,8 +89,6 @@ fn StatusBanner(status: ReadSignal<Option<(bool, String)>>) -> impl IntoView {
     }
 }
 
-// ── Registry orchestrator ──────────────────────────────────────────────────
-
 #[derive(Clone)]
 enum RegistryForm {
     AddEmbeddingModel,
@@ -170,8 +157,6 @@ fn Registry(
         />
     }
 }
-
-// ── Section components ─────────────────────────────────────────────────────
 
 #[component]
 fn EmbeddingModelsSection(
@@ -369,8 +354,6 @@ fn RegistryRow(
     }
 }
 
-// ── Form dialog ────────────────────────────────────────────────────────────
-
 #[component]
 fn RegistryFormDialog(
     form: ReadSignal<Option<RegistryForm>>,
@@ -382,14 +365,12 @@ fn RegistryFormDialog(
 ) -> impl IntoView {
     let (dialog_error, set_dialog_error) = signal::<Option<String>>(None);
 
-    // Form fields, shared across forms; the dialog body picks which ones to show.
     let (name, set_name) = signal(String::new());
     let (ai_kind, set_ai_kind) = signal(AiProviderKindDto::Cloudflare);
     let (vector_kind, set_vector_kind) = signal(VectorStoreKindDto::CloudflareVectorize);
     let (model_id, set_model_id) = signal(String::new());
     let (dims, set_dims) = signal(1024u32);
 
-    // Sync field values whenever the form changes.
     Effect::new(move |_| {
         set_dialog_error.set(None);
         match form.get() {
@@ -661,8 +642,6 @@ fn RegistryDeleteDialog(
     }
 }
 
-// ── Evaluation defaults (legacy SettingsDto.evaluation — kept) ─────────────
-
 #[component]
 fn EvaluationDefaults(initial: SettingsDto) -> impl IntoView {
     let (eval, set_eval) = signal(initial.evaluation.clone());
@@ -771,8 +750,6 @@ fn EvaluationDefaults(initial: SettingsDto) -> impl IntoView {
         </Surface>
     }
 }
-
-// ── Form helpers ───────────────────────────────────────────────────────────
 
 #[component]
 fn LabelledInput(
@@ -895,8 +872,6 @@ fn LabelledNumDirect(
         </label>
     }
 }
-
-// ── Command builders ───────────────────────────────────────────────────────
 
 fn build_command(
     form: RegistryForm,

@@ -12,22 +12,9 @@ use crate::server::setup::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct EventsWsQuery {
-    /// Optional aggregate stream filter. When absent, the socket delivers
-    /// every published event so the client can use it as an app-wide cache
-    /// invalidation bus.
     pub stream_id: Option<Uuid>,
 }
 
-/// WebSocket endpoint that fans projected domain events out to a client.
-///
-/// Two consumption modes:
-/// - Per-stream subscriber (`?stream_id=<uuid>`): receives events for a single
-///   aggregate. Used by legacy per-job views.
-/// - App-wide subscriber (no `stream_id`): receives every event. Used by the
-///   client-side event bus to drive Resource invalidation.
-///
-/// Either way, the client treats messages as opaque cache invalidation hints
-/// and re-queries the read model on receipt.
 pub async fn events_ws_handler(
     Extension(state): Extension<Arc<AppState>>,
     Query(query): Query<EventsWsQuery>,

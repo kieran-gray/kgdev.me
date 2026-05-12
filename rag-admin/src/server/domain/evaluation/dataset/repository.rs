@@ -12,16 +12,8 @@ pub enum EvaluationDatasetRepositoryError {
     Internal(String),
 }
 
-/// Read + projection-write port for the `evaluation_datasets`,
-/// `evaluation_questions`, `evaluation_references` tables.
-///
-/// The mutating methods are called only by `EvaluationDatasetProjector` after
-/// the write side has appended events. Read methods serve query handlers and
-/// the WebSocket-driven UI.
 #[async_trait]
 pub trait EvaluationDatasetRepository: Send + Sync {
-    // -- queries --
-
     async fn load(
         &self,
         dataset_id: Uuid,
@@ -36,8 +28,6 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         &self,
         dataset_id: Uuid,
     ) -> Result<Vec<EvaluationQuestion>, EvaluationDatasetRepositoryError>;
-
-    // -- projection writes --
 
     async fn insert_summary(
         &self,

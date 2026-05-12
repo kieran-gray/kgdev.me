@@ -1,23 +1,11 @@
 use leptos::prelude::*;
 
-/// The single page heading row used by every top-level page.
-///
-/// Replaces the per-page `SYSTEM_VIEW / FOO`/`tech-label`/`text-3xl` triple
-/// with a consistent (eyebrow, title, actions) row.
 #[component]
 pub fn PageHeader(
-    /// Page title text.
-    #[prop(into)]
-    title: String,
-    /// Optional small label rendered above the title (used for breadcrumbs).
-    #[prop(optional, into)]
-    eyebrow: Option<String>,
-    /// Optional subtitle below the title (one short line).
-    #[prop(optional, into)]
-    subtitle: Option<String>,
-    /// Right-aligned action slot (buttons, dropdowns).
-    #[prop(optional)]
-    actions: Option<Children>,
+    #[prop(into)] title: String,
+    #[prop(optional, into)] eyebrow: Option<String>,
+    #[prop(optional, into)] subtitle: Option<String>,
+    #[prop(optional)] actions: Option<Children>,
 ) -> impl IntoView {
     view! {
         <header class="flex items-end justify-between gap-4 mb-6">
