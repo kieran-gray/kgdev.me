@@ -24,7 +24,7 @@ use crate::server::application::evaluation::effects::{
 };
 use crate::server::application::evaluation::ports::{EvaluationGenerator, Retriever};
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
-use crate::server::application::indexing::ports::VectorIndex;
+use crate::server::application::indexing::ports::{KvStore, VectorIndex};
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::indexing::{
     IndexingCommandHandler, IndexingEffect, IndexingEffectExecutor,
@@ -102,6 +102,7 @@ use crate::server::infrastructure::event_sourcing::{
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
 use crate::server::infrastructure::id::UuidGenerator;
 use crate::server::infrastructure::indexing::PostgresIndexingRepository;
+use crate::server::infrastructure::kv::{CloudflareKvStore, PostgresKvStore};
 use crate::server::infrastructure::llm::OllamaChatClient;
 use crate::server::infrastructure::markdown::MarkdownRsParser;
 use crate::server::infrastructure::source_document::{
@@ -113,7 +114,7 @@ use crate::server::infrastructure::tokenizer::HuggingFaceTokenizer;
 use crate::server::infrastructure::vector::{
     CloudflareVectorIndexProvider, PostgresVectorIndexProvider,
 };
-use crate::server::setup::config::Config;
+use crate::server::setup::config::{Config, KvBackend};
 use crate::server::setup::exceptions::SetupError;
 use crate::server::setup::paths::{
     evaluation_defaults_path, post_chunking_config_path, tokenizer_path,
@@ -338,6 +339,18 @@ impl AppState {
         let indexing_effect_ledger: Arc<dyn EffectLedger<IndexingEffect>> =
             Arc::new(PostgresEffectLedger::<IndexingEffect>::new(pool.clone()));
 
+        let kv_store: Arc<dyn KvStore> = match config.kv_backend {
+            KvBackend::Cloudflare => {
+                let namespace_id = config.cloudflare.kv_namespace_id.clone().ok_or_else(|| {
+                    SetupError::Internal(
+                        "KV_BACKEND=cloudflare but CLOUDFLARE_KV_NAMESPACE_ID is unset".into(),
+                    )
+                })?;
+                CloudflareKvStore::new(Arc::clone(&cf_api), namespace_id)
+            }
+            KvBackend::Postgres => PostgresKvStore::new(pool.clone()),
+        };
+
         let indexing_effect_executor = IndexingEffectExecutor::new(
             Arc::clone(&source_document_repository),
             Arc::clone(&indexing_repository),
@@ -348,6 +361,7 @@ impl AppState {
             Arc::clone(&embedding_set_repository),
             Arc::clone(&vector_index_resolver),
             Arc::clone(&pipeline_resolver),
+            Arc::clone(&kv_store),
             Arc::clone(&indexing_wiring.command_processor),
             Arc::clone(&job_registry),
             Arc::clone(&activity_registry),

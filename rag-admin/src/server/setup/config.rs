@@ -12,13 +12,14 @@ pub struct Config {
     pub database_url: String,
     pub cloudflare: CloudflareConfig,
     pub ollama: OllamaConfig,
+    pub kv_backend: KvBackend,
 }
 
 #[derive(Clone)]
 pub struct CloudflareConfig {
     pub account_id: String,
     pub api_token: String,
-    pub kv_namespace_id: String,
+    pub kv_namespace_id: Option<String>,
 }
 
 #[derive(Clone)]
@@ -26,12 +27,30 @@ pub struct OllamaConfig {
     pub base_url: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KvBackend {
+    Cloudflare,
+    Postgres,
+}
+
+impl FromStr for KvBackend {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "cloudflare" => Ok(Self::Cloudflare),
+            "postgres" => Ok(Self::Postgres),
+            other => Err(format!("unknown KV backend '{other}'")),
+        }
+    }
+}
+
 impl FromEnv for CloudflareConfig {
     fn from_env() -> Result<Self, SetupError> {
         Ok(Self {
             account_id: Config::parse("CLOUDFLARE_ACCOUNT_ID")?,
             api_token: Config::parse("CLOUDFLARE_API_TOKEN")?,
-            kv_namespace_id: Config::parse("CLOUDFLARE_KV_NAMESPACE_ID")?,
+            kv_namespace_id: Config::parse_optional("CLOUDFLARE_KV_NAMESPACE_ID"),
         })
     }
 }
@@ -47,11 +66,25 @@ impl FromEnv for OllamaConfig {
 
 impl Config {
     pub fn from_env() -> Result<Self, SetupError> {
+        let cloudflare = CloudflareConfig::from_env()?;
+        let kv_backend = Self::parse_optional::<KvBackend>("KV_BACKEND").unwrap_or_else(|| {
+            if cloudflare.kv_namespace_id.is_some() {
+                KvBackend::Cloudflare
+            } else {
+                KvBackend::Postgres
+            }
+        });
+        if kv_backend == KvBackend::Cloudflare && cloudflare.kv_namespace_id.is_none() {
+            return Err(SetupError::MissingVariable(
+                "CLOUDFLARE_KV_NAMESPACE_ID (required when KV_BACKEND=cloudflare)".to_owned(),
+            ));
+        }
         Ok(Self {
             blog_url: Self::parse("BLOG_URL")?,
             database_url: Self::parse("DATABASE_URL")?,
-            cloudflare: CloudflareConfig::from_env()?,
+            cloudflare,
             ollama: OllamaConfig::from_env()?,
+            kv_backend,
         })
     }
 

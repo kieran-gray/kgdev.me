@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::{PipelineResolver, ResolvedPipeline};
 use crate::server::application::embedding::EmbeddingService;
+use crate::server::application::indexing::ports::KvStore;
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::ports::BlobStore;
@@ -33,6 +34,7 @@ use super::indexing::{
 
 const EMBED_BATCH: usize = 50;
 const UPSERT_BATCH: usize = 100;
+const TAIL_CLEANUP_WINDOW: u32 = 512;
 
 pub struct IndexingEffectExecutor {
     source_document_repository: Arc<dyn SourceDocumentRepository>,
@@ -44,6 +46,7 @@ pub struct IndexingEffectExecutor {
     embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
     vector_index_resolver: Arc<VectorIndexResolver>,
     pipeline_resolver: Arc<PipelineResolver>,
+    kv_store: Arc<dyn KvStore>,
     command_processor: Arc<CommandProcessor<Indexing>>,
     job_registry: Arc<JobRegistry>,
     activity_registry: Arc<ActivityRegistry>,
@@ -63,6 +66,7 @@ impl IndexingEffectExecutor {
         embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
         vector_index_resolver: Arc<VectorIndexResolver>,
         pipeline_resolver: Arc<PipelineResolver>,
+        kv_store: Arc<dyn KvStore>,
         command_processor: Arc<CommandProcessor<Indexing>>,
         job_registry: Arc<JobRegistry>,
         activity_registry: Arc<ActivityRegistry>,
@@ -79,6 +83,7 @@ impl IndexingEffectExecutor {
             embedding_set_repository,
             vector_index_resolver,
             pipeline_resolver,
+            kv_store,
             command_processor,
             job_registry,
             activity_registry,
@@ -432,14 +437,22 @@ impl IndexingEffectExecutor {
         let pipeline_configuration_id = indexing.pipeline_configuration_id;
         let document_version = indexing.document_version;
 
+        let document = self
+            .source_document_repository
+            .load(document_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("document {document_id}")))?;
+        let post_slug = document.source_ref.natural_key().to_string();
+        let post_version = document_version.to_string();
+
+        let doc_id_hex = uuid_hex(document_id);
+        let pipeline_hex_short = &uuid_hex(pipeline_configuration_id)[..8];
+
         let records: Vec<VectorRecord> = embeddings
             .iter()
             .filter_map(|e| chunk_map.get(&e.chunk_id).map(|c| (e, *c)))
             .map(|(e, chunk)| VectorRecord {
-                id: format!(
-                    "{document_id}:{pipeline_configuration_id}:{}",
-                    chunk.chunk_id
-                ),
+                id: vector_id(&doc_id_hex, pipeline_hex_short, chunk.sequence),
                 values: e.vector.clone(),
                 metadata: json!({
                     "document_id": document_id.to_string(),
@@ -447,6 +460,8 @@ impl IndexingEffectExecutor {
                     "pipeline_configuration_id": pipeline_configuration_id.to_string(),
                     "chunk_id": chunk.chunk_id.to_string(),
                     "chunk_set_id": chunk_set_id.to_string(),
+                    "post_slug": post_slug,
+                    "post_version": post_version,
                     "heading": chunk.heading,
                     "text": chunk.text,
                     "char_start": chunk.char_start,
@@ -486,6 +501,29 @@ impl IndexingEffectExecutor {
             vector_index.upsert(batch).await?;
         }
 
+        let tail_ids: Vec<String> = (vector_count..vector_count + TAIL_CLEANUP_WINDOW)
+            .map(|seq| vector_id(&doc_id_hex, pipeline_hex_short, seq))
+            .collect();
+        if let Err(e) = vector_index.delete(&tail_ids).await {
+            job.emit(
+                InternalLogEvent::info(format!("Tail cleanup delete skipped: {e}"))
+                    .with_meta("tail_window", json!(TAIL_CLEANUP_WINDOW)),
+            )
+            .await;
+        }
+
+        let kv_key = format!("post_version:{post_slug}");
+        let kv_value = json!({ "v": post_version });
+        if let Err(e) = self.kv_store.put_json(&kv_key, &kv_value).await {
+            job.emit(
+                InternalLogEvent::error(format!("KV post_version write failed: {e}"))
+                    .with_meta("kv_key", json!(kv_key))
+                    .with_meta("error", json!(e.to_string())),
+            )
+            .await;
+            return Err(e);
+        }
+
         let occurred_at = self.clock.now();
         self.command_processor
             .handle(
@@ -506,6 +544,16 @@ impl IndexingEffectExecutor {
         .await;
         Ok(())
     }
+}
+
+fn uuid_hex(id: Uuid) -> String {
+    let mut buf = [0u8; 32];
+    id.as_simple().encode_lower(&mut buf);
+    String::from_utf8(buf.to_vec()).expect("hex uuid is utf-8")
+}
+
+fn vector_id(doc_id_hex: &str, pipeline_hex_short: &str, sequence: u32) -> String {
+    format!("{doc_id_hex}:{pipeline_hex_short}:{sequence}")
 }
 
 /// A "safe to requeue" indexing is one where the operator explicitly asked

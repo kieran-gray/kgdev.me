@@ -27,10 +27,6 @@ impl CloudflareApi {
         &self.config.api_token
     }
 
-    pub fn kv_namespace_id(&self) -> &str {
-        &self.config.kv_namespace_id
-    }
-
     fn auth_headers(token: &str, content_type: &str) -> Result<HeaderMap, AppError> {
         let mut headers = HeaderMap::new();
         headers.insert(

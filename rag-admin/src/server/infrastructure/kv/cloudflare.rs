@@ -10,11 +10,12 @@ use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE}
 
 pub struct CloudflareKvStore {
     api: Arc<CloudflareApi>,
+    namespace_id: String,
 }
 
 impl CloudflareKvStore {
-    pub fn new(api: Arc<CloudflareApi>) -> Arc<Self> {
-        Arc::new(Self { api })
+    pub fn new(api: Arc<CloudflareApi>, namespace_id: String) -> Arc<Self> {
+        Arc::new(Self { api, namespace_id })
     }
 }
 
@@ -26,7 +27,7 @@ impl KvStore for CloudflareKvStore {
             "{}/accounts/{}/storage/kv/namespaces/{}/values/{}",
             CLOUDFLARE_API_BASE,
             self.api.account_id(),
-            self.api.kv_namespace_id(),
+            self.namespace_id,
             encoded_key
         );
         let body_bytes = serde_json::to_vec(value)
