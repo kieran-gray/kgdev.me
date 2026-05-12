@@ -14,8 +14,8 @@
   "name": "leptos-tailwind",
   "scripts": {
     "dev": "dotenv -e .env -- cargo leptos watch --project rag-admin",
-    "build": "npx tailwindcss -i ./src/base.css -o ./style/output.css",
-    "watch": "npx tailwindcss -i ./src/base.css -o ./style/output.css --watch",
+    "build": "npx tailwindcss -i ./src/styles/global.css -o ./style/output.css",
+    "watch": "npx tailwindcss -i ./src/styles/global.css -o ./style/output.css --watch",
     "lint": "cargo clippy --features ssr -- -D warnings && cargo clippy --target wasm32-unknown-unknown --features hydrate -- -D warnings",
     "lint:check": "cargo clippy --target wasm32-unknown-unknown -- -D warnings",
     "format": "cargo fmt",
