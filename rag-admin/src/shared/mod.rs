@@ -6,6 +6,7 @@ mod embedding;
 mod evaluation;
 mod events;
 mod ingest;
+mod query;
 pub(crate) mod serde_compat;
 mod settings;
 mod source_document;
@@ -45,6 +46,7 @@ pub use evaluation::{
 };
 pub use events::{aggregate as aggregate_type, PublishedEvent};
 pub use ingest::{IngestOptions, LogEvent, LogLevel};
+pub use query::{QueryHit, QueryRequest, QueryResult};
 pub use settings::SettingsDto;
 pub use source_document::{
     ChunkDto, DocumentListItemDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,

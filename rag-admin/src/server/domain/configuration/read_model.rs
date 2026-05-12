@@ -92,5 +92,6 @@ pub(crate) fn ai_provider_kind_dto(kind: AiProviderKind) -> AiProviderKindDto {
 pub(crate) fn vector_store_kind_dto(kind: VectorStoreKind) -> VectorStoreKindDto {
     match kind {
         VectorStoreKind::CloudflareVectorize => VectorStoreKindDto::CloudflareVectorize,
+        VectorStoreKind::Postgres => VectorStoreKindDto::Postgres,
     }
 }

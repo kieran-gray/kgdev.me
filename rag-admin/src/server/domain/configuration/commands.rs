@@ -156,5 +156,6 @@ fn ai_kind(dto: AiProviderKindDto) -> AiProviderKind {
 fn vector_kind(dto: VectorStoreKindDto) -> VectorStoreKind {
     match dto {
         VectorStoreKindDto::CloudflareVectorize => VectorStoreKind::CloudflareVectorize,
+        VectorStoreKindDto::Postgres => VectorStoreKind::Postgres,
     }
 }

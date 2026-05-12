@@ -34,23 +34,29 @@ impl AiProviderKindDto {
 #[serde(rename_all = "snake_case")]
 pub enum VectorStoreKindDto {
     CloudflareVectorize,
+    Postgres,
 }
 
 impl VectorStoreKindDto {
     pub fn as_str(self) -> &'static str {
         match self {
             VectorStoreKindDto::CloudflareVectorize => "cloudflare_vectorize",
+            VectorStoreKindDto::Postgres => "postgres",
         }
     }
 
     pub fn display_label(self) -> &'static str {
         match self {
             VectorStoreKindDto::CloudflareVectorize => "Cloudflare Vectorize",
+            VectorStoreKindDto::Postgres => "Postgres (pgvector)",
         }
     }
 
     pub fn all() -> &'static [VectorStoreKindDto] {
-        &[VectorStoreKindDto::CloudflareVectorize]
+        &[
+            VectorStoreKindDto::CloudflareVectorize,
+            VectorStoreKindDto::Postgres,
+        ]
     }
 }
 

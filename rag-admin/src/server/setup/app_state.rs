@@ -30,6 +30,7 @@ use crate::server::application::indexing::{
 };
 use crate::server::application::llm::ChatService;
 use crate::server::application::ports::ChatClient;
+use crate::server::application::query::QueryService;
 use crate::server::application::source_document::ports::PostChunkingConfigStore;
 use crate::server::application::source_document::ports::{
     SourceAdapterRegistry, VectorIndexProvider,
@@ -102,7 +103,9 @@ use crate::server::infrastructure::source_document::{
 };
 use crate::server::infrastructure::time::SystemClock;
 use crate::server::infrastructure::tokenizer::HuggingFaceTokenizer;
-use crate::server::infrastructure::vector::CloudflareVectorIndexProvider;
+use crate::server::infrastructure::vector::{
+    CloudflareVectorIndexProvider, PostgresVectorIndexProvider,
+};
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
 use crate::server::setup::paths::{
@@ -129,6 +132,7 @@ pub struct AppState {
     pub post_chunking_config_store: Arc<dyn PostChunkingConfigStore>,
     pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
+    pub query_service: Arc<QueryService>,
     pub source_adapter_registry: Arc<SourceAdapterRegistry>,
     pub event_bus: Arc<EventBus>,
 }
@@ -211,10 +215,18 @@ impl AppState {
         );
 
         let vector_providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>> =
-            HashMap::from([(
-                VectorStoreKind::CloudflareVectorize,
-                CloudflareVectorIndexProvider::new(cf_api.clone()) as Arc<dyn VectorIndexProvider>,
-            )]);
+            HashMap::from([
+                (
+                    VectorStoreKind::CloudflareVectorize,
+                    CloudflareVectorIndexProvider::new(cf_api.clone())
+                        as Arc<dyn VectorIndexProvider>,
+                ),
+                (
+                    VectorStoreKind::Postgres,
+                    PostgresVectorIndexProvider::new(pool.clone())
+                        as Arc<dyn VectorIndexProvider>,
+                ),
+            ]);
         let vector_index_resolver = VectorIndexResolver::new(
             vector_providers,
             configuration_wiring.aggregate_repository.clone(),
@@ -431,11 +443,17 @@ impl AppState {
                 id_generator,
             });
         let source_document_query_service = SourceDocumentQueryService::new(
-            source_document_repository,
+            source_document_repository.clone(),
             indexing_repository,
             chunk_set_repository,
             blob_store,
             markdown_parser.clone(),
+        );
+        let query_service = QueryService::new(
+            pipeline_resolver.clone(),
+            embedding_service.clone(),
+            vector_index_resolver.clone(),
+            source_document_repository,
         );
 
         let state = Self {
@@ -457,6 +475,7 @@ impl AppState {
             post_chunking_config_store,
             source_document_ingest_service,
             source_document_query_service,
+            query_service,
             source_adapter_registry,
             event_bus,
         };

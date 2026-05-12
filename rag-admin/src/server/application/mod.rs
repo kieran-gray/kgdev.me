@@ -9,6 +9,7 @@ pub mod job;
 pub mod llm;
 pub mod markdown;
 pub mod ports;
+pub mod query;
 pub mod source_document;
 
 #[cfg(test)]
