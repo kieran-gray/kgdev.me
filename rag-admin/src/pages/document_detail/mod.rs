@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use leptos_router::hooks::use_params_map;
+use leptos_router::hooks::{use_location, use_navigate, use_params_map};
+use leptos_router::NavigateOptions;
 
 mod chunk_card;
 mod chunks_tab;
@@ -42,6 +43,27 @@ enum Tab {
     Indexings,
     Source,
     Chunks,
+}
+
+impl Tab {
+    fn slug(self) -> &'static str {
+        match self {
+            Tab::Evaluation => "evaluation",
+            Tab::Indexings => "indexings",
+            Tab::Source => "source",
+            Tab::Chunks => "chunks",
+        }
+    }
+
+    fn from_slug(s: &str) -> Option<Self> {
+        match s {
+            "evaluation" => Some(Tab::Evaluation),
+            "indexings" => Some(Tab::Indexings),
+            "source" => Some(Tab::Source),
+            "chunks" => Some(Tab::Chunks),
+            _ => None,
+        }
+    }
 }
 
 /// Document detail page — generic across all source document types.
@@ -124,7 +146,34 @@ fn DocumentWorkspace(
     chunking_configurations: Vec<ChunkingConfigurationDto>,
     source_ref: String,
 ) -> impl IntoView {
-    let (active_tab, set_active_tab) = signal(Tab::Evaluation);
+    let location = use_location();
+    let active_tab = Memo::new(move |_| {
+        location
+            .query
+            .with(|q| {
+                q.get("tab")
+                    .and_then(|v| Tab::from_slug(v.as_str()))
+            })
+            .unwrap_or(Tab::Evaluation)
+    });
+    let set_tab = move |tab: Tab| {
+        let navigate = use_navigate();
+        let path = location.pathname.get_untracked();
+        let mut params = location.query.get_untracked();
+        params.insert("tab", tab.slug().to_string());
+        if tab != Tab::Source {
+            params.remove("ref_start");
+            params.remove("ref_end");
+        }
+        let qs = params.to_query_string();
+        let url = if qs.is_empty() {
+            path
+        } else {
+            format!("{path}{qs}")
+        };
+        navigate(&url, NavigateOptions::default());
+    };
+
     let detail_stored = StoredValue::new(detail.clone());
     let pipelines_stored = StoredValue::new(pipelines);
     let chunking_stored = StoredValue::new(chunking_configurations);
@@ -148,16 +197,16 @@ fn DocumentWorkspace(
             <nav class="border-b border-[var(--color-border)] mb-6 flex gap-1">
                 <TabButton label="Evaluation"
                     active=move || active_tab.get() == Tab::Evaluation
-                    on_click=Box::new(move || set_active_tab.set(Tab::Evaluation)) />
+                    on_click=Box::new(move || set_tab(Tab::Evaluation)) />
                 <TabButton label="Indexings"
                     active=move || active_tab.get() == Tab::Indexings
-                    on_click=Box::new(move || set_active_tab.set(Tab::Indexings)) />
+                    on_click=Box::new(move || set_tab(Tab::Indexings)) />
                 <TabButton label="Source"
                     active=move || active_tab.get() == Tab::Source
-                    on_click=Box::new(move || set_active_tab.set(Tab::Source)) />
+                    on_click=Box::new(move || set_tab(Tab::Source)) />
                 <TabButton label="Chunks"
                     active=move || active_tab.get() == Tab::Chunks
-                    on_click=Box::new(move || set_active_tab.set(Tab::Chunks)) />
+                    on_click=Box::new(move || set_tab(Tab::Chunks)) />
             </nav>
 
             {move || match active_tab.get() {

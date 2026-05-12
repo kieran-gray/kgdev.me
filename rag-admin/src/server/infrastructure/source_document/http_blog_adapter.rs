@@ -70,7 +70,7 @@ struct PostSummaryWire {
 struct PostDetailWire {
     title: String,
     published_at: String,
-    source_markdown: String,
+    markdown_body: String,
 }
 
 #[async_trait]
@@ -101,7 +101,7 @@ impl SourceAdapter for HttpBlogAdapter {
 
         Ok(FetchedDocument {
             source_ref: source_ref.clone(),
-            content: detail.source_markdown.into_bytes(),
+            content: detail.markdown_body.into_bytes(),
             metadata: DocumentMetadata::BlogPost(BlogPostMetadata {
                 title: detail.title,
                 published_at: detail.published_at,

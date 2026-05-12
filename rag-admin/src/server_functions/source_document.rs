@@ -2,6 +2,7 @@ use leptos::prelude::*;
 
 use crate::shared::{
     ChunkDto, ChunkingConfig, DocumentListItemDto, SourceDocumentDetailDto, SourceDocumentDto,
+    SourceDocumentMarkdownDto,
 };
 
 #[server(name = GetChunks, prefix = "/api", endpoint = "get_chunks")]
@@ -289,6 +290,31 @@ pub async fn get_document_detail_by_id(
     state
         .source_document_query_service
         .get_detail(document_id)
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = GetDocumentSource,
+    prefix = "/api",
+    endpoint = "get_document_source"
+)]
+pub async fn get_document_source(
+    source_ref_slug: String,
+) -> Result<Option<SourceDocumentMarkdownDto>, ServerFnError> {
+    use crate::server::domain::source_document::source_ref::SourceRef;
+    use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .source_document_query_service
+        .get_source_markdown(&SourceRef::UpstreamSlug {
+            slug: source_ref_slug,
+        })
         .await
         .map_err(map_app_error)
 }

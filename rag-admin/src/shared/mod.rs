@@ -47,6 +47,7 @@ pub use events::{aggregate as aggregate_type, PublishedEvent};
 pub use ingest::{IngestOptions, LogEvent, LogLevel};
 pub use settings::SettingsDto;
 pub use source_document::{
-    ChunkDto, DocumentListItemDto, IndexingDto, SourceDocumentDetailDto, SourceDocumentDto,
+    ChunkDto, DocumentListItemDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,
+    SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto,
 };
 pub use vector::{VectorIndexConfig, VectorProvider};

@@ -28,12 +28,16 @@ fn default_auto_advance() -> bool {
 pub struct ChunkingCompleted {
     pub chunk_set_id: Uuid,
     pub chunk_count: u32,
+    #[serde(default = "default_auto_advance")]
+    pub auto_advance: bool,
     pub occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EmbeddingCompleted {
     pub embedding_set_id: Uuid,
+    #[serde(default = "default_auto_advance")]
+    pub auto_advance: bool,
     pub occurred_at: Timestamp,
 }
 

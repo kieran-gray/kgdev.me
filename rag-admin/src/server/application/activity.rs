@@ -173,6 +173,7 @@ pub fn spawn_activity_projection(registry: Arc<ActivityRegistry>, event_bus: Arc
                         &event.aggregate_type,
                         &event.event_type,
                         event.occurred_at.as_str(),
+                        &event.event_data,
                     ) {
                         registry.apply(delta).await;
                     }

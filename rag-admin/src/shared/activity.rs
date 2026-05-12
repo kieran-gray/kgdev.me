@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::shared::{aggregate_type, PublishedEvent};
 
-/// Build an `ActivityDelta` from the four fields every event carries on both
+/// Build an `ActivityDelta` from the fields every event carries on both
 /// the server (`server::event_sourcing::envelope::PublishedEvent`) and the
 /// client (`shared::PublishedEvent`). The two have identical wire shapes but
 /// different Rust types — taking primitives lets both call sites share the
@@ -13,6 +13,7 @@ pub fn classify(
     aggregate_type_str: &str,
     event_type: &str,
     occurred_at: &str,
+    event_data: &serde_json::Value,
 ) -> Option<ActivityDelta> {
     match (aggregate_type_str, event_type) {
         (aggregate_type::INDEXING, "IngestRequested") => {
@@ -33,15 +34,33 @@ pub fn classify(
             occurred_at: occurred_at.to_string(),
         }),
         (aggregate_type::INDEXING, "IndexingRemoved") => Some(ActivityDelta::Remove { stream_id }),
+        (aggregate_type::INDEXING, "ChunkingCompleted" | "EmbeddingCompleted") => {
+            let auto_advance = event_data
+                .get("auto_advance")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            if auto_advance {
+                Some(ActivityDelta::Refresh { stream_id })
+            } else {
+                Some(ActivityDelta::Complete {
+                    stream_id,
+                    occurred_at: occurred_at.to_string(),
+                })
+            }
+        }
         (
             aggregate_type::INDEXING,
-            "ChunkingCompleted"
-            | "EmbeddingCompleted"
-            | "ChunkingRequeued"
-            | "EmbeddingRequeued"
-            | "IndexingRequeued"
-            | "IngestionRetried",
-        ) => Some(ActivityDelta::Refresh { stream_id }),
+            "ChunkingRequeued" | "EmbeddingRequeued" | "IndexingRequeued",
+        ) => Some(ActivityDelta::Start(ActivityStart {
+            stream_id,
+            aggregate_type: aggregate_type_str.to_string(),
+            kind: ActivityKind::Indexing,
+            label: format!("Indexing {}", short_id(stream_id)),
+            started_at: occurred_at.to_string(),
+        })),
+        (aggregate_type::INDEXING, "IngestionRetried") => {
+            Some(ActivityDelta::Refresh { stream_id })
+        }
 
         (aggregate_type::EVALUATION_DATASET, "DatasetGenerationRequested") => {
             Some(ActivityDelta::Start(ActivityStart {
@@ -167,6 +186,7 @@ pub fn classify_event(event: &PublishedEvent) -> Option<ActivityDelta> {
         &event.aggregate_type,
         &event.event_type,
         &event.occurred_at,
+        &event.event_data,
     )
 }
 

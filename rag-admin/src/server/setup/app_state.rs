@@ -235,7 +235,7 @@ impl AppState {
 
         let chunking_engine = Self::build_chunking_engine(
             tokenizer,
-            markdown_parser,
+            markdown_parser.clone(),
             ollama_chat_client.clone() as Arc<dyn ChatClient>,
             configuration_wiring.aggregate_repository.clone(),
         );
@@ -424,7 +424,7 @@ impl AppState {
                 source_document_command_handler,
                 indexing_command_handler,
                 source_document_repository: source_document_repository.clone(),
-                blob_store,
+                blob_store: blob_store.clone(),
                 source_adapter_registry: source_adapter_registry.clone(),
                 pipeline_resolver: pipeline_resolver.clone(),
                 clock,
@@ -434,6 +434,8 @@ impl AppState {
             source_document_repository,
             indexing_repository,
             chunk_set_repository,
+            blob_store,
+            markdown_parser.clone(),
         );
 
         let state = Self {

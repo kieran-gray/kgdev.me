@@ -155,6 +155,7 @@ impl Aggregate for Indexing {
                 Ok(vec![Self::Event::ChunkingCompleted(ChunkingCompleted {
                     chunk_set_id: cmd.chunk_set_id,
                     chunk_count: cmd.chunk_count,
+                    auto_advance: s.auto_advance,
                     occurred_at: cmd.occurred_at,
                 })])
             }
@@ -169,6 +170,7 @@ impl Aggregate for Indexing {
                 }
                 Ok(vec![Self::Event::EmbeddingCompleted(EmbeddingCompleted {
                     embedding_set_id: cmd.embedding_set_id,
+                    auto_advance: s.auto_advance,
                     occurred_at: cmd.occurred_at,
                 })])
             }
@@ -407,6 +409,7 @@ mod tests {
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,
+            auto_advance: true,
             occurred_at: now(),
         }));
         let indexing = Indexing::from_events(&events).unwrap();
@@ -443,6 +446,7 @@ mod tests {
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id,
             chunk_count: 5,
+            auto_advance: true,
             occurred_at: now(),
         }));
         events.push(IndexingEvent::ChunkingRequeued(ChunkingRequeued {
@@ -518,6 +522,7 @@ mod tests {
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id,
             chunk_count: 10,
+            auto_advance: true,
             occurred_at: now(),
         }));
         let indexing = Indexing::from_events(&events).unwrap();
@@ -544,10 +549,12 @@ mod tests {
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,
+            auto_advance: true,
             occurred_at: now(),
         }));
         events.push(IndexingEvent::EmbeddingCompleted(EmbeddingCompleted {
             embedding_set_id: Uuid::new_v4(),
+            auto_advance: true,
             occurred_at: now(),
         }));
         events.push(IndexingEvent::IndexingCompleted(IndexingCompleted {
@@ -570,6 +577,7 @@ mod tests {
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,
+            auto_advance: true,
             occurred_at: now(),
         }));
         events.push(IndexingEvent::IngestionFailed(IngestionFailed {
@@ -663,6 +671,7 @@ mod tests {
             Indexing::from_events(&[IndexingEvent::ChunkingCompleted(ChunkingCompleted {
                 chunk_set_id: Uuid::new_v4(),
                 chunk_count: 5,
+                auto_advance: true,
                 occurred_at: now(),
             })]);
         assert!(result.is_none());
@@ -678,10 +687,12 @@ mod tests {
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,
+            auto_advance: true,
             occurred_at: now(),
         }));
         events.push(IndexingEvent::EmbeddingCompleted(EmbeddingCompleted {
             embedding_set_id,
+            auto_advance: true,
             occurred_at: now(),
         }));
         let indexing = Indexing::from_events(&events).unwrap();
