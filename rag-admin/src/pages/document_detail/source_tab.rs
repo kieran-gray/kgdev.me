@@ -10,11 +10,7 @@ pub fn SourceTab(source_ref: String) -> impl IntoView {
     let source_ref_stored = StoredValue::new(source_ref.clone());
     let body = Resource::new(
         move || source_ref_stored.get_value(),
-        move |slug| async move {
-            get_document_source(slug)
-                .await
-                .map_err(|e| e.to_string())
-        },
+        move |slug| async move { get_document_source(slug).await.map_err(|e| e.to_string()) },
     );
 
     let (show_raw, set_show_raw) = signal(false);
@@ -77,15 +73,18 @@ fn SourceBody(
         }
     };
 
-    let actions: Box<dyn Fn() -> leptos::prelude::AnyView + Send + Sync> = Box::new(move || view! {
-        <button
-            type="button"
-            class="btn"
-            on:click=toggle
-        >
-            {move || if show_raw.get() { "Rendered" } else { "View raw markdown" }}
-        </button>
-    }.into_any());
+    let actions: Box<dyn Fn() -> leptos::prelude::AnyView + Send + Sync> = Box::new(move || {
+        view! {
+            <button
+                type="button"
+                class="btn"
+                on:click=toggle
+            >
+                {move || if show_raw.get() { "Rendered" } else { "View raw markdown" }}
+            </button>
+        }
+        .into_any()
+    });
 
     let title = doc_stored.with_value(|d| format!("Source · v{}", d.version));
 
@@ -123,8 +122,8 @@ fn RenderedMarkdown(
             .with_value(|bs| bs.clone())
             .into_iter()
             .map(|block| {
-                let highlighted = range
-                    .is_some_and(|(s, e)| block.char_start < e && block.char_end > s);
+                let highlighted =
+                    range.is_some_and(|(s, e)| block.char_start < e && block.char_end > s);
                 let is_anchor = highlighted && !anchor_assigned;
                 if is_anchor {
                     anchor_assigned = true;

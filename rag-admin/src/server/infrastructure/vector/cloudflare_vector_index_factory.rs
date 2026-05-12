@@ -18,6 +18,6 @@ impl CloudflareVectorIndexProvider {
 
 impl VectorIndexProvider for CloudflareVectorIndexProvider {
     fn build(&self, index_name: &str, _dimensions: u32) -> Arc<dyn VectorIndex> {
-        NamedVectorizeIndex::new(self.api.clone(), index_name.to_string())
+        NamedVectorizeIndex::new(Arc::clone(&self.api), index_name.to_owned())
     }
 }

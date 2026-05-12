@@ -62,16 +62,16 @@ impl SweepTemplateRepository for PostgresSweepTemplateRepository {
     }
 
     async fn set_default(&self, id: Uuid) -> Result<(), SweepTemplateRepositoryError> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| SweepTemplateRepositoryError::Internal(format!("set_default begin: {e}")))?;
+        let mut tx = self.pool.begin().await.map_err(|e| {
+            SweepTemplateRepositoryError::Internal(format!("set_default begin: {e}"))
+        })?;
 
         sqlx::query("UPDATE sweep_templates SET is_default = FALSE WHERE is_default")
             .execute(&mut *tx)
             .await
-            .map_err(|e| SweepTemplateRepositoryError::Internal(format!("set_default clear: {e}")))?;
+            .map_err(|e| {
+                SweepTemplateRepositoryError::Internal(format!("set_default clear: {e}"))
+            })?;
 
         sqlx::query("UPDATE sweep_templates SET is_default = TRUE WHERE id = $1")
             .bind(id)
@@ -79,9 +79,9 @@ impl SweepTemplateRepository for PostgresSweepTemplateRepository {
             .await
             .map_err(|e| SweepTemplateRepositoryError::Internal(format!("set_default set: {e}")))?;
 
-        tx.commit()
-            .await
-            .map_err(|e| SweepTemplateRepositoryError::Internal(format!("set_default commit: {e}")))?;
+        tx.commit().await.map_err(|e| {
+            SweepTemplateRepositoryError::Internal(format!("set_default commit: {e}"))
+        })?;
         Ok(())
     }
 

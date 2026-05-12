@@ -91,7 +91,11 @@ pub fn EvaluationLauncher(
             .and_then(|id| tpls.iter().find(|t| t.sweep_template_id == id))
             .map(|t| t.sweep_template_id);
         stored
-            .or_else(|| tpls.iter().find(|t| t.is_default).map(|t| t.sweep_template_id))
+            .or_else(|| {
+                tpls.iter()
+                    .find(|t| t.is_default)
+                    .map(|t| t.sweep_template_id)
+            })
             .or_else(|| tpls.first().map(|t| t.sweep_template_id))
     });
     let (selected_sweep_template, set_selected_sweep_template) =
@@ -1149,7 +1153,10 @@ fn SweepTemplatePicker(
 fn load_sweep_template_pref() -> Option<Uuid> {
     let window = web_sys::window()?;
     let storage = window.local_storage().ok().flatten()?;
-    let raw = storage.get_item(SWEEP_TEMPLATE_STORAGE_KEY).ok().flatten()?;
+    let raw = storage
+        .get_item(SWEEP_TEMPLATE_STORAGE_KEY)
+        .ok()
+        .flatten()?;
     Uuid::parse_str(&raw).ok()
 }
 

@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{any::type_name, env, str::FromStr};
 
 use super::exceptions::SetupError;
 
@@ -56,14 +56,14 @@ impl Config {
     }
 
     fn parse<T: FromStr>(var: &str) -> Result<T, SetupError> {
-        let type_name = std::any::type_name::<T>();
-        std::env::var(var)
-            .map_err(|_| SetupError::MissingVariable(var.to_string()))?
+        let type_name = type_name::<T>();
+        env::var(var)
+            .map_err(|_| SetupError::MissingVariable(var.to_owned()))?
             .parse()
             .map_err(|_| SetupError::InvalidVariable(format!("{var} must be {type_name}")))
     }
 
     fn parse_optional<T: FromStr>(var: &str) -> Option<T> {
-        std::env::var(var).ok()?.parse().ok()
+        env::var(var).ok()?.parse().ok()
     }
 }

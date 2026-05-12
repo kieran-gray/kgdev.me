@@ -57,7 +57,7 @@ impl Tokenizer for HuggingFaceTokenizer {
             .encode(text, true)
             .map_err(|e| AppError::Internal(format!("tokenize: {e}")))?;
         let tokens = encoding.get_tokens().to_vec();
-        let count = tokens.len() as u32;
+        let count = u32::try_from(tokens.len()).map_err(|e| AppError::Internal(e.to_string()))?;
         Ok(Tokenized { tokens, count })
     }
 }

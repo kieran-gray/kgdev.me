@@ -12,8 +12,6 @@ use crate::server::application::AppError;
 use crate::server::domain::VectorRecord;
 use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
 
-/// A VectorIndex bound to a specific Cloudflare Vectorize index by name, for use when the
-/// pipeline configuration drives which index to target (rather than the global settings).
 pub struct NamedVectorizeIndex {
     api: Arc<CloudflareApi>,
     index_name: String,

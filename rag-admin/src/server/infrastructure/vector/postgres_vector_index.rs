@@ -65,14 +65,12 @@ impl VectorIndex for PostgresVectorIndex {
         if ids.is_empty() {
             return Ok(());
         }
-        sqlx::query(
-            "DELETE FROM vector_index_records WHERE index_name = $1 AND id = ANY($2)",
-        )
-        .bind(&self.index_name)
-        .bind(ids)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| AppError::Internal(format!("pg vector delete: {e}")))?;
+        sqlx::query("DELETE FROM vector_index_records WHERE index_name = $1 AND id = ANY($2)")
+            .bind(&self.index_name)
+            .bind(ids)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::Internal(format!("pg vector delete: {e}")))?;
         Ok(())
     }
 
@@ -87,7 +85,7 @@ impl VectorIndex for PostgresVectorIndex {
         )
         .bind(literal)
         .bind(&self.index_name)
-        .bind(q.top_k as i64)
+        .bind(i64::from(q.top_k))
         .fetch_all(&self.pool)
         .await
         .map_err(|e| AppError::Internal(format!("pg vector query: {e}")))?;
@@ -122,6 +120,6 @@ impl PostgresVectorIndexProvider {
 
 impl VectorIndexProvider for PostgresVectorIndexProvider {
     fn build(&self, index_name: &str, dimensions: u32) -> Arc<dyn VectorIndex> {
-        PostgresVectorIndex::new(self.pool.clone(), index_name.to_string(), dimensions)
+        PostgresVectorIndex::new(self.pool.clone(), index_name.to_owned(), dimensions)
     }
 }

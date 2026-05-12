@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use tokio::sync::Notify;
 
@@ -29,9 +30,9 @@ use crate::server::application::indexing::{
     IndexingCommandHandler, IndexingEffect, IndexingEffectExecutor,
 };
 use crate::server::application::llm::ChatService;
-use crate::server::application::ports::ChatClient;
+use crate::server::application::ports::{ChatClient, Clock, IdGenerator, MarkdownParser};
 use crate::server::application::query::QueryService;
-use crate::server::application::source_document::ports::PostChunkingConfigStore;
+use crate::server::application::source_document::ports::{BlobStore, PostChunkingConfigStore};
 use crate::server::application::source_document::ports::{
     SourceAdapterRegistry, VectorIndexProvider,
 };
@@ -42,6 +43,7 @@ use crate::server::application::source_document::{
 use crate::server::application::{
     spawn_activity_projection, ActivityRegistry, AppError, JobRegistry,
 };
+use crate::server::domain::chunk_set::repository::ChunkSetRepository;
 use crate::server::domain::configuration::aggregate::Configuration;
 use crate::server::domain::configuration::chunking_configuration::{
     ChunkingConfigurationProjector, ChunkingConfigurationRepository,
@@ -55,6 +57,7 @@ use crate::server::domain::configuration::sweep_template::{
     SweepTemplateProjector, SweepTemplateRepository,
 };
 use crate::server::domain::configuration::ConfigurationRepository;
+use crate::server::domain::embedding_set::repository::EmbeddingSetRepository;
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::dataset::policies::derive_dataset_effects;
 use crate::server::domain::evaluation::dataset::projector::EvaluationDatasetProjector;
@@ -146,16 +149,22 @@ impl AppState {
     pub async fn initialize() -> Result<Self, SetupError> {
         // ---- Configuration & infrastructure ----
         let config = Config::from_env()?;
-        let clock = Arc::new(SystemClock);
-        let id_generator = Arc::new(UuidGenerator);
+        let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+        let id_generator: Arc<dyn IdGenerator> = Arc::new(UuidGenerator);
         let pool = Self::connect_database(&config.database_url).await?;
 
         let http = Arc::new(
             ReqwestHttpClient::new()
                 .map_err(|e| SetupError::Internal(format!("http client: {e}")))?,
         );
-        let cf_api = Arc::new(CloudflareApi::new(http.clone(), config.cloudflare.clone()));
-        let ollama_api = Arc::new(OllamaApi::new(http.clone(), config.ollama.base_url.clone()));
+        let cf_api = Arc::new(CloudflareApi::new(
+            Arc::clone(&http),
+            config.cloudflare.clone(),
+        ));
+        let ollama_api = Arc::new(OllamaApi::new(
+            Arc::clone(&http),
+            config.ollama.base_url.clone(),
+        ));
 
         // ---- Shared event-sourcing infrastructure ----
         let event_bus = Arc::new(EventBus::new());
@@ -187,138 +196,142 @@ impl AppState {
             Arc::new(PostgresEvaluationDatasetRepository::new(pool.clone()));
         let evaluation_run_repository: Arc<dyn EvaluationRunRepository> =
             Arc::new(PostgresEvaluationRunRepository::new(pool.clone()));
-        let blob_store = Arc::new(PostgresBlobStore::new(pool.clone()));
-        let chunk_set_repository = Arc::new(PostgresChunkSetRepository::new(pool.clone()));
-        let embedding_set_repository = Arc::new(PostgresEmbeddingSetRepository::new(pool.clone()));
+        let blob_store: Arc<dyn BlobStore> = Arc::new(PostgresBlobStore::new(pool.clone()));
+        let chunk_set_repository: Arc<dyn ChunkSetRepository> =
+            Arc::new(PostgresChunkSetRepository::new(pool.clone()));
+        let embedding_set_repository: Arc<dyn EmbeddingSetRepository> =
+            Arc::new(PostgresEmbeddingSetRepository::new(pool.clone()));
 
         // ---- Domain engines & shared services ----
-        let tokenizer = HuggingFaceTokenizer::load_or_fetch(tokenizer_path(), http.clone())
+        let tokenizer = HuggingFaceTokenizer::load_or_fetch(tokenizer_path(), Arc::clone(&http))
             .await
             .map_err(|e| SetupError::Internal(format!("tokenizer: {e}")))?;
-        let markdown_parser = Arc::new(MarkdownRsParser);
+        let markdown_parser: Arc<dyn MarkdownParser> = Arc::new(MarkdownRsParser);
 
         let embedders: HashMap<AiProviderKind, Arc<dyn Embedder>> = HashMap::from([
             (
                 AiProviderKind::Cloudflare,
-                WorkersAiEmbedder::new(cf_api.clone()) as Arc<dyn Embedder>,
+                WorkersAiEmbedder::new(Arc::clone(&cf_api)) as Arc<dyn Embedder>,
             ),
             (
                 AiProviderKind::Ollama,
-                OllamaEmbedder::new(ollama_api.clone()) as Arc<dyn Embedder>,
+                OllamaEmbedder::new(Arc::clone(&ollama_api)) as Arc<dyn Embedder>,
             ),
         ]);
-        let embedding_service =
-            EmbeddingService::new(embedders, configuration_wiring.aggregate_repository.clone());
+        let embedding_service = EmbeddingService::new(
+            embedders,
+            Arc::clone(&configuration_wiring.aggregate_repository),
+        );
 
-        let ollama_chat_client =
-            OllamaChatClient::new(http.clone(), config.ollama.base_url.clone());
+        let ollama_chat_client: Arc<dyn ChatClient> =
+            OllamaChatClient::new(Arc::clone(&http), config.ollama.base_url.clone());
         let chat_clients: HashMap<AiProviderKind, Arc<dyn ChatClient>> = HashMap::from([(
             AiProviderKind::Ollama,
-            ollama_chat_client.clone() as Arc<dyn ChatClient>,
+            Arc::clone(&ollama_chat_client) as Arc<dyn ChatClient>,
         )]);
         let chat_service = ChatService::new(
             chat_clients,
-            configuration_wiring.aggregate_repository.clone(),
+            Arc::clone(&configuration_wiring.aggregate_repository),
         );
 
         let vector_providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>> =
             HashMap::from([
                 (
                     VectorStoreKind::CloudflareVectorize,
-                    CloudflareVectorIndexProvider::new(cf_api.clone())
+                    CloudflareVectorIndexProvider::new(Arc::clone(&cf_api))
                         as Arc<dyn VectorIndexProvider>,
                 ),
                 (
                     VectorStoreKind::Postgres,
-                    PostgresVectorIndexProvider::new(pool.clone())
-                        as Arc<dyn VectorIndexProvider>,
+                    PostgresVectorIndexProvider::new(pool.clone()) as Arc<dyn VectorIndexProvider>,
                 ),
             ]);
         let vector_index_resolver = VectorIndexResolver::new(
             vector_providers,
-            configuration_wiring.aggregate_repository.clone(),
+            Arc::clone(&configuration_wiring.aggregate_repository),
         );
 
         let pipeline_resolver = PipelineResolver::new(
-            pipeline_configuration_repository.clone(),
-            embedding_service.clone(),
-            chat_service.clone(),
-            vector_index_resolver.clone(),
+            Arc::clone(&pipeline_configuration_repository),
+            Arc::clone(&embedding_service),
+            Arc::clone(&chat_service),
+            Arc::clone(&vector_index_resolver),
         );
 
         let evaluation_defaults_store: Arc<dyn EvaluationDefaultsStore> =
             FileEvaluationDefaultsStore::new(evaluation_defaults_path());
 
         let evaluation_generator: Arc<dyn EvaluationGenerator> =
-            ChatBasedEvaluationGenerator::new(chat_service.clone());
+            ChatBasedEvaluationGenerator::new(Arc::clone(&chat_service));
 
         let chunking_engine = Self::build_chunking_engine(
             tokenizer,
-            markdown_parser.clone(),
-            ollama_chat_client.clone() as Arc<dyn ChatClient>,
-            configuration_wiring.aggregate_repository.clone(),
+            Arc::clone(&markdown_parser),
+            Arc::clone(&ollama_chat_client),
+            Arc::clone(&configuration_wiring.aggregate_repository),
         );
 
         let post_chunking_config_store: Arc<dyn PostChunkingConfigStore> =
             FilePostChunkingConfigStore::new(post_chunking_config_path());
         let job_registry = Arc::new(JobRegistry::new());
         let activity_registry = Arc::new(ActivityRegistry::new());
-        spawn_activity_projection(activity_registry.clone(), event_bus.clone());
+        spawn_activity_projection(Arc::clone(&activity_registry), Arc::clone(&event_bus));
 
         // ---- Command handlers (thin wrappers over CommandProcessor) ----
         let configuration_command_handler =
-            ConfigurationCommandHandler::new(configuration_wiring.command_processor.clone());
-        let source_document_command_handler =
-            SourceDocumentCommandHandler::new(source_document_wiring.command_processor.clone());
+            ConfigurationCommandHandler::new(Arc::clone(&configuration_wiring.command_processor));
+        let source_document_command_handler = SourceDocumentCommandHandler::new(Arc::clone(
+            &source_document_wiring.command_processor,
+        ));
         let indexing_command_handler =
-            IndexingCommandHandler::new(indexing_wiring.command_processor.clone());
+            IndexingCommandHandler::new(Arc::clone(&indexing_wiring.command_processor));
 
         // ---- Query services ----
         let configuration_query_service =
-            ConfigurationQueryService::new(configuration_repository.clone());
+            ConfigurationQueryService::new(Arc::clone(&configuration_repository));
         let pipeline_configuration_query_service = PipelineConfigurationQueryService::new(
-            pipeline_configuration_repository.clone(),
-            configuration_repository.clone(),
+            Arc::clone(&pipeline_configuration_repository),
+            Arc::clone(&configuration_repository),
         );
         let chunking_configuration_query_service =
-            ChunkingConfigurationQueryService::new(chunking_configuration_repository.clone());
+            ChunkingConfigurationQueryService::new(Arc::clone(&chunking_configuration_repository));
         let sweep_template_query_service =
-            SweepTemplateQueryService::new(sweep_template_repository.clone());
+            SweepTemplateQueryService::new(Arc::clone(&sweep_template_repository));
         let evaluation_query_service = EvaluationQueryService::new(
-            evaluation_dataset_repository.clone(),
-            evaluation_run_repository.clone(),
+            Arc::clone(&evaluation_dataset_repository),
+            Arc::clone(&evaluation_run_repository),
         );
 
         // ---- Projection drivers (configuration, source_document, indexing have no effects) ----
         spawn_driver::<Configuration, ()>(
-            configuration_wiring.event_store.clone(),
+            Arc::clone(&configuration_wiring.event_store),
             vec![
-                Arc::new(ConfigurationProjector::new(
-                    configuration_repository.clone(),
-                )),
-                Arc::new(PipelineConfigurationProjector::new(
-                    pipeline_configuration_repository.clone(),
-                )),
-                Arc::new(ChunkingConfigurationProjector::new(
-                    chunking_configuration_repository.clone(),
-                )),
-                Arc::new(SweepTemplateProjector::new(
-                    sweep_template_repository.clone(),
-                )),
+                Arc::new(ConfigurationProjector::new(Arc::clone(
+                    &configuration_repository,
+                ))),
+                Arc::new(PipelineConfigurationProjector::new(Arc::clone(
+                    &pipeline_configuration_repository,
+                ))),
+                Arc::new(ChunkingConfigurationProjector::new(Arc::clone(
+                    &chunking_configuration_repository,
+                ))),
+                Arc::new(SweepTemplateProjector::new(Arc::clone(
+                    &sweep_template_repository,
+                ))),
             ],
             None,
-            checkpoint_repository.clone(),
-            event_bus.clone(),
+            Arc::clone(&checkpoint_repository),
+            Arc::clone(&event_bus),
             &mut wakeups,
         );
         spawn_driver::<SourceDocument, ()>(
-            source_document_wiring.event_store.clone(),
-            vec![Arc::new(SourceDocumentProjector::new(
-                source_document_repository.clone(),
-            ))],
+            Arc::clone(&source_document_wiring.event_store),
+            vec![Arc::new(SourceDocumentProjector::new(Arc::clone(
+                &source_document_repository,
+            )))],
             None,
-            checkpoint_repository.clone(),
-            event_bus.clone(),
+            Arc::clone(&checkpoint_repository),
+            Arc::clone(&event_bus),
             &mut wakeups,
         );
         // ---- Indexing pipeline (with process manager / effects) ----
@@ -326,37 +339,37 @@ impl AppState {
             Arc::new(PostgresEffectLedger::<IndexingEffect>::new(pool.clone()));
 
         let indexing_effect_executor = IndexingEffectExecutor::new(
-            source_document_repository.clone(),
-            indexing_repository.clone(),
-            blob_store.clone(),
-            chunking_engine.clone(),
-            chunk_set_repository.clone(),
-            embedding_service.clone(),
-            embedding_set_repository.clone(),
-            vector_index_resolver.clone(),
-            pipeline_resolver.clone(),
-            indexing_wiring.command_processor.clone(),
-            job_registry.clone(),
-            activity_registry.clone(),
-            clock.clone(),
-            id_generator.clone(),
+            Arc::clone(&source_document_repository),
+            Arc::clone(&indexing_repository),
+            Arc::clone(&blob_store),
+            Arc::clone(&chunking_engine),
+            Arc::clone(&chunk_set_repository),
+            Arc::clone(&embedding_service),
+            Arc::clone(&embedding_set_repository),
+            Arc::clone(&vector_index_resolver),
+            Arc::clone(&pipeline_resolver),
+            Arc::clone(&indexing_wiring.command_processor),
+            Arc::clone(&job_registry),
+            Arc::clone(&activity_registry),
+            Arc::clone(&clock),
+            Arc::clone(&id_generator),
         );
 
         let indexing_process_manager = Arc::new(ProcessManager::<Indexing, IndexingEffect>::new(
-            indexing_wiring.aggregate_repository.clone(),
+            Arc::clone(&indexing_wiring.aggregate_repository),
             indexing_effect_ledger,
             indexing_effect_executor,
             derive_indexing_effects,
         ));
 
         spawn_driver::<Indexing, IndexingEffect>(
-            indexing_wiring.event_store.clone(),
-            vec![Arc::new(IndexingProjector::new(
-                indexing_repository.clone(),
-            ))],
+            Arc::clone(&indexing_wiring.event_store),
+            vec![Arc::new(IndexingProjector::new(Arc::clone(
+                &indexing_repository,
+            )))],
             Some(indexing_process_manager),
-            checkpoint_repository.clone(),
-            event_bus.clone(),
+            Arc::clone(&checkpoint_repository),
+            Arc::clone(&event_bus),
             &mut wakeups,
         );
 
@@ -369,70 +382,70 @@ impl AppState {
         );
 
         let dataset_effect_executor = EvaluationDatasetEffectExecutor::new(
-            source_document_repository.clone(),
-            blob_store.clone(),
-            evaluation_generator,
-            embedding_service.clone(),
-            dataset_wiring.command_processor.clone(),
-            job_registry.clone(),
-            activity_registry.clone(),
-            clock.clone(),
+            Arc::clone(&source_document_repository),
+            Arc::clone(&blob_store),
+            Arc::clone(&evaluation_generator),
+            Arc::clone(&embedding_service),
+            Arc::clone(&dataset_wiring.command_processor),
+            Arc::clone(&job_registry),
+            Arc::clone(&activity_registry),
+            Arc::clone(&clock),
         );
         let evaluation_retriever: Arc<dyn Retriever> =
             Arc::new(PgvectorRetriever::new(pool.clone()));
 
         let run_effect_executor = EvaluationRunEffectExecutor::new(
-            source_document_repository.clone(),
-            blob_store.clone(),
-            chunking_engine.clone(),
-            chunk_set_repository.clone(),
-            embedding_service.clone(),
-            embedding_set_repository.clone(),
-            evaluation_dataset_repository.clone(),
-            evaluation_retriever,
-            run_wiring.command_processor.clone(),
-            pipeline_resolver.clone(),
-            job_registry.clone(),
-            activity_registry.clone(),
-            clock.clone(),
-            id_generator.clone(),
+            Arc::clone(&source_document_repository),
+            Arc::clone(&blob_store),
+            Arc::clone(&chunking_engine),
+            Arc::clone(&chunk_set_repository),
+            Arc::clone(&embedding_service),
+            Arc::clone(&embedding_set_repository),
+            Arc::clone(&evaluation_dataset_repository),
+            Arc::clone(&evaluation_retriever),
+            Arc::clone(&run_wiring.command_processor),
+            Arc::clone(&pipeline_resolver),
+            Arc::clone(&job_registry),
+            Arc::clone(&activity_registry),
+            Arc::clone(&clock),
+            Arc::clone(&id_generator),
         );
 
         let dataset_process_manager = Arc::new(ProcessManager::<
             EvaluationDataset,
             EvaluationDatasetEffect,
         >::new(
-            dataset_wiring.aggregate_repository.clone(),
+            Arc::clone(&dataset_wiring.aggregate_repository),
             dataset_effect_ledger,
             dataset_effect_executor,
             derive_dataset_effects,
         ));
         let run_process_manager =
             Arc::new(ProcessManager::<EvaluationRun, EvaluationRunEffect>::new(
-                run_wiring.aggregate_repository.clone(),
+                Arc::clone(&run_wiring.aggregate_repository),
                 run_effect_ledger,
                 run_effect_executor,
                 derive_run_effects,
             ));
 
         spawn_driver::<EvaluationDataset, EvaluationDatasetEffect>(
-            dataset_wiring.event_store.clone(),
-            vec![Arc::new(EvaluationDatasetProjector::new(
-                evaluation_dataset_repository.clone(),
-            ))],
+            Arc::clone(&dataset_wiring.event_store),
+            vec![Arc::new(EvaluationDatasetProjector::new(Arc::clone(
+                &evaluation_dataset_repository,
+            )))],
             Some(dataset_process_manager),
-            checkpoint_repository.clone(),
-            event_bus.clone(),
+            Arc::clone(&checkpoint_repository),
+            Arc::clone(&event_bus),
             &mut wakeups,
         );
         spawn_driver::<EvaluationRun, EvaluationRunEffect>(
-            run_wiring.event_store.clone(),
-            vec![Arc::new(EvaluationRunProjector::new(
-                evaluation_run_repository.clone(),
-            ))],
+            Arc::clone(&run_wiring.event_store),
+            vec![Arc::new(EvaluationRunProjector::new(Arc::clone(
+                &evaluation_run_repository,
+            )))],
             Some(run_process_manager),
             checkpoint_repository,
-            event_bus.clone(),
+            Arc::clone(&event_bus),
             &mut wakeups,
         );
 
@@ -440,31 +453,34 @@ impl AppState {
 
         // ---- Source document ingest pipeline ----
         let mut source_adapter_registry = SourceAdapterRegistry::new();
-        source_adapter_registry.register(HttpBlogAdapter::new(http.clone(), config.blog_url.clone()));
+        source_adapter_registry.register(HttpBlogAdapter::new(
+            Arc::clone(&http),
+            config.blog_url.clone(),
+        ));
         let source_adapter_registry = Arc::new(source_adapter_registry);
 
         let source_document_ingest_service =
             SourceDocumentIngestService::new(SourceDocumentIngestServiceDeps {
                 source_document_command_handler,
                 indexing_command_handler,
-                source_document_repository: source_document_repository.clone(),
-                blob_store: blob_store.clone(),
-                source_adapter_registry: source_adapter_registry.clone(),
-                pipeline_resolver: pipeline_resolver.clone(),
+                source_document_repository: Arc::clone(&source_document_repository),
+                blob_store: Arc::clone(&blob_store),
+                source_adapter_registry: Arc::clone(&source_adapter_registry),
+                pipeline_resolver: Arc::clone(&pipeline_resolver),
                 clock,
                 id_generator,
             });
         let source_document_query_service = SourceDocumentQueryService::new(
-            source_document_repository.clone(),
+            Arc::clone(&source_document_repository),
             indexing_repository,
             chunk_set_repository,
             blob_store,
-            markdown_parser.clone(),
+            Arc::clone(&markdown_parser),
         );
         let query_service = QueryService::new(
-            pipeline_resolver.clone(),
-            embedding_service.clone(),
-            vector_index_resolver.clone(),
+            Arc::clone(&pipeline_resolver),
+            Arc::clone(&embedding_service),
+            Arc::clone(&vector_index_resolver),
             source_document_repository,
         );
 
@@ -498,7 +514,7 @@ impl AppState {
     }
 
     async fn connect_database(url: &str) -> Result<PgPool, SetupError> {
-        let pool = sqlx::postgres::PgPoolOptions::new()
+        let pool = PgPoolOptions::new()
             .max_connections(5)
             .connect(url)
             .await
@@ -512,7 +528,7 @@ impl AppState {
 
     fn build_chunking_engine(
         tokenizer: Arc<HuggingFaceTokenizer>,
-        markdown_parser: Arc<MarkdownRsParser>,
+        markdown_parser: Arc<dyn MarkdownParser>,
         chat_client: Arc<dyn ChatClient>,
         configuration_repository: Arc<AggregateRepository<Configuration>>,
     ) -> Arc<ChunkerRegistry> {
@@ -558,10 +574,10 @@ where
     ));
     let snapshot_store = Arc::new(PostgresAggregateSnapshotStore::<A>::new(pool.clone()));
     let aggregate_repository = Arc::new(AggregateRepository::<A>::new(
-        event_store.clone(),
+        Arc::clone(&event_store),
         snapshot_store,
     ));
-    let command_processor = Arc::new(CommandProcessor::new(aggregate_repository.clone()));
+    let command_processor = Arc::new(CommandProcessor::new(Arc::clone(&aggregate_repository)));
     AggregateWiring {
         aggregate_repository,
         event_store,
@@ -588,9 +604,9 @@ fn spawn_driver<A, R>(
         checkpoint_repository,
         event_bus,
         process_manager,
-        wakeup.clone(),
+        Arc::clone(&wakeup),
     ));
-    wakeups.insert(A::aggregate_type().to_string(), wakeup);
+    wakeups.insert(A::aggregate_type().to_owned(), wakeup);
     tokio::spawn(driver.run());
 }
 

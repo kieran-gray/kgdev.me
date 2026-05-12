@@ -57,6 +57,9 @@ impl VectorStoreKind {
     }
 
     pub fn all() -> &'static [VectorStoreKind] {
-        &[VectorStoreKind::CloudflareVectorize, VectorStoreKind::Postgres]
+        &[
+            VectorStoreKind::CloudflareVectorize,
+            VectorStoreKind::Postgres,
+        ]
     }
 }

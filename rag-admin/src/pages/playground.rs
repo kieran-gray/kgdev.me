@@ -95,7 +95,9 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
                         error: None,
                     };
                     set_history.update(|h| {
-                        h.retain(|e| !(e.query == entry.query && e.pipeline_id == entry.pipeline_id));
+                        h.retain(|e| {
+                            !(e.query == entry.query && e.pipeline_id == entry.pipeline_id)
+                        });
                         h.insert(0, entry);
                         h.truncate(20);
                     });
@@ -389,11 +391,7 @@ fn HitCard(
         }
     };
 
-    let source_link = match (
-        hit.source_ref_key.as_ref(),
-        hit.char_start,
-        hit.char_end,
-    ) {
+    let source_link = match (hit.source_ref_key.as_ref(), hit.char_start, hit.char_end) {
         (Some(slug), Some(start), Some(end)) => Some(format!(
             "/documents/BlogPost/{slug}?tab=source&ref_start={start}&ref_end={end}"
         )),

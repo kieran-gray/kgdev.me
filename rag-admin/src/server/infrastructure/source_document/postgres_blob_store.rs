@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sha2::{Digest, Sha256};
+use sha2::{Digest as _, Sha256};
 use sqlx::PgPool;
 
 use crate::server::application::{source_document::ports::BlobStore, AppError};

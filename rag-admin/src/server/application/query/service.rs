@@ -51,9 +51,10 @@ impl QueryService {
             .embedding_service
             .embed_with_resolved(&pipeline.embedding_model, std::slice::from_ref(&req.query))
             .await?;
-        let query_vector = embeddings.into_iter().next().ok_or_else(|| {
-            AppError::Internal("embedder returned no vector for query".into())
-        })?;
+        let query_vector = embeddings
+            .into_iter()
+            .next()
+            .ok_or_else(|| AppError::Internal("embedder returned no vector for query".into()))?;
 
         let vector_index = self.vector_index_resolver.build(&pipeline.vector_index)?;
         let matches = vector_index
@@ -103,10 +104,7 @@ impl QueryService {
                         let title = match &doc.latest_metadata {
                             DocumentMetadata::BlogPost(m) => m.title.clone(),
                         };
-                        (
-                            Some(doc.source_ref.natural_key().to_string()),
-                            Some(title),
-                        )
+                        (Some(doc.source_ref.natural_key().to_string()), Some(title))
                     }
                     None => (None, None),
                 },

@@ -112,8 +112,10 @@ impl SourceAdapter for HttpBlogAdapter {
 
 fn truncate(s: &str, n: usize) -> String {
     if s.chars().count() <= n {
-        s.to_string()
+        s.to_owned()
     } else {
-        s.chars().take(n).collect::<String>() + "…"
+        let mut s = s.chars().take(n).collect::<String>();
+        s.push('\u{2026}');
+        s
     }
 }

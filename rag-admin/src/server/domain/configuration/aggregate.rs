@@ -612,10 +612,7 @@ impl Configuration {
         Ok(())
     }
 
-    fn validate_sweep_template_members(
-        &self,
-        members: &[Uuid],
-    ) -> Result<(), ConfigurationError> {
+    fn validate_sweep_template_members(&self, members: &[Uuid]) -> Result<(), ConfigurationError> {
         if members.is_empty() {
             return Err(ConfigurationError::ValidationError(
                 "Sweep template must include at least one chunking configuration".into(),

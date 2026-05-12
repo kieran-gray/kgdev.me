@@ -49,7 +49,7 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
     ) -> Result<(), SourceDocumentRepositoryError> {
         let document_type = serde_json::to_value(&read_model.document_type)
             .ok()
-            .and_then(|v| v.as_str().map(str::to_string))
+            .and_then(|v| v.as_str().map(str::to_owned))
             .unwrap_or_else(|| format!("{:?}", read_model.document_type));
         let source_ref = serde_json::to_value(&read_model.source_ref).map_err(|e| {
             SourceDocumentRepositoryError::Internal(format!("serialize source_ref: {e}"))
@@ -80,7 +80,7 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
         .bind(read_model.document_id)
         .bind(&document_type)
         .bind(&source_ref)
-        .bind(read_model.latest_version_number as i32)
+        .bind(read_model.latest_version_number.cast_signed())
         .bind(read_model.latest_content_hash.as_hex())
         .bind(&latest_metadata)
         .bind(&read_model.latest_version_occurred_at)
@@ -175,7 +175,7 @@ impl TryFrom<SourceDocumentRow> for SourceDocumentReadModel {
             document_id: row.document_id,
             document_type,
             source_ref,
-            latest_version_number: row.latest_version_number as u32,
+            latest_version_number: row.latest_version_number.cast_unsigned(),
             latest_content_hash: ContentHash::new(row.latest_content_hash),
             latest_metadata,
             latest_version_occurred_at: row.latest_version_occurred_at,

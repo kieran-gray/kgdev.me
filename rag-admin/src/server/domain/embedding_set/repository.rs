@@ -23,8 +23,6 @@ pub trait EmbeddingSetRepository: Send + Sync {
         embedding_set_id: Uuid,
     ) -> Result<Option<EmbeddingSet>, EmbeddingSetRepositoryError>;
 
-    /// Dedup lookup: returns an existing EmbeddingSet if the same chunks have already
-    /// been embedded with the same model. Used to skip re-embedding on re-index.
     async fn find_by(
         &self,
         chunk_set_id: Uuid,

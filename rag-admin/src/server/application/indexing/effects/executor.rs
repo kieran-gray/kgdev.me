@@ -9,12 +9,12 @@ use crate::server::application::configuration::{PipelineResolver, ResolvedPipeli
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::ports::{Clock, IdGenerator};
-use crate::server::application::source_document::ports::{
-    BlobStore, ChunkSetRepository, EmbeddingSetRepository,
-};
+use crate::server::application::source_document::ports::BlobStore;
 use crate::server::application::{ActivityRegistry, AppError, InternalLogEvent, Job, JobRegistry};
 use crate::server::domain::chunk_set::entity::{Chunk, ChunkSet};
+use crate::server::domain::chunk_set::repository::ChunkSetRepository;
 use crate::server::domain::embedding_set::entity::{ChunkEmbedding, EmbeddingSet};
+use crate::server::domain::embedding_set::repository::EmbeddingSetRepository;
 use crate::server::domain::indexing::aggregate::Indexing;
 use crate::server::domain::indexing::commands::{
     CompleteChunking, CompleteEmbedding, CompleteIndexing, FailIngestion, IndexingCommand,

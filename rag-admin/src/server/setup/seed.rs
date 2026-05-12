@@ -9,8 +9,8 @@ use crate::server::application::configuration::{
 use crate::shared::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto, AiProviderKindDto,
     BertChunkingConfig, ChunkingConfig, ConfigurationCommandDto, CreateChunkingConfigurationDto,
-    CreateSweepTemplateDto, LlmChunkingConfig, SectionChunkingConfig,
-    SetDefaultSweepTemplateDto, VectorStoreKindDto,
+    CreateSweepTemplateDto, LlmChunkingConfig, SectionChunkingConfig, SetDefaultSweepTemplateDto,
+    VectorStoreKindDto,
 };
 
 const DEFAULT_SWEEP_NAME: &str = "default-sweep";
@@ -129,12 +129,8 @@ pub async fn seed_if_empty(
     seed_vector_indexes_if_empty(configuration_query, command_handler).await?;
     seed_chunking_configurations_if_empty(chunking_query, configuration_query, command_handler)
         .await?;
-    seed_default_sweep_template_if_empty(
-        chunking_query,
-        sweep_template_query,
-        command_handler,
-    )
-    .await?;
+    seed_default_sweep_template_if_empty(chunking_query, sweep_template_query, command_handler)
+        .await?;
     Ok(())
 }
 
@@ -162,7 +158,7 @@ async fn seed_default_sweep_template_if_empty(
         .collect();
 
     let cmd = ConfigurationCommandDto::CreateSweepTemplate(CreateSweepTemplateDto {
-        name: DEFAULT_SWEEP_NAME.to_string(),
+        name: DEFAULT_SWEEP_NAME.to_owned(),
         members,
     });
     command_handler
@@ -174,15 +170,11 @@ async fn seed_default_sweep_template_if_empty(
         .list()
         .await
         .map_err(|e| e.to_string())?;
-    if let Some(t) = templates
-        .into_iter()
-        .find(|t| t.name == DEFAULT_SWEEP_NAME)
-    {
-        let set_default = ConfigurationCommandDto::SetDefaultSweepTemplate(
-            SetDefaultSweepTemplateDto {
+    if let Some(t) = templates.into_iter().find(|t| t.name == DEFAULT_SWEEP_NAME) {
+        let set_default =
+            ConfigurationCommandDto::SetDefaultSweepTemplate(SetDefaultSweepTemplateDto {
                 sweep_template_id: t.sweep_template_id,
-            },
-        );
+            });
         command_handler
             .handle_dto(set_default)
             .await
@@ -201,7 +193,7 @@ async fn seed_models_if_empty(
         for seed in EMBEDDING_SEEDS {
             let cmd = ConfigurationCommandDto::AddEmbeddingModel(AddEmbeddingModelDto {
                 kind: seed.kind,
-                model: seed.model.to_string(),
+                model: seed.model.to_owned(),
                 dimensions: seed.dimensions,
             });
             command_handler
@@ -215,7 +207,7 @@ async fn seed_models_if_empty(
         for seed in GENERATION_SEEDS {
             let cmd = ConfigurationCommandDto::AddGenerationModel(AddGenerationModelDto {
                 kind: seed.kind,
-                model: seed.model.to_string(),
+                model: seed.model.to_owned(),
             });
             command_handler
                 .handle_dto(cmd)
@@ -239,7 +231,7 @@ async fn seed_vector_indexes_if_empty(
     for seed in VECTOR_INDEX_SEEDS {
         let cmd = ConfigurationCommandDto::AddVectorIndex(AddVectorIndexDto {
             kind: seed.kind,
-            name: seed.name.to_string(),
+            name: seed.name.to_owned(),
             dimensions: seed.dimensions,
         });
         command_handler
@@ -273,7 +265,7 @@ async fn seed_chunking_configurations_if_empty(
     for seed in seed_definitions(llm_generation_model_id) {
         let cmd =
             ConfigurationCommandDto::CreateChunkingConfiguration(CreateChunkingConfigurationDto {
-                name: seed.name.to_string(),
+                name: seed.name.to_owned(),
                 config: seed.config,
             });
         command_handler

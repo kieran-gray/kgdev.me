@@ -4,8 +4,9 @@ use uuid::Uuid;
 
 use crate::server::application::markdown::{Block, BlockKind};
 use crate::server::application::ports::MarkdownParser;
-use crate::server::application::source_document::ports::{BlobStore, ChunkSetRepository};
+use crate::server::application::source_document::ports::BlobStore;
 use crate::server::application::AppError;
+use crate::server::domain::chunk_set::repository::ChunkSetRepository;
 use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::source_document::source_ref::SourceRef;
@@ -108,10 +109,7 @@ impl SourceDocumentQueryService {
 
         let bytes = self.blob_store.get(&doc.latest_content_hash).await?;
         let source = String::from_utf8(bytes).map_err(|e| {
-            AppError::Internal(format!(
-                "content for {} is not utf-8: {e}",
-                doc.document_id
-            ))
+            AppError::Internal(format!("content for {} is not utf-8: {e}", doc.document_id))
         })?;
 
         let parsed = self.markdown_parser.parse(&source)?;

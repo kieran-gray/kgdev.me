@@ -125,7 +125,7 @@ fn node_offsets(node: &Node) -> Option<(usize, usize)> {
 fn plain_text(node: &Node) -> String {
     let mut out = String::new();
     append_plain_text(node, &mut out);
-    out.trim().to_string()
+    out.trim().to_owned()
 }
 
 fn append_plain_text(node: &Node, out: &mut String) {

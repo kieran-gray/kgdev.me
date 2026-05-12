@@ -90,7 +90,10 @@ where
         .await
         .map_err(|e| AppError::Internal(format!("read stream version: {e}")))?;
 
-        if current_count as usize != expected_version {
+        let current_count =
+            usize::try_from(current_count).map_err(|e| AppError::Internal(e.to_string()))?;
+
+        if current_count != expected_version {
             return Err(AppError::Validation(format!(
                 "{} stream {stream_id} version conflict: expected {expected_version}, actual {current_count}",
                 self.aggregate_type
