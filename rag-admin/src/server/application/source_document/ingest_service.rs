@@ -360,10 +360,9 @@ impl SourceDocumentIngestService {
         job: Arc<Job>,
     ) -> Result<(), AppError> {
         let indexing = self.load_indexing(indexing_id).await?;
-        if indexing.chunk_set_id.is_some() {
+        if let Some(chunk_set_id) = indexing.chunk_set_id {
             job.emit(IngestLogEvent::info(format!(
-                "chunking already complete (chunk_set={}); nothing to do",
-                indexing.chunk_set_id.unwrap()
+                "chunking already complete (chunk_set={chunk_set_id}); nothing to do",
             )))
             .await;
             return Ok(());
@@ -399,10 +398,9 @@ impl SourceDocumentIngestService {
         let chunk_set_id = indexing.chunk_set_id.ok_or_else(|| {
             AppError::Validation("chunking has not completed; run the chunking stage first".into())
         })?;
-        if indexing.embedding_set_id.is_some() {
+        if let Some(embedding_set_id) = indexing.embedding_set_id {
             job.emit(IngestLogEvent::info(format!(
-                "embedding already complete (embedding_set={}); nothing to do",
-                indexing.embedding_set_id.unwrap()
+                "embedding already complete (embedding_set={embedding_set_id}); nothing to do",
             )))
             .await;
             return Ok(());
@@ -559,7 +557,7 @@ impl SourceDocumentIngestService {
                 document_id,
                 pipeline_configuration_id,
                 document_version,
-                chunking_config: chunking_config.clone(),
+                chunking_config,
                 request_id,
                 occurred_at: occurred_at.clone(),
             }))
@@ -573,7 +571,7 @@ impl SourceDocumentIngestService {
             document_id,
             pipeline_configuration_id,
             document_version,
-            chunking_config: chunking_config.clone(),
+            chunking_config,
             chunk_set_id: None,
             embedding_set_id: None,
             status: crate::server::domain::indexing::status::IndexingStatus::Pending,

@@ -42,7 +42,7 @@ impl Indexing {
             document_id: e.document_id,
             pipeline_configuration_id: e.pipeline_configuration_id,
             document_version: e.document_version,
-            chunking_config: e.chunking_config.clone(),
+            chunking_config: e.chunking_config,
             chunk_set_id: None,
             embedding_set_id: None,
             status: IndexingStatus::Pending,
@@ -66,7 +66,7 @@ impl Aggregate for Indexing {
         match event {
             Self::Event::IngestRequested(e) => {
                 self.document_version = e.document_version;
-                self.chunking_config = e.chunking_config.clone();
+                self.chunking_config = e.chunking_config;
                 self.chunk_set_id = None;
                 self.embedding_set_id = None;
                 self.status = IndexingStatus::Pending;

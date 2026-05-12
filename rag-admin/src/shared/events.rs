@@ -33,10 +33,7 @@ pub mod aggregate {
 }
 
 impl PublishedEvent {
-    /// Convenience: did this event come from one of the named aggregate types?
     pub fn from_any(&self, aggregate_types: &[&str]) -> bool {
-        aggregate_types
-            .iter()
-            .any(|t| *t == self.aggregate_type.as_str())
+        aggregate_types.contains(&self.aggregate_type.as_str())
     }
 }

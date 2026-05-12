@@ -26,7 +26,7 @@ impl From<&Indexing> for IndexingReadModel {
             document_id: indexing.document_id,
             pipeline_configuration_id: indexing.pipeline_configuration_id,
             document_version: indexing.document_version,
-            chunking_config: indexing.chunking_config.clone(),
+            chunking_config: indexing.chunking_config,
             chunk_set_id: indexing.chunk_set_id,
             embedding_set_id: indexing.embedding_set_id,
             status: indexing.status.clone(),

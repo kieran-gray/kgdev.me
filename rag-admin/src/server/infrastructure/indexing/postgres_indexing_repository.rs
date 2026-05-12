@@ -44,7 +44,7 @@ impl IndexingRepository for PostgresIndexingRepository {
     }
 
     async fn save(&self, read_model: IndexingReadModel) -> Result<(), IndexingRepositoryError> {
-        let chunking_config = serde_json::to_value(&read_model.chunking_config).map_err(|e| {
+        let chunking_config = serde_json::to_value(read_model.chunking_config).map_err(|e| {
             IndexingRepositoryError::Internal(format!("serialize chunking_config: {e}"))
         })?;
         let (status, failure_stage) = encode_status(&read_model.status);

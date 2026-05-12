@@ -43,7 +43,7 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         &self,
         read_model: ChunkingConfigurationReadModel,
     ) -> Result<(), ChunkingConfigurationRepositoryError> {
-        let config_json = serde_json::to_value(&read_model.config).map_err(|e| {
+        let config_json = serde_json::to_value(read_model.config).map_err(|e| {
             ChunkingConfigurationRepositoryError::Internal(format!("serialize config: {e}"))
         })?;
 

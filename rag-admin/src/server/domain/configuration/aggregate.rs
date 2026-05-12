@@ -151,7 +151,7 @@ impl Aggregate for Configuration {
                 self.chunking_configurations.push(ChunkingConfiguration {
                     chunking_configuration_id: e.chunking_configuration_id,
                     name: e.name.clone(),
-                    config: e.config.clone(),
+                    config: e.config,
                 });
             }
             Self::Event::ChunkingConfigurationUpdated(e) => {
@@ -161,7 +161,7 @@ impl Aggregate for Configuration {
                     .find(|cc| cc.chunking_configuration_id == e.chunking_configuration_id)
                 {
                     cc.name = e.name.clone();
-                    cc.config = e.config.clone();
+                    cc.config = e.config;
                 }
             }
             Self::Event::ChunkingConfigurationDeleted(e) => {

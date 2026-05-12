@@ -36,7 +36,7 @@ impl Projector<ConfigurationEvent> for ChunkingConfigurationProjector {
                         .save(ChunkingConfigurationReadModel {
                             chunking_configuration_id: e.chunking_configuration_id,
                             name: e.name.clone(),
-                            config: e.config.clone(),
+                            config: e.config,
                         })
                         .await?;
                 }
@@ -45,7 +45,7 @@ impl Projector<ConfigurationEvent> for ChunkingConfigurationProjector {
                         .save(ChunkingConfigurationReadModel {
                             chunking_configuration_id: e.chunking_configuration_id,
                             name: e.name.clone(),
-                            config: e.config.clone(),
+                            config: e.config,
                         })
                         .await?;
                 }

@@ -123,7 +123,7 @@ mod hydrate {
     use super::{ConnectionState, PublishedEvent};
 
     thread_local! {
-        static ACTIVE_SOCKET: RefCell<Option<WebSocket>> = RefCell::new(None);
+        static ACTIVE_SOCKET: RefCell<Option<WebSocket>> = const { RefCell::new(None) };
     }
 
     pub fn connect(
@@ -192,10 +192,9 @@ mod hydrate {
             set_connection.set(ConnectionState::Closed);
             schedule_reconnect(set_last_event, set_epoch, set_connection, attempt + 1);
         };
-        let reconnect_for_close = reconnect.clone();
 
         let on_close = Closure::<dyn FnMut(CloseEvent)>::new(move |_evt: CloseEvent| {
-            reconnect_for_close();
+            reconnect();
         });
         ws.set_onclose(Some(on_close.as_ref().unchecked_ref()));
         on_close.forget();

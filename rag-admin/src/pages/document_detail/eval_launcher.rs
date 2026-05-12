@@ -256,10 +256,7 @@ pub fn EvaluationLauncher(
         let autotune = match run_mode.get() {
             RunMode::ScoreAll => None,
             RunMode::Autotune => Some(EvaluationAutotuneRequest {
-                current_config: variants
-                    .first()
-                    .map(|v| v.config.clone())
-                    .unwrap_or_default(),
+                current_config: variants.first().map(|v| v.config).unwrap_or_default(),
                 top_k_values: options.iter().map(|o| o.top_k).collect::<Vec<_>>(),
                 min_score_milli_values: options
                     .iter()

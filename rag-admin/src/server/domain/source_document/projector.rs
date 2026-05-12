@@ -61,7 +61,7 @@ impl Projector<SourceDocumentEvent> for SourceDocumentProjector {
                                     SourceDocumentEvent::DocumentCreated(c) => Some(c),
                                     _ => None,
                                 })
-                                .last()
+                                .next_back()
                                 .ok_or_else(|| {
                                     AppError::Internal(format!(
                                         "VersionAdded for {document_id} without prior DocumentCreated"

@@ -37,7 +37,7 @@ impl Projector<IndexingEvent> for IndexingProjector {
                     let read_model = match self.repository.load(indexing_id).await? {
                         Some(mut m) => {
                             m.document_version = e.document_version;
-                            m.chunking_config = e.chunking_config.clone();
+                            m.chunking_config = e.chunking_config;
                             m.chunk_set_id = None;
                             m.embedding_set_id = None;
                             m.status = IndexingStatus::Pending;
@@ -49,7 +49,7 @@ impl Projector<IndexingEvent> for IndexingProjector {
                             document_id: e.document_id,
                             pipeline_configuration_id: e.pipeline_configuration_id,
                             document_version: e.document_version,
-                            chunking_config: e.chunking_config.clone(),
+                            chunking_config: e.chunking_config,
                             chunk_set_id: None,
                             embedding_set_id: None,
                             status: IndexingStatus::Pending,

@@ -264,7 +264,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         &self,
         result: EvaluationVariantResultDto,
     ) -> Result<(), EvaluationRunRepositoryError> {
-        let variant_config = serde_json::to_value(&result.variant_config).map_err(|e| {
+        let variant_config = serde_json::to_value(result.variant_config).map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("serialize variant_config: {e}"))
         })?;
         let options = serde_json::to_value(&result.options).map_err(|e| {

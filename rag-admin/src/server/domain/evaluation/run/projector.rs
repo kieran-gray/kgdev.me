@@ -57,7 +57,7 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
                         .save_variant_result(EvaluationVariantResultDto {
                             run_id: e.run_id,
                             variant_label: e.variant_label.clone(),
-                            variant_config: e.variant_config.clone(),
+                            variant_config: e.variant_config,
                             options: e.options.clone(),
                             split: e.split,
                             recall_mean: e.metrics.recall_mean,

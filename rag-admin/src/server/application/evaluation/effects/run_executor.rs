@@ -239,7 +239,7 @@ impl EvaluationRunEffectExecutor {
                             EvaluationRunCommand::ScoreVariant(ScoreVariant {
                                 run_id: effect.run_id,
                                 variant_label: variant.label.clone(),
-                                variant_config: variant.config.clone(),
+                                variant_config: variant.config,
                                 options: options.clone(),
                                 split: *split,
                                 chunk_set_id,
@@ -322,7 +322,7 @@ impl EvaluationRunEffectExecutor {
             chunk_set_id,
             document_id,
             document_version,
-            chunking_config: variant.config.clone(),
+            chunking_config: variant.config,
             created_at: occurred_at.to_string(),
         };
         self.chunk_set_repository

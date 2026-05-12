@@ -18,7 +18,7 @@ impl PostgresChunkSetRepository {
 #[async_trait]
 impl ChunkSetRepository for PostgresChunkSetRepository {
     async fn save(&self, chunk_set: ChunkSet, chunks: Vec<Chunk>) -> Result<(), AppError> {
-        let chunking_config = serde_json::to_value(&chunk_set.chunking_config)
+        let chunking_config = serde_json::to_value(chunk_set.chunking_config)
             .map_err(|e| AppError::Internal(format!("serialize chunking_config: {e}")))?;
 
         let mut tx = self
