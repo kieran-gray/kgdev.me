@@ -1,4 +1,3 @@
-pub mod chunking;
 pub mod configuration;
 pub mod embed;
 pub mod error;

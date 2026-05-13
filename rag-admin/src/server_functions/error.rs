@@ -12,7 +12,6 @@ mod ssr {
 
     pub fn map_app_error(err: AppError) -> ServerFnError {
         let status = match &err {
-            AppError::Domain(_) => StatusCode::BAD_REQUEST,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::Validation(_) => StatusCode::BAD_REQUEST,
             AppError::Upstream(_) => StatusCode::BAD_GATEWAY,

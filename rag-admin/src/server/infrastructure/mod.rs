@@ -1,5 +1,4 @@
 pub mod blog;
-pub mod chunking;
 pub mod clients;
 pub mod configuration;
 pub mod embedding;
@@ -8,7 +7,6 @@ pub mod event_sourcing;
 pub mod http_client;
 pub mod id;
 pub mod indexing;
-pub mod ingest;
 pub mod kv;
 pub mod llm;
 pub mod markdown;

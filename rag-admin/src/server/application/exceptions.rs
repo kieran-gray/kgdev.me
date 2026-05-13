@@ -21,8 +21,6 @@ use crate::server::domain::source_document::{
 
 #[derive(Debug, Error, Serialize, Deserialize)]
 pub enum AppError {
-    #[error("domain error: {0}")]
-    Domain(String),
     #[error("not found: {0}")]
     NotFound(String),
     #[error("validation error: {0}")]
@@ -37,7 +35,12 @@ pub enum AppError {
 
 impl From<ConfigurationError> for AppError {
     fn from(value: ConfigurationError) -> Self {
-        AppError::Domain(value.to_string())
+        match value {
+            ConfigurationError::NotFound => AppError::NotFound(value.to_string()),
+            ConfigurationError::ValidationError(_) => AppError::Validation(value.to_string()),
+            ConfigurationError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+            ConfigurationError::InvalidEvent(_) => AppError::Internal(value.to_string()),
+        }
     }
 }
 

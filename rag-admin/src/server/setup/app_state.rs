@@ -32,7 +32,7 @@ use crate::server::application::indexing::{
 use crate::server::application::llm::ChatService;
 use crate::server::application::ports::{ChatClient, Clock, IdGenerator, MarkdownParser};
 use crate::server::application::query::QueryService;
-use crate::server::application::source_document::ports::{BlobStore, PostChunkingConfigStore};
+use crate::server::application::source_document::ports::BlobStore;
 use crate::server::application::source_document::ports::{
     SourceAdapterRegistry, VectorIndexProvider,
 };
@@ -83,7 +83,6 @@ use crate::server::event_sourcing::process_manager::ProcessManager;
 use crate::server::event_sourcing::projection_driver::ProjectionDriver;
 use crate::server::event_sourcing::projector::Projector;
 use crate::server::event_sourcing::Aggregate;
-use crate::server::infrastructure::chunking::FilePostChunkingConfigStore;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::configuration::{
     FileEvaluationDefaultsStore, PostgresChunkingConfigurationRepository,
@@ -116,9 +115,7 @@ use crate::server::infrastructure::vector::{
 };
 use crate::server::setup::config::{Config, KvBackend};
 use crate::server::setup::exceptions::SetupError;
-use crate::server::setup::paths::{
-    evaluation_defaults_path, post_chunking_config_path, tokenizer_path,
-};
+use crate::server::setup::paths::{evaluation_defaults_path, tokenizer_path};
 use crate::server::setup::seed::seed_if_empty;
 
 pub struct AppState {
@@ -138,7 +135,6 @@ pub struct AppState {
     pub evaluation_defaults_store: Arc<dyn EvaluationDefaultsStore>,
     pub job_registry: Arc<JobRegistry>,
     pub activity_registry: Arc<ActivityRegistry>,
-    pub post_chunking_config_store: Arc<dyn PostChunkingConfigStore>,
     pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
     pub query_service: Arc<QueryService>,
@@ -272,8 +268,6 @@ impl AppState {
             Arc::clone(&configuration_wiring.aggregate_repository),
         );
 
-        let post_chunking_config_store: Arc<dyn PostChunkingConfigStore> =
-            FilePostChunkingConfigStore::new(post_chunking_config_path());
         let job_registry = Arc::new(JobRegistry::new());
         let activity_registry = Arc::new(ActivityRegistry::new());
         spawn_activity_projection(Arc::clone(&activity_registry), Arc::clone(&event_bus));
@@ -515,7 +509,6 @@ impl AppState {
             evaluation_defaults_store,
             job_registry,
             activity_registry,
-            post_chunking_config_store,
             source_document_ingest_service,
             source_document_query_service,
             query_service,
