@@ -102,7 +102,7 @@ impl From<EmbeddingModelRow> for EmbeddingModel {
     fn from(row: EmbeddingModelRow) -> Self {
         Self {
             embedding_model_id: row.id,
-            kind: AiProviderKind::from_str(&row.kind)
+            kind: AiProviderKind::parse(&row.kind)
                 .expect("unknown ai provider kind in embedding_models"),
             model: row.model,
             dimensions: row.dimensions as u32,

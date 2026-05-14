@@ -18,13 +18,11 @@ use crate::server::domain::embedding_set::repository::EmbeddingSetRepository;
 use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
 use crate::server::domain::evaluation::question::EvaluationQuestion;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
-use crate::server::domain::evaluation::scoring::{
-    mean, precision_omega, score_question, std_dev,
-};
 use crate::server::domain::evaluation::run::commands::{
     CompleteRun, EvaluationRunCommand, FailRun, MarkVariantPrepared, ScoreVariant,
 };
 use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
+use crate::server::domain::evaluation::scoring::{mean, precision_omega, score_question, std_dev};
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::event_sourcing::command_processor::CommandProcessor;
 use crate::server::event_sourcing::process_manager::EffectExecutor;
@@ -506,4 +504,3 @@ impl EffectExecutor<EvaluationRunEffect> for EvaluationRunEffectExecutor {
         }
     }
 }
-

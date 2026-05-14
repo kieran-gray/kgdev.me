@@ -33,8 +33,8 @@ impl AiProviderKind {
         &[AiProviderKind::Cloudflare, AiProviderKind::Ollama]
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
             "cloudflare" => Some(AiProviderKind::Cloudflare),
             "ollama" => Some(AiProviderKind::Ollama),
             _ => None,
@@ -71,8 +71,8 @@ impl VectorStoreKind {
         ]
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
             "cloudflare_vectorize" => Some(VectorStoreKind::CloudflareVectorize),
             "postgres" => Some(VectorStoreKind::Postgres),
             _ => None,

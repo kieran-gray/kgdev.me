@@ -57,7 +57,9 @@ impl EmbeddingModelCatalogCommand {
                 })
             }
             EmbeddingModelCommandDto::RemoveEmbeddingModel(d) => {
-                Self::RemoveEmbeddingModel(RemoveEmbeddingModel { model_id: d.model_id })
+                Self::RemoveEmbeddingModel(RemoveEmbeddingModel {
+                    model_id: d.model_id,
+                })
             }
         }
     }

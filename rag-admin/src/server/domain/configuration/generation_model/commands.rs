@@ -53,7 +53,9 @@ impl GenerationModelCatalogCommand {
                 })
             }
             GenerationModelCommandDto::RemoveGenerationModel(d) => {
-                Self::RemoveGenerationModel(RemoveGenerationModel { model_id: d.model_id })
+                Self::RemoveGenerationModel(RemoveGenerationModel {
+                    model_id: d.model_id,
+                })
             }
         }
     }

@@ -278,12 +278,14 @@ async fn seed_chunking_configurations_if_empty(
 
     for seed in seed_definitions(llm_generation_model_id) {
         chunking_service
-            .handle_dto(ChunkingConfigurationCommandDto::CreateChunkingConfiguration(
-                CreateChunkingConfigurationDto {
-                    name: seed.name.to_owned(),
-                    config: seed.config,
-                },
-            ))
+            .handle_dto(
+                ChunkingConfigurationCommandDto::CreateChunkingConfiguration(
+                    CreateChunkingConfigurationDto {
+                        name: seed.name.to_owned(),
+                        config: seed.config,
+                    },
+                ),
+            )
             .await
             .map_err(|e| format!("seed {}: {e}", seed.name))?;
     }

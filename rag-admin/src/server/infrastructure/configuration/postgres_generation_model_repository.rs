@@ -37,13 +37,14 @@ impl GenerationModelRepository for PostgresGenerationModelRepository {
         &self,
         model_id: Uuid,
     ) -> Result<Option<GenerationModel>, GenerationModelRepositoryError> {
-        let row: Option<GenerationModelRow> = sqlx::query_as(
-            "SELECT id, kind, model FROM generation_models WHERE id = $1",
-        )
-        .bind(model_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| GenerationModelRepositoryError::Internal(format!("find_by_id: {e}")))?;
+        let row: Option<GenerationModelRow> =
+            sqlx::query_as("SELECT id, kind, model FROM generation_models WHERE id = $1")
+                .bind(model_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| {
+                    GenerationModelRepositoryError::Internal(format!("find_by_id: {e}"))
+                })?;
         Ok(row.map(Into::into))
     }
 
@@ -98,7 +99,7 @@ impl From<GenerationModelRow> for GenerationModel {
     fn from(row: GenerationModelRow) -> Self {
         Self {
             generation_model_id: row.id,
-            kind: AiProviderKind::from_str(&row.kind)
+            kind: AiProviderKind::parse(&row.kind)
                 .expect("unknown ai provider kind in generation_models"),
             model: row.model,
         }

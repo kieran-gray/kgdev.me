@@ -9,8 +9,7 @@ pub mod repository;
 
 pub use aggregate::GenerationModelCatalog;
 pub use commands::{
-    AddGenerationModel, GenerationModelCatalogCommand, RemoveGenerationModel,
-    UpdateGenerationModel,
+    AddGenerationModel, GenerationModelCatalogCommand, RemoveGenerationModel, UpdateGenerationModel,
 };
 pub use entity::GenerationModel;
 pub use events::{

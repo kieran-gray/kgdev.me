@@ -37,13 +37,12 @@ impl VectorIndexRepository for PostgresVectorIndexRepository {
         &self,
         index_id: Uuid,
     ) -> Result<Option<VectorIndex>, VectorIndexRepositoryError> {
-        let row: Option<VectorIndexRow> = sqlx::query_as(
-            "SELECT id, kind, name, dimensions FROM vector_indexes WHERE id = $1",
-        )
-        .bind(index_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| VectorIndexRepositoryError::Internal(format!("find_by_id: {e}")))?;
+        let row: Option<VectorIndexRow> =
+            sqlx::query_as("SELECT id, kind, name, dimensions FROM vector_indexes WHERE id = $1")
+                .bind(index_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| VectorIndexRepositoryError::Internal(format!("find_by_id: {e}")))?;
         Ok(row.map(Into::into))
     }
 
@@ -102,7 +101,7 @@ impl From<VectorIndexRow> for VectorIndex {
     fn from(row: VectorIndexRow) -> Self {
         Self {
             index_id: row.id,
-            kind: VectorStoreKind::from_str(&row.kind)
+            kind: VectorStoreKind::parse(&row.kind)
                 .expect("unknown vector store kind in vector_indexes"),
             name: row.name,
             dimensions: row.dimensions as u32,

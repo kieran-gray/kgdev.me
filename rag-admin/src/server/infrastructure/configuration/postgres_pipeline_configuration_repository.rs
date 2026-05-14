@@ -61,9 +61,12 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
         sqlx::query(
             r#"
             INSERT INTO pipeline_configurations (
-                id, name, embedding_model_id, generation_model_id, vector_index_id
+                id, name, embedding_model_id, generation_model_id, vector_index_id, dimensions
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES (
+                $1, $2, $3, $4, $5,
+                (SELECT dimensions FROM embedding_models WHERE id = $3)
+            )
             "#,
         )
         .bind(row.id)
@@ -88,6 +91,7 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
                 embedding_model_id  = $3,
                 generation_model_id = $4,
                 vector_index_id     = $5,
+                dimensions          = (SELECT dimensions FROM embedding_models WHERE id = $3),
                 updated_at          = NOW()
             WHERE id = $1
             "#,
@@ -111,9 +115,7 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
             .bind(id)
             .execute(&self.pool)
             .await
-            .map_err(|e| {
-                PipelineConfigurationRepositoryError::Internal(format!("delete: {e}"))
-            })?;
+            .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("delete: {e}")))?;
         if affected.rows_affected() == 0 {
             return Err(PipelineConfigurationRepositoryError::NotFound(id));
         }
@@ -127,10 +129,7 @@ fn map_db_error(error: sqlx::Error) -> PipelineConfigurationRepositoryError {
             let code = db.code().map(|c| c.into_owned()).unwrap_or_default();
             match code.as_str() {
                 "23505" => PipelineConfigurationRepositoryError::NameConflict,
-                "23503" => PipelineConfigurationRepositoryError::ReferenceViolation(
-                    db.message().to_string(),
-                ),
-                "P0001" => PipelineConfigurationRepositoryError::DimensionMismatch(
+                "23503" | "23502" => PipelineConfigurationRepositoryError::ReferenceViolation(
                     db.message().to_string(),
                 ),
                 _ => PipelineConfigurationRepositoryError::Internal(format!(

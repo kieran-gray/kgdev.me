@@ -10,10 +10,8 @@ pub enum PipelineConfigurationRepositoryError {
     NotFound(Uuid),
     #[error("pipeline configuration with this name already exists")]
     NameConflict,
-    #[error("referenced embedding model, generation model, or vector index not found: {0}")]
+    #[error("referenced embedding model, generation model, or vector index not found, or embedding/index dimensions do not match: {0}")]
     ReferenceViolation(String),
-    #[error("{0}")]
-    DimensionMismatch(String),
     #[error("pipeline configuration repository error: {0}")]
     Internal(String),
 }

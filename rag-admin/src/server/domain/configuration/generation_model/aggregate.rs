@@ -43,9 +43,11 @@ impl GenerationModelCatalog {
         model: &str,
         excluding: Option<Uuid>,
     ) -> Result<(), GenerationModelCatalogError> {
-        if self.models.iter().any(|m| {
-            m.kind == kind && m.model == model && Some(m.generation_model_id) != excluding
-        }) {
+        if self
+            .models
+            .iter()
+            .any(|m| m.kind == kind && m.model == model && Some(m.generation_model_id) != excluding)
+        {
             return Err(GenerationModelCatalogError::ValidationError(format!(
                 "Generation model {model} already exists for {}",
                 kind.as_str()
@@ -87,8 +89,7 @@ impl Aggregate for GenerationModelCatalog {
                 }
             }
             Self::Event::GenerationModelRemoved(e) => {
-                self.models
-                    .retain(|m| m.generation_model_id != e.model_id);
+                self.models.retain(|m| m.generation_model_id != e.model_id);
             }
         }
     }

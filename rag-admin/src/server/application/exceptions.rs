@@ -95,8 +95,7 @@ impl From<PipelineConfigurationRepositoryError> for AppError {
                 AppError::NotFound(value.to_string())
             }
             PipelineConfigurationRepositoryError::NameConflict
-            | PipelineConfigurationRepositoryError::ReferenceViolation(_)
-            | PipelineConfigurationRepositoryError::DimensionMismatch(_) => {
+            | PipelineConfigurationRepositoryError::ReferenceViolation(_) => {
                 AppError::Validation(value.to_string())
             }
             PipelineConfigurationRepositoryError::Internal(_) => {

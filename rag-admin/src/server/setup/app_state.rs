@@ -13,11 +13,10 @@ use crate::server::application::chunking::chunkers::{
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::ports::EvaluationDefaultsStore;
 use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, ChunkingConfigurationService,
-    ConfigurationQueryService, EmbeddingModelCatalogCommandHandler,
-    GenerationModelCatalogCommandHandler, PipelineConfigurationQueryService,
-    PipelineConfigurationService, PipelineResolver, SweepTemplateCommandHandler,
-    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
+    ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
+    EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
+    PipelineConfigurationQueryService, PipelineConfigurationService, PipelineResolver,
+    SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::embedding::EmbeddingService;
@@ -236,8 +235,7 @@ impl AppState {
             AiProviderKind::Ollama,
             Arc::clone(&ollama_chat_client) as Arc<dyn ChatClient>,
         )]);
-        let chat_service =
-            ChatService::new(chat_clients, Arc::clone(&generation_model_repository));
+        let chat_service = ChatService::new(chat_clients, Arc::clone(&generation_model_repository));
 
         let vector_providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>> =
             HashMap::from([
@@ -287,8 +285,11 @@ impl AppState {
         let vector_index_command_handler = VectorIndexCatalogCommandHandler::new(Arc::clone(
             &vector_index_wiring.command_processor,
         ));
-        let pipeline_configuration_service =
-            PipelineConfigurationService::new(Arc::clone(&pipeline_configuration_repository));
+        let pipeline_configuration_service = PipelineConfigurationService::new(
+            Arc::clone(&pipeline_configuration_repository),
+            Arc::clone(&embedding_model_repository),
+            Arc::clone(&vector_index_repository),
+        );
         let chunking_configuration_service =
             ChunkingConfigurationService::new(Arc::clone(&chunking_configuration_repository));
         let sweep_template_command_handler = SweepTemplateCommandHandler::new(

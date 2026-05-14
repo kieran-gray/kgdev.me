@@ -877,10 +877,12 @@ fn SweepTemplateFormDialog(
             return;
         }
         let command = match form_mode.get() {
-            Some(SweepFormMode::Add) => SweepTemplateCommandDto::CreateSweepTemplate(CreateSweepTemplateDto {
-                name: name_val,
-                members,
-            }),
+            Some(SweepFormMode::Add) => {
+                SweepTemplateCommandDto::CreateSweepTemplate(CreateSweepTemplateDto {
+                    name: name_val,
+                    members,
+                })
+            }
             Some(SweepFormMode::Edit(t)) => {
                 SweepTemplateCommandDto::UpdateSweepTemplate(UpdateSweepTemplateDto {
                     sweep_template_id: t.sweep_template_id,

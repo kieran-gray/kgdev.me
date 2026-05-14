@@ -25,15 +25,9 @@ impl ChunkingConfigurationService {
         command: ChunkingConfigurationCommandDto,
     ) -> Result<(), AppError> {
         match command {
-            ChunkingConfigurationCommandDto::CreateChunkingConfiguration(d) => {
-                self.create(d).await
-            }
-            ChunkingConfigurationCommandDto::UpdateChunkingConfiguration(d) => {
-                self.update(d).await
-            }
-            ChunkingConfigurationCommandDto::DeleteChunkingConfiguration(d) => {
-                self.delete(d).await
-            }
+            ChunkingConfigurationCommandDto::CreateChunkingConfiguration(d) => self.create(d).await,
+            ChunkingConfigurationCommandDto::UpdateChunkingConfiguration(d) => self.update(d).await,
+            ChunkingConfigurationCommandDto::DeleteChunkingConfiguration(d) => self.delete(d).await,
         }
     }
 

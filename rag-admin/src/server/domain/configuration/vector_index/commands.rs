@@ -55,7 +55,9 @@ impl VectorIndexCatalogCommand {
                 })
             }
             VectorIndexCommandDto::RemoveVectorIndex(d) => {
-                Self::RemoveVectorIndex(RemoveVectorIndex { index_id: d.index_id })
+                Self::RemoveVectorIndex(RemoveVectorIndex {
+                    index_id: d.index_id,
+                })
             }
         }
     }

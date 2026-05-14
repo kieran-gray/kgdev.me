@@ -43,13 +43,14 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         &self,
         id: Uuid,
     ) -> Result<Option<ChunkingConfigurationReadModel>, ChunkingConfigurationRepositoryError> {
-        let row: Option<ChunkingConfigurationRow> = sqlx::query_as(
-            "SELECT id, name, config FROM chunking_configurations WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| ChunkingConfigurationRepositoryError::Internal(format!("find_by_id: {e}")))?;
+        let row: Option<ChunkingConfigurationRow> =
+            sqlx::query_as("SELECT id, name, config FROM chunking_configurations WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| {
+                    ChunkingConfigurationRepositoryError::Internal(format!("find_by_id: {e}"))
+                })?;
         row.map(TryInto::try_into).transpose()
     }
 
@@ -109,9 +110,7 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
             .bind(id)
             .execute(&self.pool)
             .await
-            .map_err(|e| {
-                ChunkingConfigurationRepositoryError::Internal(format!("delete: {e}"))
-            })?;
+            .map_err(|e| ChunkingConfigurationRepositoryError::Internal(format!("delete: {e}")))?;
         if affected.rows_affected() == 0 {
             return Err(ChunkingConfigurationRepositoryError::NotFound(id));
         }

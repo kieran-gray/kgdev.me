@@ -4,8 +4,7 @@ use leptos::task::spawn_local;
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
 use crate::pages::configuration::commands::{
-    run_embedding_model_command, run_generation_model_command, run_vector_index_command,
-    short_uuid,
+    run_embedding_model_command, run_generation_model_command, run_vector_index_command, short_uuid,
 };
 use crate::server_functions::configuration::get_configuration;
 use crate::server_functions::settings::{load_settings, save_settings};
@@ -14,8 +13,8 @@ use crate::shared::{
     AiProviderKindDto, ConfigurationDto, EmbeddingModelCommandDto, EmbeddingModelDto,
     EvaluationGenerationBackend, GenerationModelCommandDto, GenerationModelDto,
     RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto, SettingsDto,
-    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
-    VectorIndexCommandDto, VectorIndexDto, VectorStoreKindDto,
+    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto, VectorIndexCommandDto,
+    VectorIndexDto, VectorStoreKindDto,
 };
 
 #[derive(Clone)]
