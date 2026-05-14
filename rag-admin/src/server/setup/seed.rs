@@ -3,14 +3,16 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, ConfigurationCommandHandler, ConfigurationQueryService,
-    SweepTemplateCommandHandler, SweepTemplateQueryService,
+    ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
+    EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
+    SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 use crate::shared::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto, AiProviderKindDto,
-    BertChunkingConfig, ChunkingConfig, ConfigurationCommandDto, CreateChunkingConfigurationDto,
-    CreateSweepTemplateDto, LlmChunkingConfig, SectionChunkingConfig, SetDefaultSweepTemplateDto,
-    SweepTemplateCommandDto, VectorStoreKindDto,
+    BertChunkingConfig, ChunkingConfig, ChunkingConfigurationCommandDto,
+    CreateChunkingConfigurationDto, CreateSweepTemplateDto, EmbeddingModelCommandDto,
+    GenerationModelCommandDto, LlmChunkingConfig, SectionChunkingConfig,
+    SetDefaultSweepTemplateDto, SweepTemplateCommandDto, VectorIndexCommandDto, VectorStoreKindDto,
 };
 
 const DEFAULT_SWEEP_NAME: &str = "default-sweep";
@@ -119,19 +121,27 @@ fn leak_name(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn seed_if_empty(
     chunking_query: &Arc<ChunkingConfigurationQueryService>,
     sweep_template_query: &Arc<SweepTemplateQueryService>,
     configuration_query: &Arc<ConfigurationQueryService>,
-    command_handler: &Arc<ConfigurationCommandHandler>,
+    embedding_handler: &Arc<EmbeddingModelCatalogCommandHandler>,
+    generation_handler: &Arc<GenerationModelCatalogCommandHandler>,
+    vector_index_handler: &Arc<VectorIndexCatalogCommandHandler>,
+    chunking_service: &Arc<ChunkingConfigurationService>,
     sweep_template_handler: &Arc<SweepTemplateCommandHandler>,
 ) -> Result<(), String> {
-    seed_models_if_empty(configuration_query, command_handler).await?;
-    seed_vector_indexes_if_empty(configuration_query, command_handler).await?;
-    seed_chunking_configurations_if_empty(chunking_query, configuration_query, command_handler)
+    seed_models_if_empty(configuration_query, embedding_handler, generation_handler).await?;
+    seed_vector_indexes_if_empty(configuration_query, vector_index_handler).await?;
+    seed_chunking_configurations_if_empty(chunking_query, configuration_query, chunking_service)
         .await?;
-    seed_default_sweep_template_if_empty(chunking_query, sweep_template_query, sweep_template_handler)
-        .await?;
+    seed_default_sweep_template_if_empty(
+        chunking_query,
+        sweep_template_query,
+        sweep_template_handler,
+    )
+    .await?;
     Ok(())
 }
 
@@ -159,10 +169,12 @@ async fn seed_default_sweep_template_if_empty(
         .collect();
 
     sweep_template_handler
-        .handle_dto(SweepTemplateCommandDto::CreateSweepTemplate(CreateSweepTemplateDto {
-            name: DEFAULT_SWEEP_NAME.to_owned(),
-            members,
-        }))
+        .handle_dto(SweepTemplateCommandDto::CreateSweepTemplate(
+            CreateSweepTemplateDto {
+                name: DEFAULT_SWEEP_NAME.to_owned(),
+                members,
+            },
+        ))
         .await
         .map_err(|e| format!("seed default sweep: {e}"))?;
 
@@ -185,19 +197,21 @@ async fn seed_default_sweep_template_if_empty(
 
 async fn seed_models_if_empty(
     configuration_query: &Arc<ConfigurationQueryService>,
-    command_handler: &Arc<ConfigurationCommandHandler>,
+    embedding_handler: &Arc<EmbeddingModelCatalogCommandHandler>,
+    generation_handler: &Arc<GenerationModelCatalogCommandHandler>,
 ) -> Result<(), String> {
     let catalog = configuration_query.get().await.map_err(|e| e.to_string())?;
 
     if catalog.embedding_models.is_empty() {
         for seed in EMBEDDING_SEEDS {
-            let cmd = ConfigurationCommandDto::AddEmbeddingModel(AddEmbeddingModelDto {
-                kind: seed.kind,
-                model: seed.model.to_owned(),
-                dimensions: seed.dimensions,
-            });
-            command_handler
-                .handle_dto(cmd)
+            embedding_handler
+                .handle_dto(EmbeddingModelCommandDto::AddEmbeddingModel(
+                    AddEmbeddingModelDto {
+                        kind: seed.kind,
+                        model: seed.model.to_owned(),
+                        dimensions: seed.dimensions,
+                    },
+                ))
                 .await
                 .map_err(|e| format!("seed embedding {}: {e}", seed.model))?;
         }
@@ -205,12 +219,13 @@ async fn seed_models_if_empty(
 
     if catalog.generation_models.is_empty() {
         for seed in GENERATION_SEEDS {
-            let cmd = ConfigurationCommandDto::AddGenerationModel(AddGenerationModelDto {
-                kind: seed.kind,
-                model: seed.model.to_owned(),
-            });
-            command_handler
-                .handle_dto(cmd)
+            generation_handler
+                .handle_dto(GenerationModelCommandDto::AddGenerationModel(
+                    AddGenerationModelDto {
+                        kind: seed.kind,
+                        model: seed.model.to_owned(),
+                    },
+                ))
                 .await
                 .map_err(|e| format!("seed generation {}: {e}", seed.model))?;
         }
@@ -221,7 +236,7 @@ async fn seed_models_if_empty(
 
 async fn seed_vector_indexes_if_empty(
     configuration_query: &Arc<ConfigurationQueryService>,
-    command_handler: &Arc<ConfigurationCommandHandler>,
+    vector_index_handler: &Arc<VectorIndexCatalogCommandHandler>,
 ) -> Result<(), String> {
     let catalog = configuration_query.get().await.map_err(|e| e.to_string())?;
     if !catalog.vector_indexes.is_empty() {
@@ -229,13 +244,12 @@ async fn seed_vector_indexes_if_empty(
     }
 
     for seed in VECTOR_INDEX_SEEDS {
-        let cmd = ConfigurationCommandDto::AddVectorIndex(AddVectorIndexDto {
-            kind: seed.kind,
-            name: seed.name.to_owned(),
-            dimensions: seed.dimensions,
-        });
-        command_handler
-            .handle_dto(cmd)
+        vector_index_handler
+            .handle_dto(VectorIndexCommandDto::AddVectorIndex(AddVectorIndexDto {
+                kind: seed.kind,
+                name: seed.name.to_owned(),
+                dimensions: seed.dimensions,
+            }))
             .await
             .map_err(|e| format!("seed vector index {}: {e}", seed.name))?;
     }
@@ -246,7 +260,7 @@ async fn seed_vector_indexes_if_empty(
 async fn seed_chunking_configurations_if_empty(
     chunking_query: &Arc<ChunkingConfigurationQueryService>,
     configuration_query: &Arc<ConfigurationQueryService>,
-    command_handler: &Arc<ConfigurationCommandHandler>,
+    chunking_service: &Arc<ChunkingConfigurationService>,
 ) -> Result<(), String> {
     let existing = chunking_query.list().await.map_err(|e| e.to_string())?;
     if !existing.is_empty() {
@@ -263,13 +277,13 @@ async fn seed_chunking_configurations_if_empty(
         .map(|m| m.generation_model_id);
 
     for seed in seed_definitions(llm_generation_model_id) {
-        let cmd =
-            ConfigurationCommandDto::CreateChunkingConfiguration(CreateChunkingConfigurationDto {
-                name: seed.name.to_owned(),
-                config: seed.config,
-            });
-        command_handler
-            .handle_dto(cmd)
+        chunking_service
+            .handle_dto(ChunkingConfigurationCommandDto::CreateChunkingConfiguration(
+                CreateChunkingConfigurationDto {
+                    name: seed.name.to_owned(),
+                    config: seed.config,
+                },
+            ))
             .await
             .map_err(|e| format!("seed {}: {e}", seed.name))?;
     }

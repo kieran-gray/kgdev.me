@@ -4,11 +4,14 @@ use uuid::Uuid;
 
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
-use crate::pages::configuration::commands::{parse_uuid_or_none, run_configuration_command};
+use crate::pages::configuration::commands::{
+    parse_uuid_or_none, run_pipeline_configuration_command,
+};
 use crate::server_functions::configuration::{get_configuration, get_pipeline_configurations};
 use crate::shared::{
-    aggregate_type, ConfigurationCommandDto, ConfigurationDto, CreatePipelineConfigurationDto,
-    DeletePipelineConfigurationDto, PipelineConfigurationDto, UpdatePipelineConfigurationDto,
+    aggregate_type, ConfigurationDto, CreatePipelineConfigurationDto,
+    DeletePipelineConfigurationDto, PipelineConfigurationCommandDto, PipelineConfigurationDto,
+    UpdatePipelineConfigurationDto,
 };
 
 #[derive(Clone)]
@@ -19,7 +22,13 @@ enum FormMode {
 
 #[component]
 pub fn PipelinesPage() -> impl IntoView {
-    let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION]));
+    let invalidator = use_invalidator(|e| {
+        e.from_any(&[
+            aggregate_type::EMBEDDING_MODEL_CATALOG,
+            aggregate_type::GENERATION_MODEL_CATALOG,
+            aggregate_type::VECTOR_INDEX_CATALOG,
+        ])
+    });
     let (refresh, set_refresh) = signal(0u32);
 
     let configuration = Resource::new(
@@ -293,7 +302,7 @@ fn PipelineFormDialog(
             return;
         }
         let command = match form_mode.get() {
-            Some(FormMode::Add) => ConfigurationCommandDto::CreatePipelineConfiguration(
+            Some(FormMode::Add) => PipelineConfigurationCommandDto::CreatePipelineConfiguration(
                 CreatePipelineConfigurationDto {
                     name: name_val,
                     embedding_model_id: emb,
@@ -301,18 +310,20 @@ fn PipelineFormDialog(
                     vector_index_id: idx,
                 },
             ),
-            Some(FormMode::Edit(pc)) => ConfigurationCommandDto::UpdatePipelineConfiguration(
-                UpdatePipelineConfigurationDto {
-                    pipeline_configuration_id: pc.pipeline_configuration_id,
-                    name: name_val,
-                    embedding_model_id: emb,
-                    generation_model_id: gen,
-                    vector_index_id: idx,
-                },
-            ),
+            Some(FormMode::Edit(pc)) => {
+                PipelineConfigurationCommandDto::UpdatePipelineConfiguration(
+                    UpdatePipelineConfigurationDto {
+                        pipeline_configuration_id: pc.pipeline_configuration_id,
+                        name: name_val,
+                        embedding_model_id: emb,
+                        generation_model_id: gen,
+                        vector_index_id: idx,
+                    },
+                )
+            }
             None => return,
         };
-        run_configuration_command(
+        run_pipeline_configuration_command(
             command,
             "Pipeline saved",
             set_busy,
@@ -421,10 +432,12 @@ fn DeleteConfirmDialog(
         let Some(pc) = target.get_untracked() else {
             return;
         };
-        run_configuration_command(
-            ConfigurationCommandDto::DeletePipelineConfiguration(DeletePipelineConfigurationDto {
-                pipeline_configuration_id: pc.pipeline_configuration_id,
-            }),
+        run_pipeline_configuration_command(
+            PipelineConfigurationCommandDto::DeletePipelineConfiguration(
+                DeletePipelineConfigurationDto {
+                    pipeline_configuration_id: pc.pipeline_configuration_id,
+                },
+            ),
             "Pipeline deleted",
             set_busy,
             set_status,

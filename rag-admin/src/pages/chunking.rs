@@ -4,17 +4,18 @@ use uuid::Uuid;
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
 use crate::pages::configuration::commands::{
-    parse_uuid_or_none, run_configuration_command, run_sweep_template_command,
+    parse_uuid_or_none, run_chunking_configuration_command, run_sweep_template_command,
 };
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_configuration, get_sweep_templates,
 };
 use crate::shared::{
-    aggregate_type, BertChunkingConfig, ChunkStrategy, ChunkingConfig, ChunkingConfigurationDto,
-    ConfigurationCommandDto, ConfigurationDto, CreateChunkingConfigurationDto,
-    CreateSweepTemplateDto, DeleteChunkingConfigurationDto, DeleteSweepTemplateDto,
-    LlmChunkingConfig, SectionChunkingConfig, SetDefaultSweepTemplateDto, SweepTemplateCommandDto,
-    SweepTemplateDto, UpdateChunkingConfigurationDto, UpdateSweepTemplateDto,
+    aggregate_type, BertChunkingConfig, ChunkStrategy, ChunkingConfig,
+    ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,
+    CreateChunkingConfigurationDto, CreateSweepTemplateDto, DeleteChunkingConfigurationDto,
+    DeleteSweepTemplateDto, LlmChunkingConfig, SectionChunkingConfig, SetDefaultSweepTemplateDto,
+    SweepTemplateCommandDto, SweepTemplateDto, UpdateChunkingConfigurationDto,
+    UpdateSweepTemplateDto,
 };
 
 #[derive(Clone)]
@@ -31,7 +32,12 @@ enum SweepFormMode {
 
 #[component]
 pub fn ChunkingPage() -> impl IntoView {
-    let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION]));
+    let invalidator = use_invalidator(|e| {
+        e.from_any(&[
+            aggregate_type::GENERATION_MODEL_CATALOG,
+            aggregate_type::SWEEP_TEMPLATE,
+        ])
+    });
     let (refresh, set_refresh) = signal(0u32);
 
     let configurations = Resource::new(
@@ -379,22 +385,24 @@ fn ChunkingFormDialog(
             }
         }
         let command = match form_mode.get() {
-            Some(FormMode::Add) => ConfigurationCommandDto::CreateChunkingConfiguration(
+            Some(FormMode::Add) => ChunkingConfigurationCommandDto::CreateChunkingConfiguration(
                 CreateChunkingConfigurationDto {
                     name: name_val,
                     config,
                 },
             ),
-            Some(FormMode::Edit(cc)) => ConfigurationCommandDto::UpdateChunkingConfiguration(
-                UpdateChunkingConfigurationDto {
-                    chunking_configuration_id: cc.chunking_configuration_id,
-                    name: name_val,
-                    config,
-                },
-            ),
+            Some(FormMode::Edit(cc)) => {
+                ChunkingConfigurationCommandDto::UpdateChunkingConfiguration(
+                    UpdateChunkingConfigurationDto {
+                        chunking_configuration_id: cc.chunking_configuration_id,
+                        name: name_val,
+                        config,
+                    },
+                )
+            }
             None => return,
         };
-        run_configuration_command(
+        run_chunking_configuration_command(
             command,
             "Chunking configuration saved",
             set_busy,
@@ -608,10 +616,12 @@ fn DeleteConfirmDialog(
         let Some(cc) = target.get_untracked() else {
             return;
         };
-        run_configuration_command(
-            ConfigurationCommandDto::DeleteChunkingConfiguration(DeleteChunkingConfigurationDto {
-                chunking_configuration_id: cc.chunking_configuration_id,
-            }),
+        run_chunking_configuration_command(
+            ChunkingConfigurationCommandDto::DeleteChunkingConfiguration(
+                DeleteChunkingConfigurationDto {
+                    chunking_configuration_id: cc.chunking_configuration_id,
+                },
+            ),
             "Chunking configuration deleted",
             set_busy,
             set_status,

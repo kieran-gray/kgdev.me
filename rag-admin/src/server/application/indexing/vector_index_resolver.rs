@@ -6,9 +6,8 @@ use uuid::Uuid;
 use crate::server::application::indexing::ports::VectorIndex;
 use crate::server::application::source_document::ports::VectorIndexProvider;
 use crate::server::application::AppError;
-use crate::server::domain::configuration::aggregate::Configuration;
 use crate::server::domain::configuration::kinds::VectorStoreKind;
-use crate::server::event_sourcing::{Aggregate, AggregateRepository};
+use crate::server::domain::configuration::vector_index::VectorIndexRepository;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedVectorIndex {
@@ -20,17 +19,17 @@ pub struct ResolvedVectorIndex {
 
 pub struct VectorIndexResolver {
     providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>>,
-    configuration_repository: Arc<AggregateRepository<Configuration>>,
+    vector_indexes: Arc<dyn VectorIndexRepository>,
 }
 
 impl VectorIndexResolver {
     pub fn new(
         providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>>,
-        configuration_repository: Arc<AggregateRepository<Configuration>>,
+        vector_indexes: Arc<dyn VectorIndexRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             providers,
-            configuration_repository,
+            vector_indexes,
         })
     }
 
@@ -50,26 +49,15 @@ impl VectorIndexResolver {
     }
 
     pub async fn resolve(&self, index_id: Uuid) -> Result<ResolvedVectorIndex, AppError> {
-        let Some(loaded) = self
-            .configuration_repository
-            .load(Configuration::singleton_id())
-            .await?
-        else {
-            return Err(AppError::NotFound(
-                Configuration::aggregate_type().to_string(),
-            ));
-        };
-
-        let index = loaded
-            .aggregate
+        let index = self
             .vector_indexes
-            .iter()
-            .find(|i| i.index_id == index_id)
+            .find_by_id(index_id)
+            .await?
             .ok_or_else(|| AppError::NotFound(format!("vector index {index_id} not registered")))?;
         Ok(ResolvedVectorIndex {
             index_id: index.index_id,
             kind: index.kind,
-            name: index.name.clone(),
+            name: index.name,
             dimensions: index.dimensions,
         })
     }

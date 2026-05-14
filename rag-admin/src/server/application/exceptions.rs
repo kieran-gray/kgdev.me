@@ -3,10 +3,12 @@ use thiserror::Error;
 
 use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::configuration::{
-    chunking_configuration::ChunkingConfigurationRepositoryError, exceptions::ConfigurationError,
+    chunking_configuration::ChunkingConfigurationRepositoryError,
+    embedding_model::{EmbeddingModelCatalogError, EmbeddingModelRepositoryError},
+    generation_model::{GenerationModelCatalogError, GenerationModelRepositoryError},
     pipeline_configuration::PipelineConfigurationRepositoryError,
     sweep_template::{SweepTemplateError, SweepTemplateRepositoryError},
-    ConfigurationRepositoryError,
+    vector_index::{VectorIndexCatalogError, VectorIndexRepositoryError},
 };
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepositoryError;
 use crate::server::domain::evaluation::{
@@ -34,32 +36,90 @@ pub enum AppError {
     Internal(String),
 }
 
-impl From<ConfigurationError> for AppError {
-    fn from(value: ConfigurationError) -> Self {
+impl From<EmbeddingModelCatalogError> for AppError {
+    fn from(value: EmbeddingModelCatalogError) -> Self {
         match value {
-            ConfigurationError::NotFound => AppError::NotFound(value.to_string()),
-            ConfigurationError::ValidationError(_) => AppError::Validation(value.to_string()),
-            ConfigurationError::InvalidCommand(_) => AppError::Validation(value.to_string()),
-            ConfigurationError::InvalidEvent(_) => AppError::Internal(value.to_string()),
+            EmbeddingModelCatalogError::NotFound => AppError::NotFound(value.to_string()),
+            EmbeddingModelCatalogError::ValidationError(_)
+            | EmbeddingModelCatalogError::InvalidCommand(_) => {
+                AppError::Validation(value.to_string())
+            }
         }
     }
 }
 
-impl From<ConfigurationRepositoryError> for AppError {
-    fn from(value: ConfigurationRepositoryError) -> Self {
+impl From<GenerationModelCatalogError> for AppError {
+    fn from(value: GenerationModelCatalogError) -> Self {
+        match value {
+            GenerationModelCatalogError::NotFound => AppError::NotFound(value.to_string()),
+            GenerationModelCatalogError::ValidationError(_)
+            | GenerationModelCatalogError::InvalidCommand(_) => {
+                AppError::Validation(value.to_string())
+            }
+        }
+    }
+}
+
+impl From<VectorIndexCatalogError> for AppError {
+    fn from(value: VectorIndexCatalogError) -> Self {
+        match value {
+            VectorIndexCatalogError::NotFound => AppError::NotFound(value.to_string()),
+            VectorIndexCatalogError::ValidationError(_)
+            | VectorIndexCatalogError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+        }
+    }
+}
+
+impl From<EmbeddingModelRepositoryError> for AppError {
+    fn from(value: EmbeddingModelRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<GenerationModelRepositoryError> for AppError {
+    fn from(value: GenerationModelRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<VectorIndexRepositoryError> for AppError {
+    fn from(value: VectorIndexRepositoryError) -> Self {
         AppError::Internal(value.to_string())
     }
 }
 
 impl From<PipelineConfigurationRepositoryError> for AppError {
     fn from(value: PipelineConfigurationRepositoryError) -> Self {
-        AppError::Internal(value.to_string())
+        match value {
+            PipelineConfigurationRepositoryError::NotFound(_) => {
+                AppError::NotFound(value.to_string())
+            }
+            PipelineConfigurationRepositoryError::NameConflict
+            | PipelineConfigurationRepositoryError::ReferenceViolation(_)
+            | PipelineConfigurationRepositoryError::DimensionMismatch(_) => {
+                AppError::Validation(value.to_string())
+            }
+            PipelineConfigurationRepositoryError::Internal(_) => {
+                AppError::Internal(value.to_string())
+            }
+        }
     }
 }
 
 impl From<ChunkingConfigurationRepositoryError> for AppError {
     fn from(value: ChunkingConfigurationRepositoryError) -> Self {
-        AppError::Internal(value.to_string())
+        match value {
+            ChunkingConfigurationRepositoryError::NotFound(_) => {
+                AppError::NotFound(value.to_string())
+            }
+            ChunkingConfigurationRepositoryError::NameConflict
+            | ChunkingConfigurationRepositoryError::ReferenceViolation(_) => {
+                AppError::Validation(value.to_string())
+            }
+            ChunkingConfigurationRepositoryError::Internal(_) => {
+                AppError::Internal(value.to_string())
+            }
+        }
     }
 }
 

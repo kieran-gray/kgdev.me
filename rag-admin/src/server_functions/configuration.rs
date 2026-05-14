@@ -1,8 +1,9 @@
 use leptos::prelude::*;
 
 use crate::shared::{
-    ChunkingConfigurationDto, ConfigurationCommandDto, ConfigurationDto, PipelineConfigurationDto,
-    SweepTemplateCommandDto, SweepTemplateDto,
+    ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,
+    EmbeddingModelCommandDto, GenerationModelCommandDto, PipelineConfigurationCommandDto,
+    PipelineConfigurationDto, SweepTemplateCommandDto, SweepTemplateDto, VectorIndexCommandDto,
 };
 
 #[server(
@@ -86,12 +87,12 @@ pub async fn get_sweep_templates() -> Result<Vec<SweepTemplateDto>, ServerFnErro
 }
 
 #[server(
-    name = ApplyConfigurationCommand,
+    name = ApplyEmbeddingModelCommand,
     prefix = "/api",
-    endpoint = "apply_configuration_command"
+    endpoint = "apply_embedding_model_command"
 )]
-pub async fn apply_configuration_command(
-    command: ConfigurationCommandDto,
+pub async fn apply_embedding_model_command(
+    command: EmbeddingModelCommandDto,
 ) -> Result<(), ServerFnError> {
     use crate::server::setup::AppState;
     use crate::server_functions::error::map_app_error;
@@ -101,7 +102,95 @@ pub async fn apply_configuration_command(
         use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
 
     state
-        .configuration_command_handler
+        .embedding_model_command_handler
+        .handle_dto(command)
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = ApplyGenerationModelCommand,
+    prefix = "/api",
+    endpoint = "apply_generation_model_command"
+)]
+pub async fn apply_generation_model_command(
+    command: GenerationModelCommandDto,
+) -> Result<(), ServerFnError> {
+    use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .generation_model_command_handler
+        .handle_dto(command)
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = ApplyVectorIndexCommand,
+    prefix = "/api",
+    endpoint = "apply_vector_index_command"
+)]
+pub async fn apply_vector_index_command(
+    command: VectorIndexCommandDto,
+) -> Result<(), ServerFnError> {
+    use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .vector_index_command_handler
+        .handle_dto(command)
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = ApplyPipelineConfigurationCommand,
+    prefix = "/api",
+    endpoint = "apply_pipeline_configuration_command"
+)]
+pub async fn apply_pipeline_configuration_command(
+    command: PipelineConfigurationCommandDto,
+) -> Result<(), ServerFnError> {
+    use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .pipeline_configuration_service
+        .handle_dto(command)
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = ApplyChunkingConfigurationCommand,
+    prefix = "/api",
+    endpoint = "apply_chunking_configuration_command"
+)]
+pub async fn apply_chunking_configuration_command(
+    command: ChunkingConfigurationCommandDto,
+) -> Result<(), ServerFnError> {
+    use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .chunking_configuration_service
         .handle_dto(command)
         .await
         .map_err(map_app_error)

@@ -87,7 +87,14 @@ pub fn DocumentDetailPage() -> impl IntoView {
         },
     );
 
-    let pipeline_invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION]));
+    let pipeline_invalidator = use_invalidator(|e| {
+        e.from_any(&[
+            aggregate_type::EMBEDDING_MODEL_CATALOG,
+            aggregate_type::GENERATION_MODEL_CATALOG,
+            aggregate_type::VECTOR_INDEX_CATALOG,
+            aggregate_type::SWEEP_TEMPLATE,
+        ])
+    });
     let pipelines = Resource::new(
         move || pipeline_invalidator.get(),
         |_| async move { get_pipeline_configurations().await.unwrap_or_default() },

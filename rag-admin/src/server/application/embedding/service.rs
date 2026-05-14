@@ -5,9 +5,8 @@ use uuid::Uuid;
 
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::AppError;
-use crate::server::domain::configuration::aggregate::Configuration;
+use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::server::domain::configuration::kinds::AiProviderKind;
-use crate::server::event_sourcing::{Aggregate, AggregateRepository};
 use crate::shared::EmbedResult;
 
 #[derive(Debug, Clone)]
@@ -20,17 +19,17 @@ pub struct ResolvedEmbeddingModel {
 
 pub struct EmbeddingService {
     embedders: HashMap<AiProviderKind, Arc<dyn Embedder>>,
-    configuration_repository: Arc<AggregateRepository<Configuration>>,
+    embedding_models: Arc<dyn EmbeddingModelRepository>,
 }
 
 impl EmbeddingService {
     pub fn new(
         embedders: HashMap<AiProviderKind, Arc<dyn Embedder>>,
-        configuration_repository: Arc<AggregateRepository<Configuration>>,
+        embedding_models: Arc<dyn EmbeddingModelRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             embedders,
-            configuration_repository,
+            embedding_models,
         })
     }
 
@@ -65,21 +64,10 @@ impl EmbeddingService {
         &self,
         embedding_model_id: Uuid,
     ) -> Result<ResolvedEmbeddingModel, AppError> {
-        let Some(loaded_aggregate) = self
-            .configuration_repository
-            .load(Configuration::singleton_id())
-            .await?
-        else {
-            return Err(AppError::NotFound(
-                Configuration::aggregate_type().to_string(),
-            ));
-        };
-
-        let model = loaded_aggregate
-            .aggregate
+        let model = self
             .embedding_models
-            .iter()
-            .find(|m| m.embedding_model_id == embedding_model_id)
+            .find_by_id(embedding_model_id)
+            .await?
             .ok_or_else(|| {
                 AppError::NotFound(format!(
                     "embedding model {embedding_model_id} not registered"
@@ -88,7 +76,7 @@ impl EmbeddingService {
         Ok(ResolvedEmbeddingModel {
             embedding_model_id: model.embedding_model_id,
             kind: model.kind,
-            model: model.model.clone(),
+            model: model.model,
             dimensions: model.dimensions,
         })
     }

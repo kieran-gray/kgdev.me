@@ -3,8 +3,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::server::domain::configuration::pipeline_configuration::{
-    PipelineConfigurationReadModel, PipelineConfigurationRepository,
-    PipelineConfigurationRepositoryError,
+    NewPipelineConfiguration, PipelineConfigurationReadModel, PipelineConfigurationRepository,
+    PipelineConfigurationRepositoryError, PipelineConfigurationUpdate,
 };
 
 pub struct PostgresPipelineConfigurationRepository {
@@ -36,9 +36,27 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    async fn save(
+    async fn find_by_id(
         &self,
-        read_model: PipelineConfigurationReadModel,
+        id: Uuid,
+    ) -> Result<Option<PipelineConfigurationReadModel>, PipelineConfigurationRepositoryError> {
+        let row: Option<PipelineConfigurationRow> = sqlx::query_as(
+            r#"
+            SELECT id, name, embedding_model_id, generation_model_id, vector_index_id
+            FROM pipeline_configurations
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("find_by_id: {e}")))?;
+        Ok(row.map(Into::into))
+    }
+
+    async fn create(
+        &self,
+        row: NewPipelineConfiguration,
     ) -> Result<(), PipelineConfigurationRepositoryError> {
         sqlx::query(
             r#"
@@ -46,34 +64,83 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
                 id, name, embedding_model_id, generation_model_id, vector_index_id
             )
             VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (id) DO UPDATE SET
-                name                = $2,
+            "#,
+        )
+        .bind(row.id)
+        .bind(&row.name)
+        .bind(row.embedding_model_id)
+        .bind(row.generation_model_id)
+        .bind(row.vector_index_id)
+        .execute(&self.pool)
+        .await
+        .map(|_| ())
+        .map_err(map_db_error)
+    }
+
+    async fn update(
+        &self,
+        row: PipelineConfigurationUpdate,
+    ) -> Result<(), PipelineConfigurationRepositoryError> {
+        let affected = sqlx::query(
+            r#"
+            UPDATE pipeline_configurations
+            SET name                = $2,
                 embedding_model_id  = $3,
                 generation_model_id = $4,
                 vector_index_id     = $5,
                 updated_at          = NOW()
+            WHERE id = $1
             "#,
         )
-        .bind(read_model.pipeline_configuration_id)
-        .bind(&read_model.name)
-        .bind(read_model.embedding_model_id)
-        .bind(read_model.generation_model_id)
-        .bind(read_model.vector_index_id)
+        .bind(row.id)
+        .bind(&row.name)
+        .bind(row.embedding_model_id)
+        .bind(row.generation_model_id)
+        .bind(row.vector_index_id)
         .execute(&self.pool)
         .await
-        .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("save: {e}")))?;
-
+        .map_err(map_db_error)?;
+        if affected.rows_affected() == 0 {
+            return Err(PipelineConfigurationRepositoryError::NotFound(row.id));
+        }
         Ok(())
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), PipelineConfigurationRepositoryError> {
-        sqlx::query("DELETE FROM pipeline_configurations WHERE id = $1")
+        let affected = sqlx::query("DELETE FROM pipeline_configurations WHERE id = $1")
             .bind(id)
             .execute(&self.pool)
             .await
-            .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("delete: {e}")))?;
-
+            .map_err(|e| {
+                PipelineConfigurationRepositoryError::Internal(format!("delete: {e}"))
+            })?;
+        if affected.rows_affected() == 0 {
+            return Err(PipelineConfigurationRepositoryError::NotFound(id));
+        }
         Ok(())
+    }
+}
+
+fn map_db_error(error: sqlx::Error) -> PipelineConfigurationRepositoryError {
+    match &error {
+        sqlx::Error::Database(db) => {
+            let code = db.code().map(|c| c.into_owned()).unwrap_or_default();
+            match code.as_str() {
+                "23505" => PipelineConfigurationRepositoryError::NameConflict,
+                "23503" => PipelineConfigurationRepositoryError::ReferenceViolation(
+                    db.message().to_string(),
+                ),
+                "P0001" => PipelineConfigurationRepositoryError::DimensionMismatch(
+                    db.message().to_string(),
+                ),
+                _ => PipelineConfigurationRepositoryError::Internal(format!(
+                    "pipeline configuration: {error}"
+                )),
+            }
+        }
+        _ => PipelineConfigurationRepositoryError::Internal(format!(
+            "pipeline configuration: {error}"
+        )),
     }
 }
 

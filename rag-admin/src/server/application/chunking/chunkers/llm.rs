@@ -6,8 +6,7 @@ use crate::server::application::chunking::{ChunkOutput, DocumentChunker, TokenBu
 use crate::server::application::markdown::{Document, TextUnit};
 use crate::server::application::ports::{ChatClient, ChatRequest, ChatResponseFormat, Tokenizer};
 use crate::server::application::AppError;
-use crate::server::domain::configuration::aggregate::Configuration;
-use crate::server::event_sourcing::{Aggregate, AggregateRepository};
+use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 use crate::shared::{ChunkStrategy, ChunkingConfig};
 
 const SYSTEM_PROMPT: &str = "You split blog text into compact, self-contained retrieval chunks. \
@@ -35,17 +34,17 @@ struct MicroChunk {
 
 pub struct LlmChunker {
     chat_client: Arc<dyn ChatClient>,
-    configuration_repository: Arc<AggregateRepository<Configuration>>,
+    generation_models: Arc<dyn GenerationModelRepository>,
 }
 
 impl LlmChunker {
     pub fn create(
         chat_client: Arc<dyn ChatClient>,
-        configuration_repository: Arc<AggregateRepository<Configuration>>,
+        generation_models: Arc<dyn GenerationModelRepository>,
     ) -> Self {
         Self {
             chat_client,
-            configuration_repository,
+            generation_models,
         }
     }
 }
@@ -99,21 +98,10 @@ impl DocumentChunker for LlmChunker {
 
 impl LlmChunker {
     async fn resolve_generation_model(&self, model_id: uuid::Uuid) -> Result<String, AppError> {
-        let Some(loaded) = self
-            .configuration_repository
-            .load(Configuration::singleton_id())
+        self.generation_models
+            .find_by_id(model_id)
             .await?
-        else {
-            return Err(AppError::NotFound(
-                Configuration::aggregate_type().to_string(),
-            ));
-        };
-        loaded
-            .aggregate
-            .generation_models
-            .iter()
-            .find(|m| m.generation_model_id == model_id)
-            .map(|m| m.model.clone())
+            .map(|m| m.model)
             .ok_or_else(|| {
                 AppError::Validation(format!(
                     "LLM chunking: generation model {model_id} not found in registry"

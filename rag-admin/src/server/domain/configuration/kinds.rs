@@ -32,6 +32,14 @@ impl AiProviderKind {
     pub fn all() -> &'static [AiProviderKind] {
         &[AiProviderKind::Cloudflare, AiProviderKind::Ollama]
     }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "cloudflare" => Some(AiProviderKind::Cloudflare),
+            "ollama" => Some(AiProviderKind::Ollama),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -61,5 +69,13 @@ impl VectorStoreKind {
             VectorStoreKind::CloudflareVectorize,
             VectorStoreKind::Postgres,
         ]
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "cloudflare_vectorize" => Some(VectorStoreKind::CloudflareVectorize),
+            "postgres" => Some(VectorStoreKind::Postgres),
+            _ => None,
+        }
     }
 }

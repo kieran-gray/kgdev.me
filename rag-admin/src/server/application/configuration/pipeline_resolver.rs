@@ -6,9 +6,7 @@ use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingM
 use crate::server::application::indexing::{ResolvedVectorIndex, VectorIndexResolver};
 use crate::server::application::llm::{ChatService, ResolvedGenerationModel};
 use crate::server::application::AppError;
-use crate::server::domain::configuration::pipeline_configuration::{
-    PipelineConfigurationRepository, PipelineConfigurationRepositoryError,
-};
+use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedPipeline {
@@ -45,16 +43,10 @@ impl PipelineResolver {
         &self,
         pipeline_configuration_id: Uuid,
     ) -> Result<ResolvedPipeline, AppError> {
-        let pipelines = self
+        let pc = self
             .pipeline_repository
-            .load_all()
-            .await
-            .map_err(|e| match e {
-                PipelineConfigurationRepositoryError::Internal(m) => AppError::Internal(m),
-            })?;
-        let pc = pipelines
-            .iter()
-            .find(|p| p.pipeline_configuration_id == pipeline_configuration_id)
+            .find_by_id(pipeline_configuration_id)
+            .await?
             .ok_or_else(|| {
                 AppError::NotFound(format!(
                     "pipeline configuration {pipeline_configuration_id} not found"
@@ -73,7 +65,7 @@ impl PipelineResolver {
 
         Ok(ResolvedPipeline {
             pipeline_configuration_id: pc.pipeline_configuration_id,
-            name: pc.name.clone(),
+            name: pc.name,
             embedding_model,
             generation_model,
             vector_index,

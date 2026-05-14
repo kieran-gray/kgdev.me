@@ -13,9 +13,11 @@ use crate::server::application::chunking::chunkers::{
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::ports::EvaluationDefaultsStore;
 use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, ConfigurationCommandHandler, ConfigurationQueryService,
-    PipelineConfigurationQueryService, PipelineResolver, SweepTemplateCommandHandler,
-    SweepTemplateQueryService,
+    ChunkingConfigurationQueryService, ChunkingConfigurationService,
+    ConfigurationQueryService, EmbeddingModelCatalogCommandHandler,
+    GenerationModelCatalogCommandHandler, PipelineConfigurationQueryService,
+    PipelineConfigurationService, PipelineResolver, SweepTemplateCommandHandler,
+    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::embedding::EmbeddingService;
@@ -45,19 +47,21 @@ use crate::server::application::{
     spawn_activity_projection, ActivityRegistry, AppError, JobRegistry,
 };
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
-use crate::server::domain::configuration::aggregate::Configuration;
-use crate::server::domain::configuration::chunking_configuration::{
-    ChunkingConfigurationProjector, ChunkingConfigurationRepository,
+use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationRepository;
+use crate::server::domain::configuration::embedding_model::{
+    EmbeddingModelCatalog, EmbeddingModelProjector, EmbeddingModelRepository,
+};
+use crate::server::domain::configuration::generation_model::{
+    GenerationModelCatalog, GenerationModelProjector, GenerationModelRepository,
 };
 use crate::server::domain::configuration::kinds::{AiProviderKind, VectorStoreKind};
-use crate::server::domain::configuration::pipeline_configuration::{
-    PipelineConfigurationProjector, PipelineConfigurationRepository,
-};
-use crate::server::domain::configuration::projector::ConfigurationProjector;
+use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::domain::configuration::sweep_template::{
     SweepTemplate, SweepTemplateProjector, SweepTemplateRepository,
 };
-use crate::server::domain::configuration::ConfigurationRepository;
+use crate::server::domain::configuration::vector_index::{
+    VectorIndexCatalog, VectorIndexProjector, VectorIndexRepository,
+};
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepository;
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::dataset::policies::derive_dataset_effects;
@@ -87,8 +91,9 @@ use crate::server::event_sourcing::Aggregate;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::configuration::{
     FileEvaluationDefaultsStore, PostgresChunkingConfigurationRepository,
-    PostgresConfigurationRepository, PostgresPipelineConfigurationRepository,
-    PostgresSweepTemplateRepository,
+    PostgresEmbeddingModelRepository, PostgresGenerationModelRepository,
+    PostgresPipelineConfigurationRepository, PostgresSweepTemplateRepository,
+    PostgresVectorIndexRepository,
 };
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{
@@ -120,13 +125,16 @@ use crate::server::setup::paths::{evaluation_defaults_path, tokenizer_path};
 use crate::server::setup::seed::seed_if_empty;
 
 pub struct AppState {
-    pub configuration_command_handler: Arc<ConfigurationCommandHandler>,
+    pub embedding_model_command_handler: Arc<EmbeddingModelCatalogCommandHandler>,
+    pub generation_model_command_handler: Arc<GenerationModelCatalogCommandHandler>,
+    pub vector_index_command_handler: Arc<VectorIndexCatalogCommandHandler>,
+    pub pipeline_configuration_service: Arc<PipelineConfigurationService>,
+    pub chunking_configuration_service: Arc<ChunkingConfigurationService>,
     pub sweep_template_command_handler: Arc<SweepTemplateCommandHandler>,
     pub configuration_query_service: Arc<ConfigurationQueryService>,
     pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
     pub chunking_configuration_query_service: Arc<ChunkingConfigurationQueryService>,
     pub sweep_template_query_service: Arc<SweepTemplateQueryService>,
-    pub configuration_repository: Arc<dyn ConfigurationRepository>,
     pub evaluation_dataset_command_processor: Arc<CommandProcessor<EvaluationDataset>>,
     pub evaluation_run_command_processor: Arc<CommandProcessor<EvaluationRun>>,
     pub evaluation_query_service: Arc<EvaluationQueryService>,
@@ -146,7 +154,6 @@ pub struct AppState {
 
 impl AppState {
     pub async fn initialize() -> Result<Self, SetupError> {
-        // ---- Configuration & infrastructure ----
         let config = Config::from_env()?;
         let clock: Arc<dyn Clock> = Arc::new(SystemClock);
         let id_generator: Arc<dyn IdGenerator> = Arc::new(UuidGenerator);
@@ -165,23 +172,26 @@ impl AppState {
             config.ollama.base_url.clone(),
         ));
 
-        // ---- Shared event-sourcing infrastructure ----
         let event_bus = Arc::new(EventBus::new());
         let checkpoint_repository: Arc<dyn CheckpointRepository> =
             Arc::new(PostgresCheckpointRepository::new(pool.clone()));
         let mut wakeups: HashMap<String, Arc<Notify>> = HashMap::new();
 
-        // ---- Aggregate wirings (write side) ----
-        let configuration_wiring = build_aggregate_wiring::<Configuration>(&pool);
+        let embedding_model_wiring = build_aggregate_wiring::<EmbeddingModelCatalog>(&pool);
+        let generation_model_wiring = build_aggregate_wiring::<GenerationModelCatalog>(&pool);
+        let vector_index_wiring = build_aggregate_wiring::<VectorIndexCatalog>(&pool);
         let sweep_template_wiring = build_aggregate_wiring::<SweepTemplate>(&pool);
         let source_document_wiring = build_aggregate_wiring::<SourceDocument>(&pool);
         let indexing_wiring = build_aggregate_wiring::<Indexing>(&pool);
         let dataset_wiring = build_aggregate_wiring::<EvaluationDataset>(&pool);
         let run_wiring = build_aggregate_wiring::<EvaluationRun>(&pool);
 
-        // ---- Read-side repositories ----
-        let configuration_repository: Arc<dyn ConfigurationRepository> =
-            Arc::new(PostgresConfigurationRepository::new(pool.clone()));
+        let embedding_model_repository: Arc<dyn EmbeddingModelRepository> =
+            Arc::new(PostgresEmbeddingModelRepository::new(pool.clone()));
+        let generation_model_repository: Arc<dyn GenerationModelRepository> =
+            Arc::new(PostgresGenerationModelRepository::new(pool.clone()));
+        let vector_index_repository: Arc<dyn VectorIndexRepository> =
+            Arc::new(PostgresVectorIndexRepository::new(pool.clone()));
         let pipeline_configuration_repository: Arc<dyn PipelineConfigurationRepository> =
             Arc::new(PostgresPipelineConfigurationRepository::new(pool.clone()));
         let chunking_configuration_repository: Arc<dyn ChunkingConfigurationRepository> =
@@ -202,7 +212,6 @@ impl AppState {
         let embedding_set_repository: Arc<dyn EmbeddingSetRepository> =
             Arc::new(PostgresEmbeddingSetRepository::new(pool.clone()));
 
-        // ---- Domain engines & shared services ----
         let tokenizer = HuggingFaceTokenizer::load_or_fetch(tokenizer_path(), Arc::clone(&http))
             .await
             .map_err(|e| SetupError::Internal(format!("tokenizer: {e}")))?;
@@ -218,10 +227,8 @@ impl AppState {
                 OllamaEmbedder::new(Arc::clone(&ollama_api)) as Arc<dyn Embedder>,
             ),
         ]);
-        let embedding_service = EmbeddingService::new(
-            embedders,
-            Arc::clone(&configuration_wiring.aggregate_repository),
-        );
+        let embedding_service =
+            EmbeddingService::new(embedders, Arc::clone(&embedding_model_repository));
 
         let ollama_chat_client: Arc<dyn ChatClient> =
             OllamaChatClient::new(Arc::clone(&http), config.ollama.base_url.clone());
@@ -229,10 +236,8 @@ impl AppState {
             AiProviderKind::Ollama,
             Arc::clone(&ollama_chat_client) as Arc<dyn ChatClient>,
         )]);
-        let chat_service = ChatService::new(
-            chat_clients,
-            Arc::clone(&configuration_wiring.aggregate_repository),
-        );
+        let chat_service =
+            ChatService::new(chat_clients, Arc::clone(&generation_model_repository));
 
         let vector_providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>> =
             HashMap::from([
@@ -246,10 +251,8 @@ impl AppState {
                     PostgresVectorIndexProvider::new(pool.clone()) as Arc<dyn VectorIndexProvider>,
                 ),
             ]);
-        let vector_index_resolver = VectorIndexResolver::new(
-            vector_providers,
-            Arc::clone(&configuration_wiring.aggregate_repository),
-        );
+        let vector_index_resolver =
+            VectorIndexResolver::new(vector_providers, Arc::clone(&vector_index_repository));
 
         let pipeline_resolver = PipelineResolver::new(
             Arc::clone(&pipeline_configuration_repository),
@@ -268,16 +271,26 @@ impl AppState {
             tokenizer,
             Arc::clone(&markdown_parser),
             Arc::clone(&ollama_chat_client),
-            Arc::clone(&configuration_wiring.aggregate_repository),
+            Arc::clone(&generation_model_repository),
         );
 
         let job_registry = Arc::new(JobRegistry::new());
         let activity_registry = Arc::new(ActivityRegistry::new());
         spawn_activity_projection(Arc::clone(&activity_registry), Arc::clone(&event_bus));
 
-        // ---- Command handlers (thin wrappers over CommandProcessor) ----
-        let configuration_command_handler =
-            ConfigurationCommandHandler::new(Arc::clone(&configuration_wiring.command_processor));
+        let embedding_model_command_handler = EmbeddingModelCatalogCommandHandler::new(Arc::clone(
+            &embedding_model_wiring.command_processor,
+        ));
+        let generation_model_command_handler = GenerationModelCatalogCommandHandler::new(
+            Arc::clone(&generation_model_wiring.command_processor),
+        );
+        let vector_index_command_handler = VectorIndexCatalogCommandHandler::new(Arc::clone(
+            &vector_index_wiring.command_processor,
+        ));
+        let pipeline_configuration_service =
+            PipelineConfigurationService::new(Arc::clone(&pipeline_configuration_repository));
+        let chunking_configuration_service =
+            ChunkingConfigurationService::new(Arc::clone(&chunking_configuration_repository));
         let sweep_template_command_handler = SweepTemplateCommandHandler::new(
             Arc::clone(&sweep_template_wiring.command_processor),
             Arc::clone(&id_generator),
@@ -288,12 +301,16 @@ impl AppState {
         let indexing_command_handler =
             IndexingCommandHandler::new(Arc::clone(&indexing_wiring.command_processor));
 
-        // ---- Query services ----
-        let configuration_query_service =
-            ConfigurationQueryService::new(Arc::clone(&configuration_repository));
+        let configuration_query_service = ConfigurationQueryService::new(
+            Arc::clone(&embedding_model_repository),
+            Arc::clone(&generation_model_repository),
+            Arc::clone(&vector_index_repository),
+        );
         let pipeline_configuration_query_service = PipelineConfigurationQueryService::new(
             Arc::clone(&pipeline_configuration_repository),
-            Arc::clone(&configuration_repository),
+            Arc::clone(&embedding_model_repository),
+            Arc::clone(&generation_model_repository),
+            Arc::clone(&vector_index_repository),
         );
         let chunking_configuration_query_service =
             ChunkingConfigurationQueryService::new(Arc::clone(&chunking_configuration_repository));
@@ -304,20 +321,31 @@ impl AppState {
             Arc::clone(&evaluation_run_repository),
         );
 
-        // ---- Projection drivers (configuration, source_document, indexing have no effects) ----
-        spawn_driver::<Configuration, ()>(
-            Arc::clone(&configuration_wiring.event_store),
-            vec![
-                Arc::new(ConfigurationProjector::new(Arc::clone(
-                    &configuration_repository,
-                ))),
-                Arc::new(PipelineConfigurationProjector::new(Arc::clone(
-                    &pipeline_configuration_repository,
-                ))),
-                Arc::new(ChunkingConfigurationProjector::new(Arc::clone(
-                    &chunking_configuration_repository,
-                ))),
-            ],
+        spawn_driver::<EmbeddingModelCatalog, ()>(
+            Arc::clone(&embedding_model_wiring.event_store),
+            vec![Arc::new(EmbeddingModelProjector::new(Arc::clone(
+                &embedding_model_repository,
+            )))],
+            None,
+            Arc::clone(&checkpoint_repository),
+            Arc::clone(&event_bus),
+            &mut wakeups,
+        );
+        spawn_driver::<GenerationModelCatalog, ()>(
+            Arc::clone(&generation_model_wiring.event_store),
+            vec![Arc::new(GenerationModelProjector::new(Arc::clone(
+                &generation_model_repository,
+            )))],
+            None,
+            Arc::clone(&checkpoint_repository),
+            Arc::clone(&event_bus),
+            &mut wakeups,
+        );
+        spawn_driver::<VectorIndexCatalog, ()>(
+            Arc::clone(&vector_index_wiring.event_store),
+            vec![Arc::new(VectorIndexProjector::new(Arc::clone(
+                &vector_index_repository,
+            )))],
             None,
             Arc::clone(&checkpoint_repository),
             Arc::clone(&event_bus),
@@ -343,7 +371,7 @@ impl AppState {
             Arc::clone(&event_bus),
             &mut wakeups,
         );
-        // ---- Indexing pipeline (with process manager / effects) ----
+
         let indexing_effect_ledger: Arc<dyn EffectLedger<IndexingEffect>> =
             Arc::new(PostgresEffectLedger::<IndexingEffect>::new(pool.clone()));
 
@@ -395,7 +423,6 @@ impl AppState {
             &mut wakeups,
         );
 
-        // ---- Evaluation pipeline (with process managers / effects) ----
         let dataset_effect_ledger: Arc<dyn EffectLedger<EvaluationDatasetEffect>> = Arc::new(
             PostgresEffectLedger::<EvaluationDatasetEffect>::new(pool.clone()),
         );
@@ -473,7 +500,6 @@ impl AppState {
 
         spawn_postgres_event_listener(pool, wakeups);
 
-        // ---- Source document ingest pipeline ----
         let mut source_adapter_registry = SourceAdapterRegistry::new();
         source_adapter_registry.register(HttpBlogAdapter::new(
             Arc::clone(&http),
@@ -507,13 +533,16 @@ impl AppState {
         );
 
         let state = Self {
-            configuration_command_handler,
+            embedding_model_command_handler,
+            generation_model_command_handler,
+            vector_index_command_handler,
+            pipeline_configuration_service,
+            chunking_configuration_service,
             sweep_template_command_handler,
             configuration_query_service,
             pipeline_configuration_query_service,
             chunking_configuration_query_service,
             sweep_template_query_service,
-            configuration_repository,
             evaluation_dataset_command_processor: dataset_wiring.command_processor,
             evaluation_run_command_processor: run_wiring.command_processor,
             evaluation_query_service,
@@ -552,14 +581,14 @@ impl AppState {
         tokenizer: Arc<HuggingFaceTokenizer>,
         markdown_parser: Arc<dyn MarkdownParser>,
         chat_client: Arc<dyn ChatClient>,
-        configuration_repository: Arc<AggregateRepository<Configuration>>,
+        generation_models: Arc<dyn GenerationModelRepository>,
     ) -> Arc<ChunkerRegistry> {
         let mut chunking_engine = ChunkerRegistry::new(tokenizer, markdown_parser);
         register_builtin_chunkers(
             &mut chunking_engine,
             BuiltinChunkerDeps {
                 chat_client,
-                configuration_repository,
+                generation_models,
             },
         );
         Arc::new(chunking_engine)
@@ -570,7 +599,10 @@ impl AppState {
             &self.chunking_configuration_query_service,
             &self.sweep_template_query_service,
             &self.configuration_query_service,
-            &self.configuration_command_handler,
+            &self.embedding_model_command_handler,
+            &self.generation_model_command_handler,
+            &self.vector_index_command_handler,
+            &self.chunking_configuration_service,
             &self.sweep_template_command_handler,
         )
         .await
@@ -633,6 +665,5 @@ fn spawn_driver<A, R>(
     tokio::spawn(driver.run());
 }
 
-// Keep VectorIndex in scope for downstream re-exports.
 #[allow(dead_code)]
 fn _vector_index_imported(_: Arc<dyn VectorIndex>) {}

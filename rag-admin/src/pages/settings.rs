@@ -3,20 +3,77 @@ use leptos::task::spawn_local;
 
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
-use crate::pages::configuration::commands::{run_configuration_command, short_uuid};
+use crate::pages::configuration::commands::{
+    run_embedding_model_command, run_generation_model_command, run_vector_index_command,
+    short_uuid,
+};
 use crate::server_functions::configuration::get_configuration;
 use crate::server_functions::settings::{load_settings, save_settings};
 use crate::shared::{
     aggregate_type, AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
-    AiProviderKindDto, ConfigurationCommandDto, ConfigurationDto, EmbeddingModelDto,
-    EvaluationGenerationBackend, GenerationModelDto, RemoveEmbeddingModelDto,
-    RemoveGenerationModelDto, RemoveVectorIndexDto, SettingsDto, UpdateEmbeddingModelDto,
-    UpdateGenerationModelDto, UpdateVectorIndexDto, VectorIndexDto, VectorStoreKindDto,
+    AiProviderKindDto, ConfigurationDto, EmbeddingModelCommandDto, EmbeddingModelDto,
+    EvaluationGenerationBackend, GenerationModelCommandDto, GenerationModelDto,
+    RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto, SettingsDto,
+    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
+    VectorIndexCommandDto, VectorIndexDto, VectorStoreKindDto,
 };
+
+#[derive(Clone)]
+enum CatalogCommand {
+    Embedding(EmbeddingModelCommandDto),
+    Generation(GenerationModelCommandDto),
+    VectorIndex(VectorIndexCommandDto),
+}
+
+fn dispatch_catalog_command<F: FnOnce() + 'static>(
+    command: CatalogCommand,
+    success_message: &'static str,
+    set_busy: WriteSignal<bool>,
+    set_status: WriteSignal<Option<(bool, String)>>,
+    dialog_status: Option<WriteSignal<Option<String>>>,
+    set_refresh: WriteSignal<u32>,
+    on_success: F,
+) {
+    match command {
+        CatalogCommand::Embedding(cmd) => run_embedding_model_command(
+            cmd,
+            success_message,
+            set_busy,
+            set_status,
+            dialog_status,
+            set_refresh,
+            on_success,
+        ),
+        CatalogCommand::Generation(cmd) => run_generation_model_command(
+            cmd,
+            success_message,
+            set_busy,
+            set_status,
+            dialog_status,
+            set_refresh,
+            on_success,
+        ),
+        CatalogCommand::VectorIndex(cmd) => run_vector_index_command(
+            cmd,
+            success_message,
+            set_busy,
+            set_status,
+            dialog_status,
+            set_refresh,
+            on_success,
+        ),
+    }
+}
 
 #[component]
 pub fn SettingsPage() -> impl IntoView {
-    let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION]));
+    let invalidator = use_invalidator(|e| {
+        e.from_any(&[
+            aggregate_type::EMBEDDING_MODEL_CATALOG,
+            aggregate_type::GENERATION_MODEL_CATALOG,
+            aggregate_type::VECTOR_INDEX_CATALOG,
+        ])
+    });
     let (refresh, set_refresh) = signal(0u32);
 
     let configuration = Resource::new(
@@ -430,7 +487,7 @@ fn RegistryFormDialog(
                 return;
             }
         };
-        run_configuration_command(
+        dispatch_catalog_command(
             command,
             "Saved",
             set_busy,
@@ -591,23 +648,23 @@ fn RegistryDeleteDialog(
             return;
         };
         let command = match t {
-            DeleteTarget::EmbeddingModel(m) => {
-                ConfigurationCommandDto::RemoveEmbeddingModel(RemoveEmbeddingModelDto {
+            DeleteTarget::EmbeddingModel(m) => CatalogCommand::Embedding(
+                EmbeddingModelCommandDto::RemoveEmbeddingModel(RemoveEmbeddingModelDto {
                     model_id: m.embedding_model_id,
-                })
-            }
-            DeleteTarget::GenerationModel(m) => {
-                ConfigurationCommandDto::RemoveGenerationModel(RemoveGenerationModelDto {
+                }),
+            ),
+            DeleteTarget::GenerationModel(m) => CatalogCommand::Generation(
+                GenerationModelCommandDto::RemoveGenerationModel(RemoveGenerationModelDto {
                     model_id: m.generation_model_id,
-                })
-            }
-            DeleteTarget::VectorIndex(i) => {
-                ConfigurationCommandDto::RemoveVectorIndex(RemoveVectorIndexDto {
+                }),
+            ),
+            DeleteTarget::VectorIndex(i) => CatalogCommand::VectorIndex(
+                VectorIndexCommandDto::RemoveVectorIndex(RemoveVectorIndexDto {
                     index_id: i.index_id,
-                })
-            }
+                }),
+            ),
         };
-        run_configuration_command(
+        dispatch_catalog_command(
             command,
             "Deleted",
             set_busy,
@@ -880,7 +937,7 @@ fn build_command(
     vector_kind: VectorStoreKindDto,
     model_id: String,
     dims: u32,
-) -> Result<ConfigurationCommandDto, String> {
+) -> Result<CatalogCommand, String> {
     let name = name.trim().to_string();
     let model_id = model_id.trim().to_string();
     match form {
@@ -888,71 +945,73 @@ fn build_command(
             if model_id.is_empty() {
                 return Err("Model id is required.".into());
             }
-            Ok(ConfigurationCommandDto::AddEmbeddingModel(
-                AddEmbeddingModelDto {
+            Ok(CatalogCommand::Embedding(
+                EmbeddingModelCommandDto::AddEmbeddingModel(AddEmbeddingModelDto {
                     kind: ai_kind,
                     model: model_id,
                     dimensions: dims,
-                },
+                }),
             ))
         }
         RegistryForm::EditEmbeddingModel(m) => {
             if model_id.is_empty() {
                 return Err("Model id is required.".into());
             }
-            Ok(ConfigurationCommandDto::UpdateEmbeddingModel(
-                UpdateEmbeddingModelDto {
+            Ok(CatalogCommand::Embedding(
+                EmbeddingModelCommandDto::UpdateEmbeddingModel(UpdateEmbeddingModelDto {
                     model_id: m.embedding_model_id,
                     kind: ai_kind,
                     model: model_id,
                     dimensions: dims,
-                },
+                }),
             ))
         }
         RegistryForm::AddGenerationModel => {
             if model_id.is_empty() {
                 return Err("Model id is required.".into());
             }
-            Ok(ConfigurationCommandDto::AddGenerationModel(
-                AddGenerationModelDto {
+            Ok(CatalogCommand::Generation(
+                GenerationModelCommandDto::AddGenerationModel(AddGenerationModelDto {
                     kind: ai_kind,
                     model: model_id,
-                },
+                }),
             ))
         }
         RegistryForm::EditGenerationModel(m) => {
             if model_id.is_empty() {
                 return Err("Model id is required.".into());
             }
-            Ok(ConfigurationCommandDto::UpdateGenerationModel(
-                UpdateGenerationModelDto {
+            Ok(CatalogCommand::Generation(
+                GenerationModelCommandDto::UpdateGenerationModel(UpdateGenerationModelDto {
                     model_id: m.generation_model_id,
                     kind: ai_kind,
                     model: model_id,
-                },
+                }),
             ))
         }
         RegistryForm::AddVectorIndex => {
             if name.is_empty() {
                 return Err("Index name is required.".into());
             }
-            Ok(ConfigurationCommandDto::AddVectorIndex(AddVectorIndexDto {
-                kind: vector_kind,
-                name,
-                dimensions: dims,
-            }))
+            Ok(CatalogCommand::VectorIndex(
+                VectorIndexCommandDto::AddVectorIndex(AddVectorIndexDto {
+                    kind: vector_kind,
+                    name,
+                    dimensions: dims,
+                }),
+            ))
         }
         RegistryForm::EditVectorIndex(i) => {
             if name.is_empty() {
                 return Err("Index name is required.".into());
             }
-            Ok(ConfigurationCommandDto::UpdateVectorIndex(
-                UpdateVectorIndexDto {
+            Ok(CatalogCommand::VectorIndex(
+                VectorIndexCommandDto::UpdateVectorIndex(UpdateVectorIndexDto {
                     index_id: i.index_id,
                     kind: vector_kind,
                     name,
                     dimensions: dims,
-                },
+                }),
             ))
         }
     }

@@ -126,19 +126,39 @@ pub struct SetDefaultSweepTemplateDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
-pub enum ConfigurationCommandDto {
+pub enum EmbeddingModelCommandDto {
     AddEmbeddingModel(AddEmbeddingModelDto),
     UpdateEmbeddingModel(UpdateEmbeddingModelDto),
     RemoveEmbeddingModel(RemoveEmbeddingModelDto),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum GenerationModelCommandDto {
     AddGenerationModel(AddGenerationModelDto),
     UpdateGenerationModel(UpdateGenerationModelDto),
     RemoveGenerationModel(RemoveGenerationModelDto),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum VectorIndexCommandDto {
     AddVectorIndex(AddVectorIndexDto),
     UpdateVectorIndex(UpdateVectorIndexDto),
     RemoveVectorIndex(RemoveVectorIndexDto),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum PipelineConfigurationCommandDto {
     CreatePipelineConfiguration(CreatePipelineConfigurationDto),
     UpdatePipelineConfiguration(UpdatePipelineConfigurationDto),
     DeletePipelineConfiguration(DeletePipelineConfigurationDto),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum ChunkingConfigurationCommandDto {
     CreateChunkingConfiguration(CreateChunkingConfigurationDto),
     UpdateChunkingConfiguration(UpdateChunkingConfigurationDto),
     DeleteChunkingConfiguration(DeleteChunkingConfigurationDto),

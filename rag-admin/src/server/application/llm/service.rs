@@ -7,9 +7,8 @@ use crate::server::application::ports::{
     ChatClient, ChatRequest, ChatResponse, ChatResponseFormat,
 };
 use crate::server::application::AppError;
-use crate::server::domain::configuration::aggregate::Configuration;
+use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 use crate::server::domain::configuration::kinds::AiProviderKind;
-use crate::server::event_sourcing::{Aggregate, AggregateRepository};
 
 #[derive(Debug, Clone)]
 pub struct ResolvedGenerationModel {
@@ -28,17 +27,17 @@ pub struct ChatPrompt {
 
 pub struct ChatService {
     clients: HashMap<AiProviderKind, Arc<dyn ChatClient>>,
-    configuration_repository: Arc<AggregateRepository<Configuration>>,
+    generation_models: Arc<dyn GenerationModelRepository>,
 }
 
 impl ChatService {
     pub fn new(
         clients: HashMap<AiProviderKind, Arc<dyn ChatClient>>,
-        configuration_repository: Arc<AggregateRepository<Configuration>>,
+        generation_models: Arc<dyn GenerationModelRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             clients,
-            configuration_repository,
+            generation_models,
         })
     }
 
@@ -69,20 +68,10 @@ impl ChatService {
         &self,
         generation_model_id: Uuid,
     ) -> Result<ResolvedGenerationModel, AppError> {
-        let Some(loaded_aggregate) = self
-            .configuration_repository
-            .load(Configuration::singleton_id())
-            .await?
-        else {
-            return Err(AppError::NotFound(
-                Configuration::aggregate_type().to_string(),
-            ));
-        };
-        let model = loaded_aggregate
-            .aggregate
+        let model = self
             .generation_models
-            .iter()
-            .find(|m| m.generation_model_id == generation_model_id)
+            .find_by_id(generation_model_id)
+            .await?
             .ok_or_else(|| {
                 AppError::NotFound(format!(
                     "generation model {generation_model_id} not registered"
@@ -91,7 +80,7 @@ impl ChatService {
         Ok(ResolvedGenerationModel {
             generation_model_id: model.generation_model_id,
             kind: model.kind,
-            model: model.model.clone(),
+            model: model.model,
         })
     }
 }

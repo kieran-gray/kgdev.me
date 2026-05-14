@@ -23,8 +23,15 @@ pub fn IndexingsTab(
     let pipelines_stored = StoredValue::new(pipelines);
     let source_ref_stored = StoredValue::new(source_ref);
 
-    let invalidator =
-        use_invalidator(|e| e.from_any(&[aggregate_type::CONFIGURATION, aggregate_type::INDEXING]));
+    let invalidator = use_invalidator(|e| {
+        e.from_any(&[
+            aggregate_type::INDEXING,
+            aggregate_type::EMBEDDING_MODEL_CATALOG,
+            aggregate_type::GENERATION_MODEL_CATALOG,
+            aggregate_type::VECTOR_INDEX_CATALOG,
+            aggregate_type::SWEEP_TEMPLATE,
+        ])
+    });
     let chunking_configurations = Resource::new(
         move || invalidator.get(),
         |_| async move {
