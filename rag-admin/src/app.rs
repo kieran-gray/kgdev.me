@@ -5,9 +5,16 @@ use leptos_router::{
     ParamSegment, StaticSegment,
 };
 
-use crate::components::layout::Layout;
+use crate::components::event_bus::provide_event_bus;
+use crate::components::shell::AppShell;
 use crate::pages::{
-    embed_test::EmbedTestPage, post_detail::PostDetailPage, posts_list::PostsListPage,
+    chunking::ChunkingPage,
+    document_detail::{DatasetDetailPage, DocumentByIdRedirect, DocumentDetailPage, RunDetailPage},
+    embed_test::EmbedTestPage,
+    evaluations::EvaluationsPage,
+    pipelines::PipelinesPage,
+    playground::PlaygroundPage,
+    posts_list::PostsListPage,
     settings::SettingsPage,
 };
 
@@ -34,18 +41,46 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
+    provide_event_bus();
 
     view! {
-        <Title text="RAG Admin" />
+        <Title text="rag-admin" />
         <Router>
-            <Layout>
-                <Routes fallback=|| view! { <p class="p-8">"Page not found."</p> }>
+            <AppShell>
+                <Routes fallback=|| view! { <p class="p-8 muted">"Page not found."</p> }>
                     <Route path=StaticSegment("") view=PostsListPage />
-                    <Route path=(StaticSegment("posts"), ParamSegment("slug")) view=PostDetailPage />
+                    <Route
+                        path=(
+                            StaticSegment("documents"),
+                            StaticSegment("by-id"),
+                            ParamSegment("document_id"),
+                        )
+                        view=DocumentByIdRedirect
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("documents"),
+                            ParamSegment("doc_type"),
+                            ParamSegment("source_ref"),
+                        )
+                        view=DocumentDetailPage
+                    />
+                    <Route path=StaticSegment("evaluations") view=EvaluationsPage />
+                    <Route
+                        path=(StaticSegment("runs"), ParamSegment("run_id"))
+                        view=RunDetailPage
+                    />
+                    <Route
+                        path=(StaticSegment("datasets"), ParamSegment("dataset_id"))
+                        view=DatasetDetailPage
+                    />
+                    <Route path=StaticSegment("pipelines") view=PipelinesPage />
+                    <Route path=StaticSegment("chunking") view=ChunkingPage />
+                    <Route path=StaticSegment("playground") view=PlaygroundPage />
                     <Route path=StaticSegment("settings") view=SettingsPage />
                     <Route path=StaticSegment("embed") view=EmbedTestPage />
                 </Routes>
-            </Layout>
+            </AppShell>
         </Router>
     }
 }

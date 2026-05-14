@@ -24,9 +24,3 @@ pub struct IngestOptions {
     #[serde(default)]
     pub chunking_override: Option<ChunkingConfig>,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IngestJobInfo {
-    pub job_id: String,
-    pub stream_url: String,
-}

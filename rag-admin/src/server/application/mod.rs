@@ -1,13 +1,20 @@
-pub mod chunker;
+pub mod activity;
+pub mod chunking;
+pub mod configuration;
+pub mod embedding;
+pub mod evaluation;
 pub mod exceptions;
-pub mod ingest_log;
-pub mod job_registry;
+pub mod indexing;
+pub mod job;
+pub mod llm;
+pub mod markdown;
 pub mod ports;
-pub mod services;
+pub mod query;
+pub mod source_document;
 
 #[cfg(test)]
 pub mod test_support;
 
+pub use activity::{spawn_activity_projection, ActivityRegistry};
 pub use exceptions::AppError;
-pub use ingest_log::{IngestLogEvent, IngestLogLevel};
-pub use job_registry::{Job, JobRegistry};
+pub use job::{InternalLogEvent, InternalLogLevel, Job, JobMessage, JobRegistry};

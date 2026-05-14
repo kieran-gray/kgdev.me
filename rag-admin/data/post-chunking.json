@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "posts": {
+    "blog-view-counter": {
+      "section": {
+        "max_section_tokens": 256
+      }
+    },
+    "event-sourcing-cloudflare": {
+      "llm": {
+        "target_tokens": 384,
+        "min_tokens": 96,
+        "micro_chunk_tokens": 96,
+        "generation_model": "ministral-3:14b"
+      }
+    },
+    "quest-exactly-once-p1": {
+      "llm": {
+        "target_tokens": 384,
+        "min_tokens": 96,
+        "micro_chunk_tokens": 64,
+        "generation_model": "ministral-3:14b"
+      }
+    },
+    "quest-exactly-once-p2": {
+      "section": {
+        "max_section_tokens": 256
+      }
+    }
+  }
+}

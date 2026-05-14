@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_query_map;
 
-use crate::server_fns::embed_texts;
+use crate::server_functions::embed::embed_texts;
 use crate::shared::EmbedResult;
 
 #[component]
@@ -47,63 +47,73 @@ pub fn EmbedTestPage() -> impl IntoView {
     };
 
     view! {
-        <div class="space-y-6 max-w-6xl">
-            <div class="flex flex-col border-b border-[var(--color-border)] pb-4">
-                <h1 class="text-2xl font-bold tracking-tight uppercase">"EMBED_TESTER"</h1>
-                <p class="text-[10px] mt-2 font-mono opacity-50">
-                    "COMPUTE_COSINE_SIMILARITY"
-                </p>
+        <div class="space-y-8">
+            <div class="px-6 flex flex-col gap-1">
+                <span class="tech-label opacity-40">"SYSTEM_VIEW / EMBED_TEST"</span>
+                <h1 class="text-3xl font-bold tracking-tight">"SIMILARITY_LAB"</h1>
             </div>
 
-            <div class="card-outer p-4 flex flex-col sm:flex-row gap-4 items-center">
-                <label class="block flex-1 space-y-1.5">
-                    <div class="tech-label opacity-70">"MODEL_ID"</div>
-                    <input
-                        class="input font-mono text-sm"
-                        prop:value=model
-                        on:input=move |e| set_model.set(event_target_value(&e))
-                    />
-                    <div class="tech-label text-[9px] opacity-40">
-                        "> MODEL_NAME (e.g. qwen3-embedding:0.6b, @cf/baai/bge-base-en-v1.5)"
+            <div class="border-y border-[var(--color-border)] bg-[var(--color-card-inner)]/30">
+                <div class="px-6 py-6 flex flex-col sm:flex-row gap-6 items-end">
+                    <label class="block flex-1 space-y-2">
+                        <div class="tech-label opacity-70">"MODEL_ID"</div>
+                        <input
+                            class="input font-mono text-sm"
+                            prop:value=model
+                            on:input=move |e| set_model.set(event_target_value(&e))
+                        />
+                        <div class="tech-label text-[9px] opacity-40 italic">
+                            "> e.g. qwen3-embedding:0.6b, @cf/baai/bge-base-en-v1.5"
+                        </div>
+                    </label>
+                    <button
+                        class="btn btn-primary px-8 h-[42px]"
+                        disabled=move || loading.get()
+                        on:click=compute
+                    >
+                        {move || if loading.get() { "COMPUTING..." } else { "EXECUTE_TEST" }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-[var(--color-border)] border-y border-x border-[var(--color-border)]">
+                <div class="bg-[var(--color-page-bg)] px-6 py-6 space-y-3">
+                    <div class="flex items-center gap-2">
+                        <span class="tech-label">"01"</span>
+                        <span class="tech-label opacity-50">"SOURCE_A"</span>
                     </div>
-                </label>
-                <button
-                    class="btn btn-primary whitespace-nowrap"
-                    disabled=move || loading.get()
-                    on:click=compute
-                >
-                    {move || if loading.get() { "COMPUTING..." } else { "COMPUTE_SIMILARITY" }}
-                </button>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div class="card-outer p-4 space-y-2">
-                    <span class="tech-label">"input.text_a"</span>
                     <textarea
-                        class="input font-mono text-sm h-48 resize-y"
+                        class="input font-mono text-sm h-64 resize-y bg-black/20"
+                        placeholder="Enter text segment A..."
                         prop:value=text_a
                         on:input=move |e| set_text_a.set(event_target_value(&e))
                     />
                 </div>
-                <div class="card-outer p-4 space-y-2">
-                    <span class="tech-label">"input.text_b"</span>
+                <div class="bg-[var(--color-page-bg)] px-6 py-6 space-y-3">
+                    <div class="flex items-center gap-2">
+                        <span class="tech-label">"02"</span>
+                        <span class="tech-label opacity-50">"SOURCE_B"</span>
+                    </div>
                     <textarea
-                        class="input font-mono text-sm h-48 resize-y"
+                        class="input font-mono text-sm h-64 resize-y bg-black/20"
+                        placeholder="Enter text segment B..."
                         prop:value=text_b
                         on:input=move |e| set_text_b.set(event_target_value(&e))
                     />
                 </div>
             </div>
 
-            {move || {
-                error
-                    .get()
-                    .map(|e| {
-                        view! {
-                            <div class="card-outer p-4 log-line-error font-mono text-sm">{e}</div>
-                        }
-                    })
-            }}
+            <div class="px-6">
+                {move || {
+                    error
+                        .get()
+                        .map(|e| {
+                            view! {
+                                <div class="card-outer p-4 log-line-error font-mono text-xs bg-red-950/20">{e}</div>
+                            }
+                        })
+                }}
+            </div>
 
             {move || {
                 result
@@ -111,53 +121,47 @@ pub fn EmbedTestPage() -> impl IntoView {
                     .map(|r| {
                         let EmbedResult { dims, norm_a, norm_b, similarity } = r;
                         view! {
-                            <div class="card-outer p-6 space-y-6">
-                                <div class="flex flex-col">
-                                    <span class="tech-label">"output.similarity"</span>
+                            <div class="border-y border-[var(--color-border)] overflow-hidden">
+                                <div class="px-6 py-8 border-b border-[var(--color-border)] bg-[var(--color-card-inner)]/20">
+                                    <div class="flex flex-col items-center text-center">
+                                        <span class="tech-label opacity-40 mb-4">"COSINE_SIMILARITY_SCORE"</span>
+                                        <span class=format!(
+                                            "text-7xl font-mono font-bold tracking-tighter {}",
+                                            similarity_class(similarity),
+                                        )>{format!("{:.4}", similarity)}</span>
+                                        <span class=format!(
+                                            "tech-label mt-4 px-3 py-1 border border-current {}",
+                                            similarity_class(similarity),
+                                        )>{similarity_label(similarity)}</span>
+                                    </div>
                                 </div>
 
-                                <div class="flex flex-col items-center text-center py-4 border-b border-[var(--color-border)]">
-                                    <span class=format!(
-                                        "text-6xl font-mono font-bold {}",
-                                        similarity_class(similarity),
-                                    )>{format!("{:.4}", similarity)}</span>
-                                    <span class=format!(
-                                        "tech-label mt-3 {}",
-                                        similarity_class(similarity),
-                                    )>{similarity_label(similarity)}</span>
-                                    <p class="text-[10px] font-mono opacity-40 mt-3 max-w-md leading-relaxed">
-                                        "Cosine similarity measures the angle between two vectors in embedding space. \
-                                         1.0 = identical direction (same meaning), 0.0 = orthogonal (unrelated), −1.0 = opposite meaning."
-                                    </p>
-                                </div>
-
-                                <div class="space-y-3">
-                                    <div class="grid grid-cols-3 gap-0 border-x border-t border-[var(--color-border)]">
-                                        <div class="p-3 border-r border-b border-[var(--color-border)] bg-[var(--color-card-inner)]/50">
-                                            <div class="tech-label opacity-50 mb-1">"DIMENSIONS"</div>
-                                            <div class="font-mono text-xs font-bold truncate tracking-wider">
-                                                {dims.to_string()}
-                                            </div>
-                                        </div>
-                                        <div class="p-3 border-r border-b border-[var(--color-border)] bg-[var(--color-card-inner)]/50">
-                                            <div class="tech-label opacity-50 mb-1">"NORM_A"</div>
-                                            <div class=format!(
-                                                "font-mono text-xs font-bold truncate tracking-wider {}",
-                                                norm_class(norm_a),
-                                            )>{format!("{:.4}", norm_a)}</div>
-                                        </div>
-                                        <div class="p-3 border-r border-b border-[var(--color-border)] bg-[var(--color-card-inner)]/50">
-                                            <div class="tech-label opacity-50 mb-1">"NORM_B"</div>
-                                            <div class=format!(
-                                                "font-mono text-xs font-bold truncate tracking-wider {}",
-                                                norm_class(norm_b),
-                                            )>{format!("{:.4}", norm_b)}</div>
+                                <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[var(--color-border)]">
+                                    <div class="px-6 py-6 bg-[var(--color-card-inner)]/10">
+                                        <div class="tech-label opacity-40 mb-2">"VECTOR_DIMENSIONS"</div>
+                                        <div class="font-mono text-xl font-bold">
+                                            {dims.to_string()}
                                         </div>
                                     </div>
-                                    <p class="tech-label text-[9px] opacity-40">
-                                        "NORM: L2 magnitude of the embedding vector. \
-                                         Well-behaved models normalize to ~1.0. \
-                                         Values far from 1.0 may indicate a model misconfiguration."
+                                    <div class="px-6 py-6 bg-[var(--color-card-inner)]/10">
+                                        <div class="tech-label opacity-40 mb-2">"L2_NORM_A"</div>
+                                        <div class=format!(
+                                            "font-mono text-xl font-bold {}",
+                                            norm_class(norm_a),
+                                        )>{format!("{:.4}", norm_a)}</div>
+                                    </div>
+                                    <div class="px-6 py-6 bg-[var(--color-card-inner)]/10">
+                                        <div class="tech-label opacity-40 mb-2">"L2_NORM_B"</div>
+                                        <div class=format!(
+                                            "font-mono text-xl font-bold {}",
+                                            norm_class(norm_b),
+                                        )>{format!("{:.4}", norm_b)}</div>
+                                    </div>
+                                </div>
+
+                                <div class="px-6 py-4 bg-black/40 border-t border-[var(--color-border)]">
+                                    <p class="text-[10px] font-mono opacity-40 leading-relaxed text-center italic">
+                                        "PROTIP: Well-behaved models normalize to ~1.0. Significant deviation suggests misconfiguration."
                                     </p>
                                 </div>
                             </div>

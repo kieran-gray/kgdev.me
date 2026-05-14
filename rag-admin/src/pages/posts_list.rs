@@ -1,115 +1,178 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 
-use crate::server_fns::list_posts;
-use crate::shared::PostSummary;
+use crate::components::event_bus::use_invalidator;
+use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::server_functions::source_document::list_documents_with_status;
+use crate::shared::{aggregate_type, DocumentListItemDto};
 
 #[component]
 pub fn PostsListPage() -> impl IntoView {
-    let posts = Resource::new(|| (), |_| async move { list_posts().await });
+    let invalidator = use_invalidator(|e| {
+        e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
+    });
+    let docs = Resource::new(
+        move || invalidator.get(),
+        |_| async move { list_documents_with_status().await },
+    );
 
     view! {
-        <div class="space-y-6">
-            <div class="flex items-end justify-between border-b border-[var(--color-border)] pb-2">
-                <div class="flex flex-col">
-                    <h1 class="text-2xl font-bold tracking-tight">"BLOG_POSTS"</h1>
-                        <p class="text-[10px] mt-2 font-mono opacity-50">
-                            "MANAGE_POST_EMBEDDINGS"
-                        </p>
-                </div>
-            </div>
-            <Suspense fallback=|| view! { <p class="tech-label animate-pulse">"LOADING_DATA..."</p> }>
-                {move || {
-                    posts
-                        .get()
-                        .map(|res| match res {
-                            Ok(list) => view! { <PostsTable posts=list /> }.into_any(),
-                            Err(e) => {
-                                view! {
-                                    <div class="card-outer p-4 log-line-error font-mono text-sm">
-                                        {format!("ERROR_LOG: {e}")}
-                                    </div>
-                                }
-                                    .into_any()
-                            }
-                        })
-                }}
+        <div>
+            <PageHeader
+                title="Documents"
+                subtitle="Source documents discovered by the registered adapters.".to_string()
+                actions=Box::new(|| view! {
+
+
+
+                    <button class="btn btn-primary" disabled=true title="Coming soon">
+                        "+ Import"
+                    </button>
+                }.into_any())
+            />
+
+            <Suspense fallback=|| view! {
+                <Surface flush=true>
+                    <div class="p-6 muted text-sm">"Loading documents…"</div>
+                </Surface>
+            }>
+                {move || docs.get().map(|res| match res {
+                    Ok(list) if list.is_empty() => view! {
+                        <Surface>
+                            <EmptyState
+                                title="No documents yet"
+                                body="Import sources from the upstream blog or another adapter to begin.".to_string()
+                            />
+                        </Surface>
+                    }.into_any(),
+                    Ok(list) => view! { <DocumentsTable docs=list /> }.into_any(),
+                    Err(e) => view! {
+                        <Surface>
+                            <div class="log-line-error text-sm">{format!("Failed to load: {e}")}</div>
+                        </Surface>
+                    }.into_any(),
+                })}
             </Suspense>
         </div>
     }
 }
 
 #[component]
-fn PostsTable(posts: Vec<PostSummary>) -> impl IntoView {
-    if posts.is_empty() {
-        return view! { <div class="card-outer p-4 tech-label">"NO_RECORDS_FOUND"</div> }
-            .into_any();
-    }
-    let total_records = posts.len();
+fn DocumentsTable(docs: Vec<DocumentListItemDto>) -> impl IntoView {
+    let total = docs.len();
+    let indexed = docs
+        .iter()
+        .filter(|d| d.indexings.iter().any(|i| i.status.contains("Indexed")))
+        .count();
+    let failed = docs
+        .iter()
+        .filter(|d| d.indexings.iter().any(|i| i.status.contains("Failed")))
+        .count();
+    let in_progress = docs
+        .iter()
+        .filter(|d| {
+            d.document_id.is_some()
+                && !d.indexings.is_empty()
+                && d.indexings
+                    .iter()
+                    .all(|i| !i.status.contains("Indexed") && !i.status.contains("Failed"))
+        })
+        .count();
+
     view! {
-        <div class="card-outer overflow-hidden">
-            <table class="w-full text-sm border-collapse">
+        <Surface flush=true>
+            <table class="data-table">
                 <thead>
-                    <tr style="background-color: var(--color-card-inner);">
-                        <th class="text-left px-4 py-2 tech-label border-b border-[var(--color-border)]">"SLUG"</th>
-                        <th class="text-left px-4 py-2 tech-label border-b border-[var(--color-border)]">"TITLE"</th>
-                        <th class="text-left px-4 py-2 tech-label border-b border-[var(--color-border)]">"STATUS"</th>
-                        <th class="text-left px-4 py-2 tech-label border-b border-[var(--color-border)] text-center">"CHUNKS"</th>
-                        <th class="text-right px-4 py-2 tech-label border-b border-[var(--color-border)]">"LAST_INGESTED"</th>
+                    <tr>
+                        <th class="w-[36%]">"Title"</th>
+                        <th>"Type"</th>
+                        <th>"Status"</th>
+                        <th class="text-right">"Version"</th>
+                        <th class="w-8 text-right"></th>
                     </tr>
                 </thead>
                 <tbody>
-                    {posts
-                        .into_iter()
-                        .map(|p| {
-                            let status_label = if p.manifest_post_version.is_none() {
-                                ("NEVER_INGESTED", "text-amber-500")
-                            } else if p.is_dirty {
-                                ("DIRTY", "text-amber-500")
-                            } else {
-                                ("UP_TO_DATE", "text-emerald-500")
-                            };
-                            let chunks = p
-                                .manifest_chunk_count
-                                .map(|c| c.to_string())
-                                .unwrap_or_else(|| "00".into());
-                            let mut last = p
-                                .manifest_ingested_at
-                                .clone()
-                                .unwrap_or_else(|| "N/A".into());
-                            last.truncate(19);
-
-                            let href = format!("/posts/{}", p.slug);
-                            view! {
-                                <tr class="hover:bg-[var(--color-card-inner)] transition-colors group">
-                                    <td class="px-4 py-2 font-mono text-xs border-b border-[var(--color-border)]">
-                                        <A href=href.clone() attr:class="text-[var(--color-accent)]">
-                                            {format!("./{}", p.slug)}
-                                        </A>
-                                    </td>
-                                    <td class="px-4 py-2 font-medium border-b border-[var(--color-border)]">{p.title}</td>
-                                    <td class="px-4 py-2 border-b border-[var(--color-border)]">
-                                        <span class=format!("text-[10px] font-bold tracking-widest {}", status_label.1)>
-                                            {status_label.0}
-                                        </span>
-                                    </td>
-                                    <td class="px-4 py-2 font-mono text-xs text-center border-b border-[var(--color-border)]">
-                                        {format!("{:02}", chunks.parse::<i32>().unwrap_or(0))}
-                                    </td>
-                                    <td class="px-4 py-2 text-[10px] font-mono text-right border-b border-[var(--color-border)]" style="color: var(--color-muted);">
-                                        {last}
-                                    </td>
-                                </tr>
-                            }
-                        })
-                        .collect_view()}
+                    {docs.into_iter().map(|doc| view! { <DocumentRow doc /> }).collect_view()}
                 </tbody>
             </table>
-            <div class="px-4 py-1 bg-[var(--color-page-bg)] flex justify-between items-center border-t border-[var(--color-border)]">
-                <span class="tech-label opacity-50">{format!("TOTAL_RECORDS: {:03}", total_records)}</span>
-                <span class="tech-label opacity-50">"PAGE_01_OF_01"</span>
+            <div class="px-4 py-2.5 border-t border-[var(--color-border)] flex items-center gap-4 text-xs muted">
+                <span>{format!("{total} documents")}</span>
+                <span class="faint">"·"</span>
+                <span>{format!("{indexed} indexed")}</span>
+                {(in_progress > 0).then(|| view! {
+                    <>
+                        <span class="faint">"·"</span>
+                        <span style="color: var(--status-pending)">
+                            {format!("{in_progress} in progress")}
+                        </span>
+                    </>
+                })}
+                {(failed > 0).then(|| view! {
+                    <>
+                        <span class="faint">"·"</span>
+                        <span style="color: var(--status-fail)">
+                            {format!("{failed} failed")}
+                        </span>
+                    </>
+                })}
             </div>
-        </div>
+        </Surface>
     }
-        .into_any()
+}
+
+#[component]
+fn DocumentRow(doc: DocumentListItemDto) -> impl IntoView {
+    let href = format!(
+        "/documents/{}/{}",
+        doc.document_type.to_lowercase(),
+        doc.source_ref_key,
+    );
+    let (status_label, status_kind) = ingest_status(&doc);
+    let version_label = doc
+        .latest_version
+        .map(|v| format!("v{v}"))
+        .unwrap_or_else(|| "—".into());
+    let type_label = document_type_label(&doc.document_type).to_string();
+    let title = doc.title.clone();
+    let source_ref = doc.source_ref_key.clone();
+
+    view! {
+        <tr>
+            <td>
+                <A href=href.clone() attr:class="block">
+                    <div class="text-text font-medium">{title}</div>
+                    <div class="faint text-xs mt-0.5">{format!("./{source_ref}")}</div>
+                </A>
+            </td>
+            <td><span class="pill pill-neutral">{type_label}</span></td>
+            <td><StatusPill label=status_label kind=status_kind /></td>
+            <td class="text-right text-xs muted">{version_label}</td>
+            <td class="text-right faint">"›"</td>
+        </tr>
+    }
+}
+
+fn ingest_status(doc: &DocumentListItemDto) -> (String, Status) {
+    if doc.document_id.is_none() {
+        ("Not ingested".to_string(), Status::Stale)
+    } else if doc.indexings.is_empty() {
+        ("Registered".to_string(), Status::Info)
+    } else if doc.indexings.iter().any(|i| i.status.contains("Indexed")) {
+        ("Indexed".to_string(), Status::Ok)
+    } else if doc.indexings.iter().any(|i| i.status.contains("Failed")) {
+        ("Failed".to_string(), Status::Fail)
+    } else if doc.indexings.iter().any(|i| i.status.contains("Embedding")) {
+        ("Embedding".to_string(), Status::Pending)
+    } else if doc.indexings.iter().any(|i| i.status.contains("Chunking")) {
+        ("Chunking".to_string(), Status::Pending)
+    } else {
+        ("Pending".to_string(), Status::Pending)
+    }
+}
+
+fn document_type_label(doc_type: &str) -> &'static str {
+    match doc_type {
+        "BlogPost" => "Blog post",
+        _ => "Document",
+    }
 }

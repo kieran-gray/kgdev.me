@@ -3,7 +3,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "provider", rename_all = "lowercase")]
 pub enum VectorIndexConfig {
-    Cloudflare { name: String, dimensions: u32 },
+    Cloudflare {
+        name: String,
+        #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
+        dimensions: u32,
+    },
 }
 
 impl Default for VectorIndexConfig {

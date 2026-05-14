@@ -8,24 +8,23 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::Extension;
 use futures_util::stream::Stream;
 
-use crate::server::application::job_registry::JobMessage;
-use crate::server::setup::AppState;
+use crate::server::application::{JobMessage, JobRegistry};
 use crate::shared::LogEvent;
 
-pub async fn ingest_logs_handler(
+pub async fn job_logs_handler(
     Path(job_id): Path<String>,
-    Extension(state): Extension<Arc<AppState>>,
+    Extension(jobs): Extension<Arc<JobRegistry>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let stream = stream_for_job(state, job_id);
+    let stream = stream_for_job(jobs, job_id);
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
 
 fn stream_for_job(
-    state: Arc<AppState>,
+    jobs: Arc<JobRegistry>,
     job_id: String,
 ) -> impl Stream<Item = Result<Event, Infallible>> {
     stream! {
-        let job = state.job_registry.get(&job_id).await;
+        let job = jobs.get(&job_id).await;
         let Some(job) = job else {
             let payload = serde_json::to_string(&LogEvent {
                 level: crate::shared::LogLevel::Error,

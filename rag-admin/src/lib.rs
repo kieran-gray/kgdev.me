@@ -3,7 +3,7 @@
 pub mod app;
 pub mod components;
 pub mod pages;
-pub mod server_fns;
+pub mod server_functions;
 pub mod shared;
 
 #[cfg(feature = "ssr")]
