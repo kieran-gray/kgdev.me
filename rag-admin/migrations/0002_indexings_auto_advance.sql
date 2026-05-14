@@ -1,2 +1,0 @@
-ALTER TABLE indexings
-    ADD COLUMN auto_advance BOOLEAN NOT NULL DEFAULT TRUE;

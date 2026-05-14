@@ -5,17 +5,20 @@ use crate::shared::{
     SourceDocumentMarkdownDto,
 };
 
+#[cfg(feature = "ssr")]
+use crate::server::application::source_document::{
+    ports::SourceAdapterRegistry, SourceDocumentIngestService, SourceDocumentQueryService,
+};
+#[cfg(feature = "ssr")]
+use crate::server::domain::source_document::{document_type::DocumentType, source_ref::SourceRef};
+#[cfg(feature = "ssr")]
+use crate::server_functions::error::{ctx, map_app_error};
+#[cfg(feature = "ssr")]
+use std::sync::Arc;
+
 #[server(name = GetChunks, prefix = "/api", endpoint = "get_chunks")]
 pub async fn get_chunks(chunk_set_id: uuid::Uuid) -> Result<Vec<ChunkDto>, ServerFnError> {
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_query_service
+    ctx::<Arc<SourceDocumentQueryService>>()?
         .get_chunks(chunk_set_id)
         .await
         .map_err(map_app_error)
@@ -31,17 +34,9 @@ pub async fn start_source_document_ingest(
     pipeline_configuration_id: uuid::Uuid,
     chunking_config: ChunkingConfig,
 ) -> Result<uuid::Uuid, ServerFnError> {
-    use crate::server::domain::source_document::document_type::DocumentType;
-    use crate::server::domain::source_document::source_ref::SourceRef;
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
+    let ingest = ctx::<Arc<SourceDocumentIngestService>>()?;
 
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_ingest_service
+    ingest
         .import_document(
             SourceRef::UpstreamSlug {
                 slug: source_ref_slug.clone(),
@@ -51,8 +46,7 @@ pub async fn start_source_document_ingest(
         .await
         .map_err(map_app_error)?;
 
-    state
-        .source_document_ingest_service
+    ingest
         .request_indexing(
             SourceRef::UpstreamSlug {
                 slug: source_ref_slug,
@@ -73,17 +67,7 @@ pub async fn start_source_document_ingest(
 pub async fn import_source_document(
     source_ref_slug: String,
 ) -> Result<SourceDocumentDto, ServerFnError> {
-    use crate::server::domain::source_document::document_type::DocumentType;
-    use crate::server::domain::source_document::source_ref::SourceRef;
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_ingest_service
+    ctx::<Arc<SourceDocumentIngestService>>()?
         .import_document(
             SourceRef::UpstreamSlug {
                 slug: source_ref_slug,
@@ -105,16 +89,7 @@ pub async fn request_indexing(
     chunking_config: ChunkingConfig,
     auto_advance: bool,
 ) -> Result<uuid::Uuid, ServerFnError> {
-    use crate::server::domain::source_document::source_ref::SourceRef;
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_ingest_service
+    ctx::<Arc<SourceDocumentIngestService>>()?
         .request_indexing(
             SourceRef::UpstreamSlug {
                 slug: source_ref_slug,
@@ -129,15 +104,7 @@ pub async fn request_indexing(
 
 #[server(name = RequeueChunking, prefix = "/api", endpoint = "requeue_chunking")]
 pub async fn requeue_chunking(indexing_id: uuid::Uuid) -> Result<(), ServerFnError> {
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_ingest_service
+    ctx::<Arc<SourceDocumentIngestService>>()?
         .requeue_chunking(indexing_id)
         .await
         .map_err(map_app_error)
@@ -145,15 +112,7 @@ pub async fn requeue_chunking(indexing_id: uuid::Uuid) -> Result<(), ServerFnErr
 
 #[server(name = RequeueEmbedding, prefix = "/api", endpoint = "requeue_embedding")]
 pub async fn requeue_embedding(indexing_id: uuid::Uuid) -> Result<(), ServerFnError> {
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_ingest_service
+    ctx::<Arc<SourceDocumentIngestService>>()?
         .requeue_embedding(indexing_id)
         .await
         .map_err(map_app_error)
@@ -161,15 +120,7 @@ pub async fn requeue_embedding(indexing_id: uuid::Uuid) -> Result<(), ServerFnEr
 
 #[server(name = RequeueIndexing, prefix = "/api", endpoint = "requeue_indexing")]
 pub async fn requeue_indexing(indexing_id: uuid::Uuid) -> Result<(), ServerFnError> {
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_ingest_service
+    ctx::<Arc<SourceDocumentIngestService>>()?
         .requeue_indexing(indexing_id)
         .await
         .map_err(map_app_error)
@@ -181,24 +132,12 @@ pub async fn requeue_indexing(indexing_id: uuid::Uuid) -> Result<(), ServerFnErr
     endpoint = "list_documents_with_status"
 )]
 pub async fn list_documents_with_status() -> Result<Vec<DocumentListItemDto>, ServerFnError> {
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
+    let adapters = ctx::<Arc<SourceAdapterRegistry>>()?;
+    let query = ctx::<Arc<SourceDocumentQueryService>>()?;
 
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+    let available = adapters.list_all().await.map_err(map_app_error)?;
 
-    let available = state
-        .source_adapter_registry
-        .list_all()
-        .await
-        .map_err(map_app_error)?;
-
-    let existing: Vec<SourceDocumentDto> = state
-        .source_document_query_service
-        .list()
-        .await
-        .map_err(map_app_error)?;
+    let existing: Vec<SourceDocumentDto> = query.list().await.map_err(map_app_error)?;
 
     let mut existing_map: std::collections::HashMap<String, SourceDocumentDto> = existing
         .into_iter()
@@ -255,16 +194,7 @@ pub async fn list_documents_with_status() -> Result<Vec<DocumentListItemDto>, Se
 pub async fn get_document_detail_by_source_ref(
     source_ref_slug: String,
 ) -> Result<Option<SourceDocumentDetailDto>, ServerFnError> {
-    use crate::server::domain::source_document::source_ref::SourceRef;
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_query_service
+    ctx::<Arc<SourceDocumentQueryService>>()?
         .get_detail_by_source_ref(&SourceRef::UpstreamSlug {
             slug: source_ref_slug,
         })
@@ -280,15 +210,7 @@ pub async fn get_document_detail_by_source_ref(
 pub async fn get_document_detail_by_id(
     document_id: uuid::Uuid,
 ) -> Result<Option<SourceDocumentDetailDto>, ServerFnError> {
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_query_service
+    ctx::<Arc<SourceDocumentQueryService>>()?
         .get_detail(document_id)
         .await
         .map_err(map_app_error)
@@ -302,16 +224,7 @@ pub async fn get_document_detail_by_id(
 pub async fn get_document_source(
     source_ref_slug: String,
 ) -> Result<Option<SourceDocumentMarkdownDto>, ServerFnError> {
-    use crate::server::domain::source_document::source_ref::SourceRef;
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_query_service
+    ctx::<Arc<SourceDocumentQueryService>>()?
         .get_source_markdown(&SourceRef::UpstreamSlug {
             slug: source_ref_slug,
         })
@@ -325,15 +238,7 @@ pub async fn get_document_source(
     endpoint = "list_source_documents"
 )]
 pub async fn list_source_documents() -> Result<Vec<SourceDocumentDto>, ServerFnError> {
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_query_service
+    ctx::<Arc<SourceDocumentQueryService>>()?
         .list()
         .await
         .map_err(map_app_error)
@@ -347,15 +252,7 @@ pub async fn list_source_documents() -> Result<Vec<SourceDocumentDto>, ServerFnE
 pub async fn get_source_document_detail(
     document_id: uuid::Uuid,
 ) -> Result<Option<SourceDocumentDetailDto>, ServerFnError> {
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .source_document_query_service
+    ctx::<Arc<SourceDocumentQueryService>>()?
         .get_detail(document_id)
         .await
         .map_err(map_app_error)

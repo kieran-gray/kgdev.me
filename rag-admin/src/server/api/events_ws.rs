@@ -8,7 +8,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::server::setup::AppState;
+use crate::server::event_sourcing::event_bus::EventBus;
 
 #[derive(Debug, Deserialize)]
 pub struct EventsWsQuery {
@@ -16,15 +16,15 @@ pub struct EventsWsQuery {
 }
 
 pub async fn events_ws_handler(
-    Extension(state): Extension<Arc<AppState>>,
+    Extension(event_bus): Extension<Arc<EventBus>>,
     Query(query): Query<EventsWsQuery>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    ws.on_upgrade(move |socket| handle_socket(socket, state, query.stream_id))
+    ws.on_upgrade(move |socket| handle_socket(socket, event_bus, query.stream_id))
 }
 
-async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, stream_id: Option<Uuid>) {
-    let mut subscription = state.event_bus.subscribe();
+async fn handle_socket(mut socket: WebSocket, event_bus: Arc<EventBus>, stream_id: Option<Uuid>) {
+    let mut subscription = event_bus.subscribe();
 
     loop {
         let event = match subscription.recv().await {

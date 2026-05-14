@@ -6,6 +6,37 @@ use crate::shared::{
     EvaluationRunSummaryDto, RunEvaluationRequestDto,
 };
 
+#[cfg(feature = "ssr")]
+use crate::server::application::configuration::{ports::EvaluationDefaultsStore, PipelineResolver};
+#[cfg(feature = "ssr")]
+use crate::server::application::evaluation::query_service::EvaluationQueryService;
+#[cfg(feature = "ssr")]
+use crate::server::application::ports::{Clock, IdGenerator};
+#[cfg(feature = "ssr")]
+use crate::server::application::source_document::SourceDocumentQueryService;
+#[cfg(feature = "ssr")]
+use crate::server::domain::evaluation::dataset::{
+    aggregate::EvaluationDataset,
+    commands::{
+        DeleteDataset as DeleteDatasetCommand, EvaluationDatasetCommand,
+        RenameDataset as RenameDatasetCommand, RequestDatasetGeneration,
+    },
+};
+#[cfg(feature = "ssr")]
+use crate::server::domain::evaluation::run::{
+    aggregate::EvaluationRun,
+    commands::{EvaluationRunCommand, RequestRun},
+    scoring_policy::ScoringPolicy,
+};
+#[cfg(feature = "ssr")]
+use crate::server::event_sourcing::command_processor::CommandProcessor;
+#[cfg(feature = "ssr")]
+use crate::server::infrastructure::{id::UuidGenerator, time::SystemClock};
+#[cfg(feature = "ssr")]
+use crate::server_functions::error::ctx;
+#[cfg(feature = "ssr")]
+use std::sync::Arc;
+
 #[server(
     name = GetDatasetsForDocument,
     prefix = "/api",
@@ -14,14 +45,7 @@ use crate::shared::{
 pub async fn get_datasets_for_document(
     document_id: Uuid,
 ) -> Result<Vec<EvaluationDatasetSummaryDto>, ServerFnError> {
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    let datasets = state
-        .evaluation_query_service
+    let datasets = ctx::<Arc<EvaluationQueryService>>()?
         .list_datasets_for_document(document_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -40,21 +64,15 @@ pub async fn get_datasets_for_document(
 
 #[server(name = GetDataset, prefix = "/api", endpoint = "get_dataset")]
 pub async fn get_dataset(dataset_id: Uuid) -> Result<Option<EvaluationDatasetDto>, ServerFnError> {
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
+    let query = ctx::<Arc<EvaluationQueryService>>()?;
 
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    let dataset = state
-        .evaluation_query_service
+    let dataset = query
         .get_dataset(dataset_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     if let Some(d) = dataset {
-        let questions = state
-            .evaluation_query_service
+        let questions = query
             .load_questions(dataset_id)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -91,33 +109,23 @@ pub async fn start_generate_synthetic_dataset(
     pipeline_configuration_id: Uuid,
     label: String,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
-    use crate::server::application::ports::{Clock, IdGenerator};
-    use crate::server::domain::evaluation::dataset::commands::{
-        EvaluationDatasetCommand, RequestDatasetGeneration,
-    };
-    use crate::server::infrastructure::id::UuidGenerator;
-    use crate::server::infrastructure::time::SystemClock;
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
+    let defaults = ctx::<Arc<dyn EvaluationDefaultsStore>>()?;
+    let pipelines = ctx::<Arc<PipelineResolver>>()?;
+    let documents = ctx::<Arc<SourceDocumentQueryService>>()?;
+    let dataset_processor = ctx::<Arc<CommandProcessor<EvaluationDataset>>>()?;
 
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    let eval_settings = state
-        .evaluation_defaults_store
+    let eval_settings = defaults
         .load()
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .evaluation;
 
-    let pipeline = state
-        .pipeline_resolver
+    let pipeline = pipelines
         .resolve(pipeline_configuration_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let document = state
-        .source_document_query_service
+    let document = documents
         .get_detail(document_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
@@ -127,8 +135,7 @@ pub async fn start_generate_synthetic_dataset(
     let dataset_id = UuidGenerator.new_uuid();
     let occurred_at = SystemClock.now();
 
-    state
-        .evaluation_dataset_command_processor
+    dataset_processor
         .handle(
             dataset_id,
             EvaluationDatasetCommand::RequestDatasetGeneration(RequestDatasetGeneration {
@@ -159,22 +166,10 @@ pub async fn start_generate_synthetic_dataset(
 
 #[server(name = RenameDataset, prefix = "/api", endpoint = "rename_dataset")]
 pub async fn rename_dataset(dataset_id: Uuid, label: String) -> Result<(), ServerFnError> {
-    use crate::server::application::ports::Clock;
-    use crate::server::domain::evaluation::dataset::commands::{
-        EvaluationDatasetCommand, RenameDataset,
-    };
-    use crate::server::infrastructure::time::SystemClock;
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .evaluation_dataset_command_processor
+    ctx::<Arc<CommandProcessor<EvaluationDataset>>>()?
         .handle(
             dataset_id,
-            EvaluationDatasetCommand::RenameDataset(RenameDataset {
+            EvaluationDatasetCommand::RenameDataset(RenameDatasetCommand {
                 dataset_id,
                 label,
                 occurred_at: SystemClock.now(),
@@ -187,22 +182,10 @@ pub async fn rename_dataset(dataset_id: Uuid, label: String) -> Result<(), Serve
 
 #[server(name = DeleteDataset, prefix = "/api", endpoint = "delete_dataset")]
 pub async fn delete_dataset(dataset_id: Uuid) -> Result<(), ServerFnError> {
-    use crate::server::application::ports::Clock;
-    use crate::server::domain::evaluation::dataset::commands::{
-        DeleteDataset, EvaluationDatasetCommand,
-    };
-    use crate::server::infrastructure::time::SystemClock;
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    state
-        .evaluation_dataset_command_processor
+    ctx::<Arc<CommandProcessor<EvaluationDataset>>>()?
         .handle(
             dataset_id,
-            EvaluationDatasetCommand::DeleteDataset(DeleteDataset {
+            EvaluationDatasetCommand::DeleteDataset(DeleteDatasetCommand {
                 dataset_id,
                 occurred_at: SystemClock.now(),
             }),
@@ -220,19 +203,10 @@ pub async fn delete_dataset(dataset_id: Uuid) -> Result<(), ServerFnError> {
 pub async fn start_run_evaluation(
     request: RunEvaluationRequestDto,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
-    use crate::server::application::ports::Clock;
-    use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
-    use crate::server::domain::evaluation::run::commands::{EvaluationRunCommand, RequestRun};
-    use crate::server::domain::evaluation::run::scoring_policy::ScoringPolicy;
-    use crate::server::infrastructure::time::SystemClock;
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
+    let datasets = ctx::<Arc<EvaluationQueryService>>()?;
+    let run_processor = ctx::<Arc<CommandProcessor<EvaluationRun>>>()?;
 
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    let dataset = state
-        .evaluation_query_service
+    let dataset = datasets
         .get_dataset(request.dataset_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
@@ -253,8 +227,7 @@ pub async fn start_run_evaluation(
     );
     let occurred_at = SystemClock.now();
 
-    state
-        .evaluation_run_command_processor
+    run_processor
         .handle(
             run_id,
             EvaluationRunCommand::RequestRun(RequestRun {
@@ -287,14 +260,7 @@ pub async fn start_run_evaluation(
 pub async fn get_runs_for_document(
     document_id: Uuid,
 ) -> Result<Vec<EvaluationRunSummaryDto>, ServerFnError> {
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    let runs = state
-        .evaluation_query_service
+    let runs = ctx::<Arc<EvaluationQueryService>>()?
         .list_runs_for_document(document_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -313,14 +279,7 @@ pub async fn get_runs_for_document(
 
 #[server(name = GetRun, prefix = "/api", endpoint = "get_run")]
 pub async fn get_run(run_id: Uuid) -> Result<Option<EvaluationRunDto>, ServerFnError> {
-    use crate::server::setup::AppState;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    let run = state
-        .evaluation_query_service
+    let run = ctx::<Arc<EvaluationQueryService>>()?
         .get_run(run_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;

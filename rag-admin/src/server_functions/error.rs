@@ -1,5 +1,5 @@
 #[cfg(feature = "ssr")]
-pub use ssr::{map_app_error, map_setup_error};
+pub use ssr::{ctx, map_app_error, map_setup_error};
 
 #[cfg(feature = "ssr")]
 mod ssr {
@@ -9,6 +9,12 @@ mod ssr {
 
     use crate::server::application::AppError;
     use crate::server::setup::SetupError;
+
+    pub fn ctx<T: Clone + 'static>() -> Result<T, ServerFnError> {
+        use_context::<T>().ok_or_else(|| {
+            ServerFnError::new(format!("missing context: {}", std::any::type_name::<T>()))
+        })
+    }
 
     pub fn map_app_error(err: AppError) -> ServerFnError {
         let status = match &err {

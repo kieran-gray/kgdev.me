@@ -2,21 +2,22 @@ use leptos::prelude::*;
 
 use crate::shared::EmbedResult;
 
+#[cfg(feature = "ssr")]
+use crate::server::application::configuration::ConfigurationQueryService;
+#[cfg(feature = "ssr")]
+use crate::server::application::embedding::EmbeddingService;
+#[cfg(feature = "ssr")]
+use crate::server_functions::error::{ctx, map_app_error};
+#[cfg(feature = "ssr")]
+use std::sync::Arc;
+
 #[server(name = EmbedTexts, prefix = "/api", endpoint = "embed_texts")]
 pub async fn embed_texts(
     model: String,
     text_a: String,
     text_b: String,
 ) -> Result<EmbedResult, ServerFnError> {
-    use crate::server::setup::AppState;
-    use crate::server_functions::error::map_app_error;
-    use std::sync::Arc;
-
-    let state: Arc<AppState> =
-        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
-
-    let configuration = state
-        .configuration_query_service
+    let configuration = ctx::<Arc<ConfigurationQueryService>>()?
         .get()
         .await
         .map_err(map_app_error)?;
@@ -31,8 +32,7 @@ pub async fn embed_texts(
             ))
         })?;
 
-    state
-        .embedding_service
+    ctx::<Arc<EmbeddingService>>()?
         .embed_texts(embedding_model_id, &text_a, &text_b)
         .await
         .map_err(map_app_error)

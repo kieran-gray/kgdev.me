@@ -1,12 +1,4 @@
--- ───────────────────────────────────────────────────────────────────────────
--- Extensions
--- ───────────────────────────────────────────────────────────────────────────
-
 CREATE EXTENSION IF NOT EXISTS vector;
-
--- ───────────────────────────────────────────────────────────────────────────
--- Event sourcing core
--- ───────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE events (
     id BIGSERIAL PRIMARY KEY,
@@ -20,6 +12,7 @@ CREATE TABLE events (
 );
 
 CREATE INDEX events_stream_id_idx ON events (stream_id, position);
+
 CREATE INDEX events_aggregate_type_id_idx ON events (aggregate_type, id);
 
 CREATE TABLE aggregate_snapshots (
@@ -53,9 +46,14 @@ CREATE TABLE pending_effects (
     last_error TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX pending_effects_pending_idx
-    ON pending_effects (aggregate_type, status, attempts)
-    WHERE status IN ('pending', 'failed');
+
+CREATE INDEX pending_effects_pending_idx ON pending_effects (
+    aggregate_type,
+    status,
+    attempts
+)
+WHERE
+    status IN ('pending', 'failed');
 
 CREATE OR REPLACE FUNCTION notify_events_appended() RETURNS TRIGGER AS $$
 BEGIN
@@ -68,43 +66,74 @@ CREATE TRIGGER events_appended_trigger
     AFTER INSERT ON events
     FOR EACH ROW EXECUTE FUNCTION notify_events_appended();
 
--- ───────────────────────────────────────────────────────────────────────────
--- Configuration read model
--- ───────────────────────────────────────────────────────────────────────────
--- The configuration aggregate (singleton, id = uuid nil) is projected into a
--- single JSONB-wide row. Each embedding/generation model and vector index
--- carries its `kind` (AiProviderKind / VectorStoreKind) directly — there are
--- no separate provider entities.
-
-CREATE TABLE configuration (
+CREATE TABLE embedding_models (
     id UUID PRIMARY KEY,
-    embedding_models  JSONB NOT NULL DEFAULT '[]',
-    generation_models JSONB NOT NULL DEFAULT '[]',
-    vector_indexes    JSONB NOT NULL DEFAULT '[]',
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    kind TEXT NOT NULL,
+    model TEXT NOT NULL,
+    dimensions INTEGER NOT NULL CHECK (dimensions > 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (kind, model),
+    CONSTRAINT embedding_models_id_dimensions_uk UNIQUE (id, dimensions)
+);
+
+CREATE TABLE generation_models (
+    id UUID PRIMARY KEY,
+    kind TEXT NOT NULL,
+    model TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (kind, model)
+);
+
+CREATE TABLE vector_indexes (
+    id UUID PRIMARY KEY,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    dimensions INTEGER NOT NULL CHECK (dimensions > 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT vector_indexes_id_dimensions_uk UNIQUE (id, dimensions)
 );
 
 CREATE TABLE pipeline_configurations (
     id UUID PRIMARY KEY,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     embedding_model_id UUID NOT NULL,
-    generation_model_id UUID NOT NULL,
+    generation_model_id UUID NOT NULL REFERENCES generation_models (id) ON DELETE RESTRICT,
     vector_index_id UUID NOT NULL,
+    dimensions INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT pipeline_configurations_dimensions_positive CHECK (dimensions > 0),
+    CONSTRAINT pipeline_configurations_embedding_model_fk FOREIGN KEY (
+        embedding_model_id,
+        dimensions
+    ) REFERENCES embedding_models (id, dimensions) ON DELETE RESTRICT,
+    CONSTRAINT pipeline_configurations_vector_index_fk FOREIGN KEY (vector_index_id, dimensions) REFERENCES vector_indexes (id, dimensions) ON DELETE RESTRICT
 );
 
 CREATE TABLE chunking_configurations (
     id UUID PRIMARY KEY,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    generation_model_id UUID REFERENCES generation_models (id) ON DELETE RESTRICT,
     config JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ───────────────────────────────────────────────────────────────────────────
--- Source document read model
--- ───────────────────────────────────────────────────────────────────────────
+CREATE TABLE sweep_templates (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    members JSONB NOT NULL DEFAULT '[]',
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX sweep_templates_one_default ON sweep_templates (is_default)
+WHERE
+    is_default;
 
 CREATE TABLE source_documents (
     document_id UUID PRIMARY KEY,
@@ -117,6 +146,7 @@ CREATE TABLE source_documents (
     deleted BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
 CREATE INDEX source_documents_source_ref_idx ON source_documents USING GIN (source_ref);
 
 CREATE TABLE source_document_blobs (
@@ -124,10 +154,6 @@ CREATE TABLE source_document_blobs (
     bytes BYTEA NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
--- ───────────────────────────────────────────────────────────────────────────
--- Chunking / embedding / indexing
--- ───────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE indexings (
     indexing_id UUID PRIMARY KEY,
@@ -141,8 +167,10 @@ CREATE TABLE indexings (
     failure_stage TEXT,
     attempts INT NOT NULL,
     removed BOOLEAN NOT NULL DEFAULT FALSE,
+    auto_advance BOOLEAN NOT NULL DEFAULT TRUE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
 CREATE INDEX indexings_document_id_idx ON indexings (document_id);
 
 CREATE TABLE chunk_sets (
@@ -152,6 +180,7 @@ CREATE TABLE chunk_sets (
     chunking_config JSONB NOT NULL,
     created_at TEXT NOT NULL
 );
+
 CREATE INDEX chunk_sets_document_id_idx ON chunk_sets (document_id);
 
 CREATE TABLE chunks (
@@ -163,6 +192,7 @@ CREATE TABLE chunks (
     char_start INT NOT NULL,
     char_end INT NOT NULL
 );
+
 CREATE INDEX chunks_chunk_set_id_idx ON chunks (chunk_set_id, sequence);
 
 CREATE TABLE embedding_sets (
@@ -172,7 +202,10 @@ CREATE TABLE embedding_sets (
     embedding_model_snapshot JSONB NOT NULL,
     dimensions INT NOT NULL,
     created_at TEXT NOT NULL,
-    CONSTRAINT embedding_sets_chunk_model_unique UNIQUE (chunk_set_id, embedding_model_id)
+    CONSTRAINT embedding_sets_chunk_model_unique UNIQUE (
+        chunk_set_id,
+        embedding_model_id
+    )
 );
 
 CREATE TABLE chunk_embeddings (
@@ -181,11 +214,18 @@ CREATE TABLE chunk_embeddings (
     vec VECTOR NOT NULL,
     PRIMARY KEY (chunk_id, embedding_set_id)
 );
+
 CREATE INDEX chunk_embeddings_embedding_set_id_idx ON chunk_embeddings (embedding_set_id);
 
--- ───────────────────────────────────────────────────────────────────────────
--- Evaluation
--- ───────────────────────────────────────────────────────────────────────────
+CREATE TABLE vector_index_records (
+    index_name TEXT NOT NULL,
+    id TEXT NOT NULL,
+    vec VECTOR NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    PRIMARY KEY (index_name, id)
+);
+
+CREATE INDEX vector_index_records_index_name_idx ON vector_index_records (index_name);
 
 CREATE TABLE evaluation_datasets (
     dataset_id UUID PRIMARY KEY,
@@ -207,10 +247,12 @@ CREATE TABLE evaluation_datasets (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
 CREATE INDEX evaluation_datasets_document_id_idx ON evaluation_datasets (document_id);
-CREATE INDEX evaluation_datasets_deleted_at_idx
-    ON evaluation_datasets (deleted_at)
-    WHERE deleted_at IS NULL;
+
+CREATE INDEX evaluation_datasets_deleted_at_idx ON evaluation_datasets (deleted_at)
+WHERE
+    deleted_at IS NULL;
 
 CREATE TABLE evaluation_questions (
     dataset_id UUID NOT NULL REFERENCES evaluation_datasets (dataset_id) ON DELETE CASCADE,
@@ -228,9 +270,12 @@ CREATE TABLE evaluation_references (
     char_start INT NOT NULL,
     char_end INT NOT NULL,
     embedding JSONB,
-    PRIMARY KEY (dataset_id, question_sequence, sequence),
-    FOREIGN KEY (dataset_id, question_sequence)
-        REFERENCES evaluation_questions (dataset_id, sequence) ON DELETE CASCADE
+    PRIMARY KEY (
+        dataset_id,
+        question_sequence,
+        sequence
+    ),
+    FOREIGN KEY (dataset_id, question_sequence) REFERENCES evaluation_questions (dataset_id, sequence) ON DELETE CASCADE
 );
 
 CREATE TABLE evaluation_runs (
@@ -254,7 +299,9 @@ CREATE TABLE evaluation_runs (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
 CREATE INDEX evaluation_runs_document_id_idx ON evaluation_runs (document_id);
+
 CREATE INDEX evaluation_runs_dataset_id_idx ON evaluation_runs (dataset_id);
 
 CREATE TABLE evaluation_variant_results (
@@ -287,7 +334,17 @@ CREATE TABLE retrieval_traces (
     recall REAL NOT NULL,
     precision REAL NOT NULL,
     iou REAL NOT NULL,
-    PRIMARY KEY (run_id, variant_label, split, question_sequence),
-    FOREIGN KEY (run_id, variant_label, split)
-        REFERENCES evaluation_variant_results (run_id, variant_label, split) ON DELETE CASCADE
+    PRIMARY KEY (
+        run_id,
+        variant_label,
+        split,
+        question_sequence
+    ),
+    FOREIGN KEY (run_id, variant_label, split) REFERENCES evaluation_variant_results (run_id, variant_label, split) ON DELETE CASCADE
+);
+
+CREATE TABLE kv_store (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

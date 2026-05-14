@@ -1,10 +1,9 @@
-pub mod app_state;
 pub mod compose;
 pub mod config;
 pub mod exceptions;
 pub mod paths;
 pub mod seed;
 
-pub use app_state::AppState;
+pub use compose::{bootstrap, App};
 pub use config::Config;
 pub use exceptions::SetupError;
