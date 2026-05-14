@@ -36,5 +36,3 @@ services/*/node_modules/
 web/node_modules/
 
 .codex
-settings.toml
-rag-admin/data/evaluations/*
