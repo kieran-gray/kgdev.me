@@ -27,13 +27,6 @@ use crate::server::{
             },
             PipelineConfiguration, PipelineConfigurationValidator,
         },
-        sweep_template::{
-            events::{
-                SweepTemplateCreated, SweepTemplateDefaultSet, SweepTemplateDeleted,
-                SweepTemplateUpdated,
-            },
-            SweepTemplate,
-        },
         vector_index::{VectorIndex, VectorIndexAdded, VectorIndexRemoved, VectorIndexUpdated},
     },
     event_sourcing::Aggregate,
@@ -47,8 +40,6 @@ pub struct Configuration {
     pub vector_indexes: Vec<VectorIndex>,
     pub pipeline_configurations: Vec<PipelineConfiguration>,
     pub chunking_configurations: Vec<ChunkingConfiguration>,
-    pub sweep_templates: Vec<SweepTemplate>,
-    pub default_sweep_template_id: Option<Uuid>,
 }
 
 impl Aggregate for Configuration {
@@ -176,33 +167,6 @@ impl Aggregate for Configuration {
             Self::Event::ChunkingConfigurationDeleted(e) => {
                 self.chunking_configurations
                     .retain(|cc| cc.chunking_configuration_id != e.chunking_configuration_id);
-            }
-            Self::Event::SweepTemplateCreated(e) => {
-                self.sweep_templates.push(SweepTemplate {
-                    sweep_template_id: e.sweep_template_id,
-                    name: e.name.clone(),
-                    members: e.members.clone(),
-                });
-            }
-            Self::Event::SweepTemplateUpdated(e) => {
-                if let Some(st) = self
-                    .sweep_templates
-                    .iter_mut()
-                    .find(|st| st.sweep_template_id == e.sweep_template_id)
-                {
-                    st.name = e.name.clone();
-                    st.members = e.members.clone();
-                }
-            }
-            Self::Event::SweepTemplateDeleted(e) => {
-                self.sweep_templates
-                    .retain(|st| st.sweep_template_id != e.sweep_template_id);
-                if self.default_sweep_template_id == Some(e.sweep_template_id) {
-                    self.default_sweep_template_id = None;
-                }
-            }
-            Self::Event::SweepTemplateDefaultSet(e) => {
-                self.default_sweep_template_id = Some(e.sweep_template_id);
             }
         }
     }
@@ -417,45 +381,6 @@ impl Aggregate for Configuration {
                 )]
             }
 
-            Self::Command::CreateSweepTemplate(cmd) => {
-                Self::validate_non_empty("sweep template name", &cmd.name)?;
-                Self::ensure_unique_sweep_template_name(state, &cmd.name, None)?;
-                Self::validate_sweep_template_members(state, &cmd.members)?;
-                vec![Self::Event::SweepTemplateCreated(SweepTemplateCreated {
-                    sweep_template_id: Uuid::new_v4(),
-                    name: cmd.name,
-                    members: cmd.members,
-                })]
-            }
-            Self::Command::UpdateSweepTemplate(cmd) => {
-                Self::find_sweep_template(state, cmd.sweep_template_id)?;
-                Self::validate_non_empty("sweep template name", &cmd.name)?;
-                Self::ensure_unique_sweep_template_name(
-                    state,
-                    &cmd.name,
-                    Some(cmd.sweep_template_id),
-                )?;
-                Self::validate_sweep_template_members(state, &cmd.members)?;
-                vec![Self::Event::SweepTemplateUpdated(SweepTemplateUpdated {
-                    sweep_template_id: cmd.sweep_template_id,
-                    name: cmd.name,
-                    members: cmd.members,
-                })]
-            }
-            Self::Command::DeleteSweepTemplate(cmd) => {
-                Self::find_sweep_template(state, cmd.sweep_template_id)?;
-                vec![Self::Event::SweepTemplateDeleted(SweepTemplateDeleted {
-                    sweep_template_id: cmd.sweep_template_id,
-                })]
-            }
-            Self::Command::SetDefaultSweepTemplate(cmd) => {
-                Self::find_sweep_template(state, cmd.sweep_template_id)?;
-                vec![Self::Event::SweepTemplateDefaultSet(
-                    SweepTemplateDefaultSet {
-                        sweep_template_id: cmd.sweep_template_id,
-                    },
-                )]
-            }
         };
         bootstrap_events.append(&mut events);
         Ok(bootstrap_events)
@@ -492,8 +417,6 @@ impl Configuration {
             vector_indexes: Vec::new(),
             pipeline_configurations: Vec::new(),
             chunking_configurations: Vec::new(),
-            sweep_templates: Vec::new(),
-            default_sweep_template_id: None,
         }
     }
 
@@ -584,50 +507,6 @@ impl Configuration {
                 "model id '{model_id}' is not well-formed for provider kind {}",
                 kind.as_str()
             )));
-        }
-        Ok(())
-    }
-
-    fn find_sweep_template(&self, id: Uuid) -> Result<&SweepTemplate, ConfigurationError> {
-        self.sweep_templates
-            .iter()
-            .find(|st| st.sweep_template_id == id)
-            .ok_or(ConfigurationError::NotFound)
-    }
-
-    fn ensure_unique_sweep_template_name(
-        &self,
-        name: &str,
-        sweep_template_id: Option<Uuid>,
-    ) -> Result<(), ConfigurationError> {
-        if self
-            .sweep_templates
-            .iter()
-            .any(|st| st.name == name && Some(st.sweep_template_id) != sweep_template_id)
-        {
-            return Err(ConfigurationError::ValidationError(format!(
-                "Sweep template with name {name} already exists"
-            )));
-        }
-        Ok(())
-    }
-
-    fn validate_sweep_template_members(&self, members: &[Uuid]) -> Result<(), ConfigurationError> {
-        if members.is_empty() {
-            return Err(ConfigurationError::ValidationError(
-                "Sweep template must include at least one chunking configuration".into(),
-            ));
-        }
-        for id in members {
-            if !self
-                .chunking_configurations
-                .iter()
-                .any(|cc| cc.chunking_configuration_id == *id)
-            {
-                return Err(ConfigurationError::ValidationError(format!(
-                    "Sweep template references unknown chunking configuration {id}"
-                )));
-            }
         }
         Ok(())
     }

@@ -142,6 +142,11 @@ pub enum ConfigurationCommandDto {
     CreateChunkingConfiguration(CreateChunkingConfigurationDto),
     UpdateChunkingConfiguration(UpdateChunkingConfigurationDto),
     DeleteChunkingConfiguration(DeleteChunkingConfigurationDto),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum SweepTemplateCommandDto {
     CreateSweepTemplate(CreateSweepTemplateDto),
     UpdateSweepTemplate(UpdateSweepTemplateDto),
     DeleteSweepTemplate(DeleteSweepTemplateDto),

@@ -2,7 +2,7 @@ use leptos::prelude::*;
 
 use crate::shared::{
     ChunkingConfigurationDto, ConfigurationCommandDto, ConfigurationDto, PipelineConfigurationDto,
-    SweepTemplateDto,
+    SweepTemplateCommandDto, SweepTemplateDto,
 };
 
 #[server(
@@ -102,6 +102,28 @@ pub async fn apply_configuration_command(
 
     state
         .configuration_command_handler
+        .handle_dto(command)
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = ApplySweepTemplateCommand,
+    prefix = "/api",
+    endpoint = "apply_sweep_template_command"
+)]
+pub async fn apply_sweep_template_command(
+    command: SweepTemplateCommandDto,
+) -> Result<(), ServerFnError> {
+    use crate::server::setup::AppState;
+    use crate::server_functions::error::map_app_error;
+    use std::sync::Arc;
+
+    let state: Arc<AppState> =
+        use_context::<Arc<AppState>>().ok_or_else(|| ServerFnError::new("missing app state"))?;
+
+    state
+        .sweep_template_command_handler
         .handle_dto(command)
         .await
         .map_err(map_app_error)

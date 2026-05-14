@@ -3,7 +3,9 @@ use uuid::Uuid;
 
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
-use crate::pages::configuration::commands::{parse_uuid_or_none, run_configuration_command};
+use crate::pages::configuration::commands::{
+    parse_uuid_or_none, run_configuration_command, run_sweep_template_command,
+};
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_configuration, get_sweep_templates,
 };
@@ -11,8 +13,8 @@ use crate::shared::{
     aggregate_type, BertChunkingConfig, ChunkStrategy, ChunkingConfig, ChunkingConfigurationDto,
     ConfigurationCommandDto, ConfigurationDto, CreateChunkingConfigurationDto,
     CreateSweepTemplateDto, DeleteChunkingConfigurationDto, DeleteSweepTemplateDto,
-    LlmChunkingConfig, SectionChunkingConfig, SetDefaultSweepTemplateDto, SweepTemplateDto,
-    UpdateChunkingConfigurationDto, UpdateSweepTemplateDto,
+    LlmChunkingConfig, SectionChunkingConfig, SetDefaultSweepTemplateDto, SweepTemplateCommandDto,
+    SweepTemplateDto, UpdateChunkingConfigurationDto, UpdateSweepTemplateDto,
 };
 
 #[derive(Clone)]
@@ -161,8 +163,8 @@ pub fn ChunkingPage() -> impl IntoView {
                             on_edit=Callback::new(move |st: SweepTemplateDto| set_sweep_form_mode.set(Some(SweepFormMode::Edit(st))))
                             on_delete=Callback::new(move |st: SweepTemplateDto| set_sweep_delete_target.set(Some(st)))
                             on_set_default=Callback::new(move |st: SweepTemplateDto| {
-                                run_configuration_command(
-                                    ConfigurationCommandDto::SetDefaultSweepTemplate(SetDefaultSweepTemplateDto {
+                                run_sweep_template_command(
+                                    SweepTemplateCommandDto::SetDefaultSweepTemplate(SetDefaultSweepTemplateDto {
                                         sweep_template_id: st.sweep_template_id,
                                     }),
                                     "Default sweep template set",
@@ -174,8 +176,8 @@ pub fn ChunkingPage() -> impl IntoView {
                                 );
                             })
                             on_duplicate=Callback::new(move |st: SweepTemplateDto| {
-                                run_configuration_command(
-                                    ConfigurationCommandDto::CreateSweepTemplate(CreateSweepTemplateDto {
+                                run_sweep_template_command(
+                                    SweepTemplateCommandDto::CreateSweepTemplate(CreateSweepTemplateDto {
                                         name: format!("{}-copy", st.name),
                                         members: st.members,
                                     }),
@@ -865,14 +867,12 @@ fn SweepTemplateFormDialog(
             return;
         }
         let command = match form_mode.get() {
-            Some(SweepFormMode::Add) => {
-                ConfigurationCommandDto::CreateSweepTemplate(CreateSweepTemplateDto {
-                    name: name_val,
-                    members,
-                })
-            }
+            Some(SweepFormMode::Add) => SweepTemplateCommandDto::CreateSweepTemplate(CreateSweepTemplateDto {
+                name: name_val,
+                members,
+            }),
             Some(SweepFormMode::Edit(t)) => {
-                ConfigurationCommandDto::UpdateSweepTemplate(UpdateSweepTemplateDto {
+                SweepTemplateCommandDto::UpdateSweepTemplate(UpdateSweepTemplateDto {
                     sweep_template_id: t.sweep_template_id,
                     name: name_val,
                     members,
@@ -880,7 +880,7 @@ fn SweepTemplateFormDialog(
             }
             None => return,
         };
-        run_configuration_command(
+        run_sweep_template_command(
             command,
             "Sweep template saved",
             set_busy,
@@ -1003,8 +1003,8 @@ fn SweepTemplateDeleteDialog(
         let Some(t) = target.get_untracked() else {
             return;
         };
-        run_configuration_command(
-            ConfigurationCommandDto::DeleteSweepTemplate(DeleteSweepTemplateDto {
+        run_sweep_template_command(
+            SweepTemplateCommandDto::DeleteSweepTemplate(DeleteSweepTemplateDto {
                 sweep_template_id: t.sweep_template_id,
             }),
             "Sweep template deleted",

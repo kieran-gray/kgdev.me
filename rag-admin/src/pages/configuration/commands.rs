@@ -2,8 +2,8 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use uuid::Uuid;
 
-use crate::server_functions::configuration::apply_configuration_command;
-use crate::shared::ConfigurationCommandDto;
+use crate::server_functions::configuration::{apply_configuration_command, apply_sweep_template_command};
+use crate::shared::{ConfigurationCommandDto, SweepTemplateCommandDto};
 
 pub fn parse_uuid_or_none(value: &str) -> Option<Uuid> {
     Uuid::parse_str(value).ok()
@@ -24,13 +24,58 @@ pub fn run_configuration_command<F>(
 ) where
     F: FnOnce() + 'static,
 {
+    run_command(
+        async move { apply_configuration_command(command).await.map(|_| ()) },
+        success_message,
+        set_busy,
+        set_status,
+        dialog_status,
+        set_refresh,
+        on_success,
+    );
+}
+
+pub fn run_sweep_template_command<F>(
+    command: SweepTemplateCommandDto,
+    success_message: &'static str,
+    set_busy: WriteSignal<bool>,
+    set_status: WriteSignal<Option<(bool, String)>>,
+    dialog_status: Option<WriteSignal<Option<String>>>,
+    set_refresh: WriteSignal<u32>,
+    on_success: F,
+) where
+    F: FnOnce() + 'static,
+{
+    run_command(
+        async move { apply_sweep_template_command(command).await.map(|_| ()) },
+        success_message,
+        set_busy,
+        set_status,
+        dialog_status,
+        set_refresh,
+        on_success,
+    );
+}
+
+fn run_command<Fut, F>(
+    future: Fut,
+    success_message: &'static str,
+    set_busy: WriteSignal<bool>,
+    set_status: WriteSignal<Option<(bool, String)>>,
+    dialog_status: Option<WriteSignal<Option<String>>>,
+    set_refresh: WriteSignal<u32>,
+    on_success: F,
+) where
+    Fut: std::future::Future<Output = Result<(), ServerFnError>> + 'static,
+    F: FnOnce() + 'static,
+{
     set_busy.set(true);
     set_status.set(None);
     if let Some(ds) = dialog_status {
         ds.set(None);
     }
     spawn_local(async move {
-        match apply_configuration_command(command).await {
+        match future.await {
             Ok(()) => {
                 if let Some(ds) = dialog_status {
                     ds.set(None);

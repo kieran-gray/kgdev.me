@@ -14,7 +14,8 @@ use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::ports::EvaluationDefaultsStore;
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ConfigurationCommandHandler, ConfigurationQueryService,
-    PipelineConfigurationQueryService, PipelineResolver, SweepTemplateQueryService,
+    PipelineConfigurationQueryService, PipelineResolver, SweepTemplateCommandHandler,
+    SweepTemplateQueryService,
 };
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::embedding::EmbeddingService;
@@ -54,7 +55,7 @@ use crate::server::domain::configuration::pipeline_configuration::{
 };
 use crate::server::domain::configuration::projector::ConfigurationProjector;
 use crate::server::domain::configuration::sweep_template::{
-    SweepTemplateProjector, SweepTemplateRepository,
+    SweepTemplate, SweepTemplateProjector, SweepTemplateRepository,
 };
 use crate::server::domain::configuration::ConfigurationRepository;
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepository;
@@ -120,6 +121,7 @@ use crate::server::setup::seed::seed_if_empty;
 
 pub struct AppState {
     pub configuration_command_handler: Arc<ConfigurationCommandHandler>,
+    pub sweep_template_command_handler: Arc<SweepTemplateCommandHandler>,
     pub configuration_query_service: Arc<ConfigurationQueryService>,
     pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
     pub chunking_configuration_query_service: Arc<ChunkingConfigurationQueryService>,
@@ -171,6 +173,7 @@ impl AppState {
 
         // ---- Aggregate wirings (write side) ----
         let configuration_wiring = build_aggregate_wiring::<Configuration>(&pool);
+        let sweep_template_wiring = build_aggregate_wiring::<SweepTemplate>(&pool);
         let source_document_wiring = build_aggregate_wiring::<SourceDocument>(&pool);
         let indexing_wiring = build_aggregate_wiring::<Indexing>(&pool);
         let dataset_wiring = build_aggregate_wiring::<EvaluationDataset>(&pool);
@@ -275,6 +278,10 @@ impl AppState {
         // ---- Command handlers (thin wrappers over CommandProcessor) ----
         let configuration_command_handler =
             ConfigurationCommandHandler::new(Arc::clone(&configuration_wiring.command_processor));
+        let sweep_template_command_handler = SweepTemplateCommandHandler::new(
+            Arc::clone(&sweep_template_wiring.command_processor),
+            Arc::clone(&id_generator),
+        );
         let source_document_command_handler = SourceDocumentCommandHandler::new(Arc::clone(
             &source_document_wiring.command_processor,
         ));
@@ -310,10 +317,17 @@ impl AppState {
                 Arc::new(ChunkingConfigurationProjector::new(Arc::clone(
                     &chunking_configuration_repository,
                 ))),
-                Arc::new(SweepTemplateProjector::new(Arc::clone(
-                    &sweep_template_repository,
-                ))),
             ],
+            None,
+            Arc::clone(&checkpoint_repository),
+            Arc::clone(&event_bus),
+            &mut wakeups,
+        );
+        spawn_driver::<SweepTemplate, ()>(
+            Arc::clone(&sweep_template_wiring.event_store),
+            vec![Arc::new(SweepTemplateProjector::new(Arc::clone(
+                &sweep_template_repository,
+            )))],
             None,
             Arc::clone(&checkpoint_repository),
             Arc::clone(&event_bus),
@@ -494,6 +508,7 @@ impl AppState {
 
         let state = Self {
             configuration_command_handler,
+            sweep_template_command_handler,
             configuration_query_service,
             pipeline_configuration_query_service,
             chunking_configuration_query_service,
@@ -556,6 +571,7 @@ impl AppState {
             &self.sweep_template_query_service,
             &self.configuration_query_service,
             &self.configuration_command_handler,
+            &self.sweep_template_command_handler,
         )
         .await
         {

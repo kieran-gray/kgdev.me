@@ -30,9 +30,9 @@ pub use configuration_commands::{
     CreateChunkingConfigurationDto, CreatePipelineConfigurationDto, CreateSweepTemplateDto,
     DeleteChunkingConfigurationDto, DeletePipelineConfigurationDto, DeleteSweepTemplateDto,
     RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto,
-    SetDefaultSweepTemplateDto, UpdateChunkingConfigurationDto, UpdateEmbeddingModelDto,
-    UpdateGenerationModelDto, UpdatePipelineConfigurationDto, UpdateSweepTemplateDto,
-    UpdateVectorIndexDto,
+    SetDefaultSweepTemplateDto, SweepTemplateCommandDto, UpdateChunkingConfigurationDto,
+    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdatePipelineConfigurationDto,
+    UpdateSweepTemplateDto, UpdateVectorIndexDto,
 };
 pub use embedding::{
     catalog_for_backend, CatalogEntry, EmbedResult, EmbedderBackend, EmbeddingModel,

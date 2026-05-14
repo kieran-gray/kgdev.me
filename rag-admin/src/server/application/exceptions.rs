@@ -5,7 +5,8 @@ use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::configuration::{
     chunking_configuration::ChunkingConfigurationRepositoryError, exceptions::ConfigurationError,
     pipeline_configuration::PipelineConfigurationRepositoryError,
-    sweep_template::SweepTemplateRepositoryError, ConfigurationRepositoryError,
+    sweep_template::{SweepTemplateError, SweepTemplateRepositoryError},
+    ConfigurationRepositoryError,
 };
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepositoryError;
 use crate::server::domain::evaluation::{
@@ -65,6 +66,18 @@ impl From<ChunkingConfigurationRepositoryError> for AppError {
 impl From<SweepTemplateRepositoryError> for AppError {
     fn from(value: SweepTemplateRepositoryError) -> Self {
         AppError::Internal(value.to_string())
+    }
+}
+
+impl From<SweepTemplateError> for AppError {
+    fn from(value: SweepTemplateError) -> Self {
+        match value {
+            SweepTemplateError::NotFound => AppError::NotFound(value.to_string()),
+            SweepTemplateError::AlreadyExists
+            | SweepTemplateError::AlreadyDeleted
+            | SweepTemplateError::ValidationError(_)
+            | SweepTemplateError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+        }
     }
 }
 

@@ -135,10 +135,6 @@ fn apply(model: &mut ConfigurationReadModel, event: &ConfigurationEvent) -> bool
         | ConfigurationEvent::PipelineConfigurationDeleted(_)
         | ConfigurationEvent::ChunkingConfigurationCreated(_)
         | ConfigurationEvent::ChunkingConfigurationUpdated(_)
-        | ConfigurationEvent::ChunkingConfigurationDeleted(_)
-        | ConfigurationEvent::SweepTemplateCreated(_)
-        | ConfigurationEvent::SweepTemplateUpdated(_)
-        | ConfigurationEvent::SweepTemplateDeleted(_)
-        | ConfigurationEvent::SweepTemplateDefaultSet(_) => false,
+        | ConfigurationEvent::ChunkingConfigurationDeleted(_) => false,
     }
 }
