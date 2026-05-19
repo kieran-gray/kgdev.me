@@ -51,39 +51,48 @@ impl AppState {
             create_inference_service(env, &config.ai.inference, Arc::clone(&http_client));
         let ai_service = ai_service?;
 
-        let vectorize_service = VectorizeRestService::create(
+        let blog_vectorize = VectorizeRestService::create(
             config.cloudflare.account_id.clone(),
             config.cloudflare.vectorize_api_token.clone(),
-            config.ai.vectorize_index_name.clone(),
+            config.ai.blog_index_name.clone(),
+            http_client.clone(),
+        );
+        let glossary_vectorize = VectorizeRestService::create(
+            config.cloudflare.account_id.clone(),
+            config.cloudflare.vectorize_api_token.clone(),
+            config.ai.glossary_index_name.clone(),
             http_client.clone(),
         );
 
         let kv = env
             .kv("BLOG_POST_QA_CACHE")
-            .map_err(|_| SetupError::MissingVariable("BLOG_POST_QA_CACHE".to_string()))?;
+            .map_err(|_e| SetupError::MissingVariable("BLOG_POST_QA_CACHE".to_string()))?;
         let kv_cache = Arc::new(KVCache::create(kv, QA_CACHE_TTL_SECONDS));
         let qa_cache_service = QaCacheService::create(kv_cache);
 
         let qa_do_client = DurableObjectClient::new(
             env.durable_object("BLOG_POST_QA")
-                .map_err(|_| SetupError::MissingVariable("BLOG_POST_QA".to_string()))?,
+                .map_err(|_e| SetupError::MissingVariable("BLOG_POST_QA".to_string()))?,
         );
         let qa_coordinator = QaCoordinatorDoService::create(qa_do_client);
 
         let blog_qa_service = BlogQaService::create(
             ai_service,
-            vectorize_service,
+            blog_vectorize,
+            glossary_vectorize,
             qa_cache_service,
             qa_coordinator,
             config.ai.inference.generation_model().to_string(),
             config.qa_daily_cap,
-            config.ai.vectorize_top_k,
+            config.ai.blog_index_name.clone(),
+            config.ai.blog_top_k,
+            config.ai.glossary_top_k,
             config.ai.min_score,
         );
 
         let view_counter_do_client = DurableObjectClient::new(
             env.durable_object("VIEW_COUNTER")
-                .map_err(|_| SetupError::MissingVariable("VIEW_COUNTER".to_string()))?,
+                .map_err(|_e| SetupError::MissingVariable("VIEW_COUNTER".to_string()))?,
         );
 
         Ok(Self {
@@ -107,7 +116,7 @@ fn create_inference_service(
         } => {
             let ai_binding = env
                 .ai("AI")
-                .map_err(|_| SetupError::MissingVariable("AI".to_string()))?;
+                .map_err(|_e| SetupError::MissingVariable("AI".to_string()))?;
             Ok(WorkersAiService::create(
                 ai_binding,
                 embedding_model.clone(),

@@ -54,7 +54,7 @@ impl BlogPostQA {
         Ok(())
     }
 
-    fn handle_charge(&self, body: ChargeBody) -> Result<Response> {
+    fn handle_charge(&self, body: &ChargeBody) -> Result<Response> {
         let now = now_ms();
 
         if let Err(retry_after_ms) = self.bucket.borrow_mut().try_take(now) {
@@ -71,7 +71,7 @@ impl BlogPostQA {
         Response::from_json(&ChargeResponse::Ok)
     }
 
-    fn handle_record_hit(&self, body: HashBody) -> Result<Response> {
+    fn handle_record_hit(&self, body: &HashBody) -> Result<Response> {
         self.ensure_schema()?;
         if let Err(e) = record_hit(&self.sql(), &body.hash, now_ms()) {
             warn!(error = %e, "qa_stats write failed");
@@ -98,14 +98,14 @@ impl DurableObject for BlogPostQA {
         let path = req.path();
         match path.as_str() {
             "/charge" => match req.json::<ChargeBody>().await {
-                Ok(body) => self.handle_charge(body),
+                Ok(body) => self.handle_charge(&body),
                 Err(e) => {
                     error!(error = %e, "charge body parse failed");
                     Response::error("Bad Request", 400)
                 }
             },
             "/record-hit" => match req.json::<HashBody>().await {
-                Ok(body) => self.handle_record_hit(body),
+                Ok(body) => self.handle_record_hit(&body),
                 Err(e) => {
                     error!(error = %e, "record-hit body parse failed");
                     Response::error("Bad Request", 400)

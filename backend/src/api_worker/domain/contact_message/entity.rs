@@ -34,7 +34,7 @@ impl ContactMessage {
     }
 
     fn validate_email(email: &str) -> Result<(), ContactMessageValidationError> {
-        if email.is_empty() || email.len() > 254 || email.chars().any(|c| c.is_whitespace()) {
+        if email.is_empty() || email.len() > 254 || email.chars().any(char::is_whitespace) {
             return Err(ContactMessageValidationError::InvalidEmail(
                 "Email must be between 1 and 254 characters".into(),
             ));

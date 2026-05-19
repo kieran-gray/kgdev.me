@@ -209,7 +209,7 @@ describe("WebSocket connect", () => {
 
 		it('streams a fallback answer with a mocked AI embedding', async () => {
 			await (env as any).BLOG_POST_QA_CACHE.put(
-				'post_version:my-post',
+				'source_version:kgdev-me-blog:my-post',
 			JSON.stringify({ v: 'test-version-1' })
 		);
 
@@ -235,12 +235,26 @@ describe("WebSocket connect", () => {
 									chunk_id: 1,
 									heading: 'Intro',
 									text: 'A short excerpt that is not relevant enough to use.',
-									post_slug: 'my-post',
-									post_version: 'test-version-1'
+									source_slug: 'my-post',
+									source_version: 'test-version-1'
 								}
 							}
 						]
 					}
+				})
+			);
+
+		fetchMock
+			.get('https://api.cloudflare.com')
+			.intercept({
+				method: 'POST',
+				path: '/client/v4/accounts/test-account-id/vectorize/v2/indexes/kgdev-me-glossary/query'
+			})
+			.reply(
+				200,
+				JSON.stringify({
+					success: true,
+					result: { matches: [] }
 				})
 			);
 

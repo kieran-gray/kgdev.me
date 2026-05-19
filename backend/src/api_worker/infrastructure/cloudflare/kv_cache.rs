@@ -30,20 +30,24 @@ impl CacheTrait for KVCache {
     ) -> Result<(), CacheError> {
         self.cache
             .put(&key, value)
-            .unwrap()
+            .map_err(|err| {
+                let err = format!("Failed to write to cache: {err}");
+                warn!(cache_key = %key, err);
+                CacheError::WriteError(err)
+            })?
             .expiration_ttl(ttl_seconds)
             .execute()
             .await
-            .map_err(|_| {
-                let err = "Failed to write to cache".to_string();
+            .map_err(|err| {
+                let err = format!("Failed to write to cache: {err}");
                 warn!(cache_key = %key, err);
                 CacheError::WriteError(err)
             })
     }
 
     async fn get<T: for<'de> Deserialize<'de>>(&self, id: String) -> Result<Option<T>, CacheError> {
-        let cache_result = self.cache.get(&id).json::<T>().await.map_err(|_| {
-            let err = "Failed to fetch from cache".to_string();
+        let cache_result = self.cache.get(&id).json::<T>().await.map_err(|err| {
+            let err = format!("Failed to fetch from cache: {err}");
             warn!(cache_key = %id, err);
             CacheError::ReadError(err)
         })?;
@@ -51,8 +55,8 @@ impl CacheTrait for KVCache {
     }
 
     async fn clear(&self, id: String) -> Result<(), CacheError> {
-        self.cache.delete(&id).await.map_err(|_| {
-            let err = "Failed to delete from cache".to_string();
+        self.cache.delete(&id).await.map_err(|err| {
+            let err = format!("Failed to delete from cache: {err}");
             warn!(cache_key = %id, err);
             CacheError::DeleteError(err)
         })?;

@@ -2,6 +2,11 @@
 name = "kgdev_me_backend"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+description = "The backend for kgdev.me, a personal website and blog built with Rust on Cloudflare Workers."
+repository = "https://github.com/kieran-gray/kgdev.me"
+categories = ["web-backend", "cloudflare-workers", "rust"]
+keywords = ["rust", "cloudflare-workers", "web-backend", "wasm", "serverless"]
 authors = ["Kieran Gray <gray.kieran@protonmail.com>"]
 
 [lib]
@@ -33,3 +38,91 @@ ollama = []
 
 [package.metadata.cargo-machete]
 ignored = ["wasm-bindgen"]
+
+[lints.clippy]
+# don't stop from compiling / running
+all = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+# pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+
+# Transitive dependency version conflicts cannot be fixed at this crate's level
+multiple_crate_versions = "allow"
+
+# Don't Panic - prevent panics from unwraps and unsafe slicing or indexing
+string_slice = "warn"
+indexing_slicing = "warn"
+unwrap_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+unreachable = "warn"
+get_unwrap = "warn"
+unwrap_in_result = "warn"
+unchecked_time_subtraction = "warn"
+panic_in_result_fn = "warn"
+expect_used = "warn"
+
+# Don't Fail Silently - prevent dropped futures and swallowed errors
+let_underscore_future = "warn"
+let_underscore_must_use = "warn"
+unused_result_ok = "warn"
+map_err_ignore = "warn"
+assertions_on_result_states = "warn"
+
+# Don't Do Bad Async Stuff - prevent deadlocks and concurrency bugs
+await_holding_lock = "warn"
+await_holding_refcell_ref = "warn"
+large_futures = "warn"
+
+# Don't Do Unsafe Things with Memory
+mem_forget = "warn"
+undocumented_unsafe_blocks = "warn"
+multiple_unsafe_ops_per_block = "warn"
+unnecessary_safety_doc = "warn"
+unnecessary_safety_comment = "warn"
+
+# Don't Do Bad Things That are Easy to Avoid
+rc_mutex = "warn"
+debug_assert_with_mut_call = "warn"
+iter_not_returning_iterator = "warn"
+expl_impl_clone_on_copy = "warn"
+infallible_try_from = "warn"
+dbg_macro = "warn"
+
+# Style lints
+absolute_paths = "warn"
+assigning_clones = "warn"
+cloned_instead_of_copied = "warn"
+collapsible_else_if = "warn"
+default_trait_access = "warn"
+duration_suboptimal_units = "warn"
+elidable_lifetime_names = "warn"
+explicit_into_iter_loop = "warn"
+explicit_iter_loop = "warn"
+filter_map_next = "warn"
+fn_params_excessive_bools = "warn"
+format_push_string = "warn"
+from_iter_instead_of_collect = "warn"
+if_not_else = "warn"
+inconsistent_struct_constructor = "warn"
+manual_let_else = "warn"
+match_bool = "warn"
+match_same_arms = "warn"
+match_wildcard_for_single_variants = "warn"
+needless_continue = "warn"
+needless_pass_by_value = "warn"
+needless_raw_string_hashes = "warn"
+needless_raw_strings = "warn"
+redundant_closure_for_method_calls = "warn"
+redundant_else = "warn"
+semicolon_if_nothing_returned = "warn"
+single_match_else = "warn"
+uninlined_format_args = "warn"
+unnested_or_patterns = "warn"
+unused_self = "warn"
+wildcard_imports = "warn"

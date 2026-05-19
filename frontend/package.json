@@ -4,8 +4,7 @@
 	"type": "module",
 	"version": "0.0.1",
 	"scripts": {
-		"dev": "CLOUDFLARE_ENV=dev astro dev",
-		"start": "CLOUDFLARE_ENV=dev astro dev",
+		"dev": "CLOUDFLARE_ENV=dev astro dev --host 0.0.0.0",
 		"build": "npm run export:backend-manifest && astro check && astro build && node scripts/postbuild.mjs",
 		"preview": "CLOUDFLARE_ENV=dev npm run build && wrangler dev --env dev",
 		"astro": "astro",

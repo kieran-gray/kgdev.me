@@ -14,9 +14,15 @@ pub struct ScoredChunk {
     pub chunk_id: u32,
     pub heading: String,
     pub text: String,
-    pub post_slug: String,
+    pub source_slug: String,
     pub score: f32,
     pub references: Vec<Reference>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct QueryFilter<'a> {
+    pub source_slug: &'a str,
+    pub source_version: &'a str,
 }
 
 #[async_trait(?Send)]
@@ -24,8 +30,8 @@ pub trait VectorizeServiceTrait {
     async fn query(
         &self,
         embedding: &[f32],
-        post_slug: &str,
-        post_version: &str,
+        filter: Option<QueryFilter<'_>>,
         top_k: u32,
+        min_score: f32,
     ) -> Result<Vec<ScoredChunk>, AppError>;
 }

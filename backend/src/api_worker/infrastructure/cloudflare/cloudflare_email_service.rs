@@ -120,7 +120,7 @@ impl EmailServiceTrait for CloudflareEmailService {
             .post(&url, body, headers)
             .await
             .map_err(|e| {
-                AppError::InternalError(format!("Failed to send email via Cloudflare: {}", e))
+                AppError::InternalError(format!("Failed to send email via Cloudflare: {e}"))
             })?;
 
         Ok(())

@@ -1,3 +1,8 @@
+use std::{
+    error::Error,
+    fmt::{self, Display, Formatter},
+};
+
 #[derive(Debug, Clone)]
 pub enum ContactMessageValidationError {
     InvalidEmail(String),
@@ -5,8 +10,8 @@ pub enum ContactMessageValidationError {
     InvalidMessage(String),
 }
 
-impl std::fmt::Display for ContactMessageValidationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ContactMessageValidationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             ContactMessageValidationError::InvalidEmail(msg) => write!(f, "Invalid email: {msg}"),
             ContactMessageValidationError::InvalidName(msg) => write!(f, "Invalid name: {msg}"),
@@ -17,4 +22,4 @@ impl std::fmt::Display for ContactMessageValidationError {
     }
 }
 
-impl std::error::Error for ContactMessageValidationError {}
+impl Error for ContactMessageValidationError {}

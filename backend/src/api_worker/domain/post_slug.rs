@@ -1,3 +1,8 @@
+use std::{
+    error::Error,
+    fmt::{self, Display, Formatter},
+};
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PostSlug(String);
 
@@ -7,8 +12,8 @@ pub enum PostSlugValidationError {
     InvalidFormat(String),
 }
 
-impl std::fmt::Display for PostSlugValidationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PostSlugValidationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Empty => write!(f, "Post slug cannot be empty"),
             Self::InvalidFormat(slug) => write!(f, "Invalid post slug: {slug}"),
@@ -16,7 +21,7 @@ impl std::fmt::Display for PostSlugValidationError {
     }
 }
 
-impl std::error::Error for PostSlugValidationError {}
+impl Error for PostSlugValidationError {}
 
 impl PostSlug {
     pub fn parse(raw: &str) -> Result<Self, PostSlugValidationError> {
@@ -40,8 +45,8 @@ impl PostSlug {
     }
 }
 
-impl std::fmt::Display for PostSlug {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PostSlug {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }

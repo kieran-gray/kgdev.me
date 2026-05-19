@@ -228,31 +228,6 @@
 	text-decoration-thickness: 2px;
 }
 
-.blog-qa-sources {
-	font-size: 0.75rem;
-	color: var(--muted-text);
-}
-
-.blog-qa-sources summary {
-	cursor: pointer;
-	user-select: none;
-}
-
-.blog-qa-sources ul {
-	list-style: none;
-	margin: 0.4rem 0 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 0.2rem;
-}
-
-.blog-qa-sources li {
-	padding-left: 0.75rem;
-	border-left: 2px solid var(--accent-200);
-	line-height: 1.4;
-}
-
 .blog-qa-mobile-wrap {
 	padding: 1.5rem 0;
 }

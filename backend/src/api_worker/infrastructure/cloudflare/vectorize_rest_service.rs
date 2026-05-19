@@ -6,7 +6,7 @@ use serde_json::json;
 use tracing::{error, warn};
 
 use crate::api_worker::{
-    application::{AppError, Reference, ScoredChunk, VectorizeServiceTrait},
+    application::{AppError, QueryFilter, Reference, ScoredChunk, VectorizeServiceTrait},
     infrastructure::http_client::HttpClientTrait,
 };
 
@@ -55,9 +55,12 @@ struct MatchMetadata {
     chunk_id: u32,
     heading: Option<String>,
     text: String,
-    post_slug: String,
-    post_version: Option<String>,
-    sources: Option<String>,
+    source_slug: String,
+    source_version: Option<String>,
+    #[serde(default)]
+    reference_titles: Vec<String>,
+    #[serde(default)]
+    reference_urls: Vec<String>,
 }
 
 #[async_trait(?Send)]
@@ -65,9 +68,9 @@ impl VectorizeServiceTrait for VectorizeRestService {
     async fn query(
         &self,
         embedding: &[f32],
-        post_slug: &str,
-        post_version: &str,
+        filter: Option<QueryFilter<'_>>,
         top_k: u32,
+        min_score: f32,
     ) -> Result<Vec<ScoredChunk>, AppError> {
         let url = format!(
             "https://api.cloudflare.com/client/v4/accounts/{}/vectorize/v2/indexes/{}/query",
@@ -78,16 +81,26 @@ impl VectorizeServiceTrait for VectorizeRestService {
             ("Authorization", token.as_str()),
             ("Content-Type", "application/json"),
         ];
-        let body = json!({
+        let mut body = json!({
             "vector": embedding,
             "topK": top_k,
             "returnMetadata": "all",
             "returnValues": false,
-            "filter": {
-                "post_slug": { "$eq": post_slug },
-                "post_version": { "$eq": post_version },
-            },
         });
+        if let Some(QueryFilter {
+            source_slug,
+            source_version,
+        }) = filter
+            && let Some(obj) = body.as_object_mut()
+        {
+            obj.insert(
+                "filter".to_string(),
+                json!({
+                    "source_slug": { "$eq": source_slug },
+                    "source_version": { "$eq": source_version },
+                }),
+            );
+        }
 
         let response_json = self
             .http_client
@@ -118,28 +131,32 @@ impl VectorizeServiceTrait for VectorizeRestService {
             .into_iter()
             .filter_map(|m| {
                 let metadata = m.metadata?;
-                if metadata.post_slug != post_slug {
-                    return None;
+                if let Some(QueryFilter {
+                    source_slug,
+                    source_version,
+                }) = filter
+                {
+                    if metadata.source_slug != source_slug {
+                        return None;
+                    }
+                    if metadata.source_version.as_deref() != Some(source_version) {
+                        return None;
+                    }
                 }
-                if metadata.post_version.as_deref() != Some(post_version) {
+                if m.score < min_score {
                     return None;
                 }
                 let references = metadata
-                    .sources
-                    .as_deref()
-                    .and_then(|raw| match serde_json::from_str::<Vec<Reference>>(raw) {
-                        Ok(refs) => Some(refs),
-                        Err(e) => {
-                            warn!(error = %e, raw = raw, "could not parse chunk sources metadata");
-                            None
-                        }
-                    })
-                    .unwrap_or_default();
+                    .reference_titles
+                    .into_iter()
+                    .zip(metadata.reference_urls)
+                    .map(|(title, url)| Reference { title, url })
+                    .collect();
                 Some(ScoredChunk {
                     chunk_id: metadata.chunk_id,
                     heading: metadata.heading.unwrap_or_default(),
                     text: metadata.text,
-                    post_slug: metadata.post_slug,
+                    source_slug: metadata.source_slug,
                     score: m.score,
                     references,
                 })

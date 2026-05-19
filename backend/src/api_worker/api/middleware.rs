@@ -1,3 +1,4 @@
+use std::future::Future;
 use worker::{Request, Response, Result, RouteContext};
 
 use crate::api_worker::AppState;
@@ -10,7 +11,7 @@ pub async fn public<F, Fut>(
 ) -> Result<Response>
 where
     F: Fn(Request, RouteContext<AppState>) -> Fut,
-    Fut: std::future::Future<Output = Result<Response>>,
+    Fut: Future<Output = Result<Response>>,
 {
     let cors_context = CorsContext::new(ctx.data.config.security.allowed_origins.clone(), &req);
     if let Err(response) = cors_context.validate(&req) {
@@ -21,11 +22,11 @@ where
 }
 
 pub fn create_options_handler(
-    req: Request,
+    req: &Request,
     ctx: RouteContext<AppState>,
 ) -> worker::Result<Response> {
-    let cors_context = CorsContext::new(ctx.data.config.security.allowed_origins, &req);
-    match cors_context.validate(&req) {
+    let cors_context = CorsContext::new(ctx.data.config.security.allowed_origins, req);
+    match cors_context.validate(req) {
         Ok(_) => cors_context.preflight_response(),
         Err(response) => Ok(response),
     }

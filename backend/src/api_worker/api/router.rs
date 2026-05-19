@@ -17,11 +17,15 @@ pub fn create_router(app_state: AppState) -> Router<'static, AppState> {
         .post_async("/api/v1/contact/", |req, ctx| {
             public(create_contact_message_handler, req, ctx)
         })
-        .options("/api/v1/contact/", create_options_handler)
+        .options("/api/v1/contact/", |req, ctx| {
+            create_options_handler(&req, ctx)
+        })
         .post_async("/api/v1/ask/:page", |req, ctx| {
             public(ask_question_handler, req, ctx)
         })
-        .options("/api/v1/ask/:page", create_options_handler)
+        .options("/api/v1/ask/:page", |req, ctx| {
+            create_options_handler(&req, ctx)
+        })
         .on_async("/api/v1/connect/:page", |req, ctx| {
             public(handle_websocket_connect, req, ctx)
         })

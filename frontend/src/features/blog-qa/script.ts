@@ -1,18 +1,11 @@
 export {};
 
-interface Source {
-	chunk_id: number;
-	heading: string;
-	score: number;
-}
-
 interface Reference {
 	title: string;
 	url: string;
 }
 
 interface MetaPayload {
-	sources: Source[];
 	references?: Reference[];
 	cached: boolean;
 	model: string;
@@ -41,8 +34,6 @@ interface Elements {
 	resultBox: HTMLDivElement;
 	statusEl: HTMLDivElement;
 	answerEl: HTMLDivElement;
-	sourcesWrap: HTMLDetailsElement;
-	sourcesList: HTMLUListElement;
 	referencesWrap: HTMLDivElement;
 	referencesList: HTMLUListElement;
 }
@@ -59,8 +50,6 @@ const selectors = {
 	resultBox: '#blog-qa-result',
 	statusEl: '#blog-qa-status',
 	answerEl: '#blog-qa-answer',
-	sourcesWrap: '#blog-qa-sources-wrap',
-	sourcesList: '#blog-qa-sources',
 	referencesWrap: '#blog-qa-references-wrap',
 	referencesList: '#blog-qa-references'
 } as const;
@@ -202,25 +191,8 @@ function setup() {
 		els.statusEl.textContent = '';
 		els.statusEl.removeAttribute('data-state');
 		els.answerEl.textContent = '';
-		els.sourcesList.innerHTML = '';
-		els.sourcesWrap.hidden = true;
 		els.referencesList.innerHTML = '';
 		els.referencesWrap.hidden = true;
-	}
-
-	function renderSources(sources: Source[]) {
-		els.sourcesList.innerHTML = '';
-		if (sources.length === 0) {
-			els.sourcesWrap.hidden = true;
-			return;
-		}
-		for (const s of sources) {
-			const li = document.createElement('li');
-			const heading = s.heading || '(intro)';
-			li.textContent = `${heading} — ${(s.score * 100).toFixed(0)}%`;
-			els.sourcesList.appendChild(li);
-		}
-		els.sourcesWrap.hidden = false;
 	}
 
 	function renderReferences(references: Reference[]) {
@@ -247,7 +219,6 @@ function setup() {
 			case 'meta': {
 				const meta = JSON.parse(frame.data) as MetaPayload;
 				showStatus('ok', meta.cached ? 'Cached answer' : 'Drafting answer…');
-				renderSources(meta.sources);
 				renderReferences(meta.references ?? []);
 				return { done: false };
 			}

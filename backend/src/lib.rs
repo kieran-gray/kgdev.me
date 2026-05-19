@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use serde_json::json;
 
-use worker::*;
+use worker::{Context, Env, Request, Response, Result, event, wasm_bindgen};
 
 use crate::api_worker::{
     api::create_router,

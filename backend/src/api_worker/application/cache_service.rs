@@ -1,3 +1,8 @@
+use std::{
+    error::Error,
+    fmt::{self, Display, Formatter},
+};
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -8,8 +13,8 @@ pub enum CacheError {
     DeleteError(String),
 }
 
-impl std::fmt::Display for CacheError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for CacheError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             CacheError::WriteError(msg) => write!(f, "Write error: {msg}"),
             CacheError::ReadError(msg) => write!(f, "Read error: {msg}"),
@@ -18,7 +23,7 @@ impl std::fmt::Display for CacheError {
     }
 }
 
-impl std::error::Error for CacheError {}
+impl Error for CacheError {}
 
 #[async_trait(?Send)]
 pub trait CacheTrait {

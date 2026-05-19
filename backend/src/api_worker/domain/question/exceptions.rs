@@ -1,3 +1,8 @@
+use std::{
+    error::Error,
+    fmt::{Display, Formatter, Result},
+};
+
 #[derive(Debug, Clone)]
 pub enum QuestionValidationError {
     TooShort,
@@ -5,8 +10,8 @@ pub enum QuestionValidationError {
     InvalidFormat(String),
 }
 
-impl std::fmt::Display for QuestionValidationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for QuestionValidationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             QuestionValidationError::TooShort => write!(f, "Question is too short"),
             QuestionValidationError::TooLong => write!(f, "Question is too long"),
@@ -15,4 +20,4 @@ impl std::fmt::Display for QuestionValidationError {
     }
 }
 
-impl std::error::Error for QuestionValidationError {}
+impl Error for QuestionValidationError {}

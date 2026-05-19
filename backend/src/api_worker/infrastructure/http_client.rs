@@ -39,13 +39,12 @@ impl WorkerHttpClient {
     }
 
     fn build_post_request(
-        &self,
         url: &str,
-        body: Value,
+        body: &Value,
         headers: Vec<(&str, &str)>,
     ) -> Result<Request, String> {
         let body_string = serde_json::to_string(&body)
-            .map_err(|e| format!("Failed to serialize request body: {}", e))?;
+            .map_err(|e| format!("Failed to serialize request body: {e}"))?;
 
         let mut init = RequestInit::new();
         init.with_method(Method::Post);
@@ -55,29 +54,29 @@ impl WorkerHttpClient {
         for (name, value) in headers {
             worker_headers
                 .set(name, value)
-                .map_err(|e| format!("Failed to set header {}: {}", name, e))?;
+                .map_err(|e| format!("Failed to set header {name}: {e}"))?;
         }
         init.with_headers(worker_headers);
 
-        Request::new_with_init(url, &init).map_err(|e| format!("Failed to create request: {}", e))
+        Request::new_with_init(url, &init).map_err(|e| format!("Failed to create request: {e}"))
     }
 
     async fn execute_request(&self, request: Request) -> Result<Value, String> {
         let mut response = Fetch::Request(request).send().await.map_err(|e| {
             error!("HTTP request failed: {:?}", e);
-            format!("HTTP request failed: {}", e)
+            format!("HTTP request failed: {e}")
         })?;
 
         let status = response.status_code();
         if !(200..300).contains(&status) {
             let body = response.text().await.unwrap_or_default();
             error!("API call returned {}: {}", status, body);
-            return Err(format!("HTTP {} from upstream: {}", status, body));
+            return Err(format!("HTTP {status} from upstream: {body}"));
         }
 
         let json_response: Value = response.json().await.map_err(|e| {
             error!("Failed to parse JSON response: {:?}", e);
-            format!("Failed to parse JSON response: {}", e)
+            format!("Failed to parse JSON response: {e}")
         })?;
 
         Ok(json_response)
@@ -86,19 +85,19 @@ impl WorkerHttpClient {
     async fn execute_stream_request(&self, request: Request) -> Result<ByteStream, String> {
         let mut response = Fetch::Request(request).send().await.map_err(|e| {
             error!("HTTP request failed: {:?}", e);
-            format!("HTTP request failed: {}", e)
+            format!("HTTP request failed: {e}")
         })?;
 
         let status = response.status_code();
         if !(200..300).contains(&status) {
             let body = response.text().await.unwrap_or_default();
             error!("API call returned {}: {}", status, body);
-            return Err(format!("HTTP {} from upstream: {}", status, body));
+            return Err(format!("HTTP {status} from upstream: {body}"));
         }
 
         response.stream().map_err(|e| {
             error!("Failed to read streaming response: {:?}", e);
-            format!("Failed to read streaming response: {}", e)
+            format!("Failed to read streaming response: {e}")
         })
     }
 }
@@ -117,7 +116,7 @@ impl HttpClientTrait for WorkerHttpClient {
         body: Value,
         headers: Vec<(&str, &str)>,
     ) -> Result<Value, String> {
-        let request = self.build_post_request(url, body, headers)?;
+        let request = WorkerHttpClient::build_post_request(url, &body, headers)?;
         self.execute_request(request).await
     }
 
@@ -127,7 +126,7 @@ impl HttpClientTrait for WorkerHttpClient {
         body: Value,
         headers: Vec<(&str, &str)>,
     ) -> Result<ByteStream, String> {
-        let request = self.build_post_request(url, body, headers)?;
+        let request = WorkerHttpClient::build_post_request(url, &body, headers)?;
         self.execute_stream_request(request).await
     }
 
@@ -139,12 +138,12 @@ impl HttpClientTrait for WorkerHttpClient {
         for (name, value) in headers {
             worker_headers
                 .set(name, value)
-                .map_err(|e| format!("Failed to set header {}: {}", name, e))?;
+                .map_err(|e| format!("Failed to set header {name}: {e}"))?;
         }
         init.with_headers(worker_headers);
 
         let request = Request::new_with_init(url, &init)
-            .map_err(|e| format!("Failed to create request: {}", e))?;
+            .map_err(|e| format!("Failed to create request: {e}"))?;
 
         self.execute_request(request).await
     }

@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{any::type_name, str::FromStr};
 
 use serde::Deserialize;
 use worker::Env;
@@ -76,8 +76,10 @@ impl FromEnv for CloudflareConfig {
 #[derive(Clone)]
 pub struct AiConfig {
     pub inference: InferenceConfig,
-    pub vectorize_index_name: String,
-    pub vectorize_top_k: u32,
+    pub blog_index_name: String,
+    pub glossary_index_name: String,
+    pub blog_top_k: u32,
+    pub glossary_top_k: u32,
     pub min_score: f32,
 }
 
@@ -115,14 +117,18 @@ impl FromEnv for AiConfig {
         let embedding_model = Config::parse(env, "EMBEDDING_MODEL")?;
         let generation_model = Config::parse(env, "GENERATION_MODEL")?;
         let inference = InferenceConfig::from_env(env, embedding_model, generation_model)?;
-        let vectorize_index_name = Config::parse(env, "VECTORIZE_INDEX_NAME")?;
-        let vectorize_top_k = Config::parse(env, "VECTORIZE_TOP_K")?;
+        let blog_index_name = Config::parse(env, "VECTORIZE_BLOG_INDEX_NAME")?;
+        let glossary_index_name = Config::parse(env, "VECTORIZE_GLOSSARY_INDEX_NAME")?;
+        let blog_top_k = Config::parse(env, "VECTORIZE_BLOG_TOP_K")?;
+        let glossary_top_k = Config::parse(env, "VECTORIZE_GLOSSARY_TOP_K")?;
         let min_score = Config::parse(env, "MIN_SCORE")?;
 
         Ok(Self {
             inference,
-            vectorize_index_name,
-            vectorize_top_k,
+            blog_index_name,
+            glossary_index_name,
+            blog_top_k,
+            glossary_top_k,
             min_score,
         })
     }
@@ -191,20 +197,20 @@ impl Config {
     }
 
     fn parse<T: FromStr>(env: &Env, var: &str) -> Result<T, SetupError> {
-        let type_name = std::any::type_name::<T>();
+        let type_name = type_name::<T>();
         let env_var: T = env
             .var(var)
             .map_err(|e| SetupError::MissingVariable(e.to_string()))?
             .to_string()
             .parse()
-            .map_err(|_| SetupError::InvalidVariable(format!("{var} should be {type_name}")))?;
+            .map_err(|_e| SetupError::InvalidVariable(format!("{var} should be {type_name}")))?;
         Ok(env_var)
     }
 
     fn parse_csv(env: &Env, var: &str) -> Result<Vec<String>, SetupError> {
         let env_var = env
             .var(var)
-            .map_err(|_| SetupError::MissingVariable(var.to_string()))?
+            .map_err(|_e| SetupError::MissingVariable(var.to_string()))?
             .to_string()
             .split(',')
             .map(|s| s.trim().to_string())

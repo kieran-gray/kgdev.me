@@ -19,7 +19,7 @@ impl From<AppError> for worker::Response {
 
         let body = json!({ "success": false, "error": message });
         worker::Response::from_json(&body)
-            .unwrap()
-            .with_status(status)
+            .map(|r| r.with_status(status))
+            .unwrap_or_else(|_| worker::ResponseBuilder::new().with_status(status).empty())
     }
 }

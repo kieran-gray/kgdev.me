@@ -1,5 +1,5 @@
 use serde_json::json;
-use worker::{Request, Response};
+use worker::{Request, Response, ResponseBuilder};
 
 pub struct CorsContext {
     allowed_origins: Vec<String>,
@@ -34,7 +34,10 @@ impl CorsContext {
                 "CORS check failed"
             );
             let message = json!({"message": "Forbidden"});
-            return Err(Response::from_json(&message).unwrap().with_status(403));
+            let response = Response::from_json(&message)
+                .map(|r| r.with_status(403))
+                .unwrap_or_else(|_| ResponseBuilder::new().with_status(403).empty());
+            return Err(response);
         }
         Ok(())
     }
@@ -43,13 +46,13 @@ impl CorsContext {
         if let Some(origin_value) = self.origin.clone()
             && (self.allowed_origins.is_empty() || self.allowed_origins.contains(&origin_value))
         {
-            let _ = response
+            _ = response
                 .headers_mut()
                 .set("Access-Control-Allow-Origin", &origin_value);
-            let _ = response
+            _ = response
                 .headers_mut()
                 .set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-            let _ = response.headers_mut().set(
+            _ = response.headers_mut().set(
                 "Access-Control-Allow-Headers",
                 "Content-Type, Authorization",
             );

@@ -26,6 +26,6 @@ fn broadcast(attached: &[worker::WebSocket], total: u64, live: u64) {
     .to_string();
 
     for ws in attached {
-        ws.send_with_str(&message).ok();
+        _ = ws.send_with_str(&message);
     }
 }

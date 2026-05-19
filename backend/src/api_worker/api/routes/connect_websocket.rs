@@ -7,16 +7,15 @@ pub async fn handle_websocket_connect(
     req: Request,
     ctx: RouteContext<AppState>,
 ) -> worker::Result<Response> {
-    let slug = match ctx.param("page") {
-        Some(p) => match PostSlug::parse(p) {
+    let slug = if let Some(p) = ctx.param("page") {
+        match PostSlug::parse(p) {
             Ok(slug) => slug,
             Err(e) => return Ok(Response::from(AppError::ValidationError(e.to_string()))),
-        },
-        None => {
-            let error = "No page provided";
-            error!(error);
-            return Response::error(error, 400);
         }
+    } else {
+        let error = "No page provided";
+        error!(error);
+        return Response::error(error, 400);
     };
 
     if !ctx.data.config.security.allowed_blog_paths.contains(&slug) {

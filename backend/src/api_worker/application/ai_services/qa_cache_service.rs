@@ -9,16 +9,8 @@ use crate::api_worker::application::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedSource {
-    pub chunk_id: u32,
-    pub heading: String,
-    pub score: f32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedAnswer {
     pub answer: String,
-    pub sources: Vec<CachedSource>,
     #[serde(default)]
     pub references: Vec<Reference>,
     pub model: String,
@@ -26,7 +18,7 @@ pub struct CachedAnswer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct PostVersion {
+struct SourceVersion {
     v: String,
 }
 
@@ -35,17 +27,21 @@ pub trait QaCacheServiceTrait {
     async fn get(
         &self,
         slug: &str,
-        post_version: &str,
+        source_version: &str,
         hash: &str,
     ) -> Result<Option<CachedAnswer>, AppError>;
     async fn put(
         &self,
         slug: &str,
-        post_version: &str,
+        source_version: &str,
         hash: &str,
         answer: &CachedAnswer,
     ) -> Result<(), AppError>;
-    async fn get_post_version(&self, slug: &str) -> Result<Option<String>, AppError>;
+    async fn get_source_version(
+        &self,
+        index_name: &str,
+        slug: &str,
+    ) -> Result<Option<String>, AppError>;
 }
 
 pub struct QaCacheService<C: CacheTrait + Send + Sync> {
@@ -57,16 +53,16 @@ impl<C: CacheTrait + Send + Sync + 'static> QaCacheService<C> {
         Arc::new(Self { cache })
     }
 
-    fn answer_key(slug: &str, post_version: &str, hash: &str) -> String {
-        format!("qa:{slug}:{post_version}:{hash}")
+    fn answer_key(slug: &str, source_version: &str, hash: &str) -> String {
+        format!("qa:{slug}:{source_version}:{hash}")
     }
 
-    fn post_version_key(slug: &str) -> String {
-        format!("post_version:{slug}")
+    fn source_version_key(index_name: &str, slug: &str) -> String {
+        format!("source_version:{index_name}:{slug}")
     }
 }
 
-fn map_cache_err(e: CacheError) -> AppError {
+fn map_cache_err(e: &CacheError) -> AppError {
     AppError::InternalError(format!("Cache error: {e}"))
 }
 
@@ -75,34 +71,38 @@ impl<C: CacheTrait + Send + Sync + 'static> QaCacheServiceTrait for QaCacheServi
     async fn get(
         &self,
         slug: &str,
-        post_version: &str,
+        source_version: &str,
         hash: &str,
     ) -> Result<Option<CachedAnswer>, AppError> {
         self.cache
-            .get::<CachedAnswer>(Self::answer_key(slug, post_version, hash))
+            .get::<CachedAnswer>(Self::answer_key(slug, source_version, hash))
             .await
-            .map_err(map_cache_err)
+            .map_err(|ref e| map_cache_err(e))
     }
 
     async fn put(
         &self,
         slug: &str,
-        post_version: &str,
+        source_version: &str,
         hash: &str,
         answer: &CachedAnswer,
     ) -> Result<(), AppError> {
         self.cache
-            .set(Self::answer_key(slug, post_version, hash), answer)
+            .set(Self::answer_key(slug, source_version, hash), answer)
             .await
-            .map_err(map_cache_err)
+            .map_err(|ref e| map_cache_err(e))
     }
 
-    async fn get_post_version(&self, slug: &str) -> Result<Option<String>, AppError> {
+    async fn get_source_version(
+        &self,
+        index_name: &str,
+        slug: &str,
+    ) -> Result<Option<String>, AppError> {
         let entry = self
             .cache
-            .get::<PostVersion>(Self::post_version_key(slug))
+            .get::<SourceVersion>(Self::source_version_key(index_name, slug))
             .await
-            .map_err(map_cache_err)?;
+            .map_err(|ref e| map_cache_err(e))?;
         Ok(entry.map(|e| e.v))
     }
 }

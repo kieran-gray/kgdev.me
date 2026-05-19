@@ -1,0 +1,45 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import Section from '@/components/layout/Section.astro';
+import { getCollection, type CollectionEntry } from 'astro:content';
+import { siteConfig } from '@/config/site';
+
+export async function getStaticPaths() {
+	const entries = await getCollection('glossary');
+	return entries.map((entry) => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+
+interface Props {
+	entry: CollectionEntry<'glossary'>;
+}
+
+const { entry } = Astro.props as Props;
+const { Content } = await entry.render();
+const term = entry.data.term;
+const sources = entry.data.sources ?? [];
+const title = `${term} | Glossary | ${siteConfig.meta.title}`;
+const description = `Definition: ${term}.`;
+---
+
+<BaseLayout head={{ title, description }}>
+	<Section>
+		<article
+			class="content prose prose-img:rounded-lg prose-img:shadow-xl mt-8 max-w-none text-base leading-8 text-[var(--text-color)]"
+		>
+			<h1>{term}</h1>
+			<Content />
+			{sources.length > 0 && (
+				<>
+					<h2>Sources</h2>
+					<ul>
+						{sources.map((s) => (
+							<li>
+								<a href={s.url} rel="noopener noreferrer" target="_blank">{s.title}</a>
+							</li>
+						))}
+					</ul>
+				</>
+			)}
+		</article>
+	</Section>
+</BaseLayout>

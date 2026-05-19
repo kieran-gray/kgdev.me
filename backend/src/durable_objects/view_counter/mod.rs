@@ -1,7 +1,7 @@
 pub mod storage;
 pub mod websocket;
 
-use std::cell::Cell;
+use std::{cell::Cell, time::Duration};
 
 use tracing::{debug, error};
 use worker::{
@@ -59,7 +59,7 @@ impl DurableObject for ViewCounter {
 
         self.state
             .storage()
-            .set_alarm(std::time::Duration::from_secs(5))
+            .set_alarm(Duration::from_secs(5))
             .await?;
 
         Ok(response)

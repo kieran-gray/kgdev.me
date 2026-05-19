@@ -1,3 +1,8 @@
+use std::{
+    error::Error,
+    fmt::{self, Display, Formatter},
+};
+
 #[derive(Debug)]
 pub enum AppError {
     NotFound(String),
@@ -7,8 +12,8 @@ pub enum AppError {
     RateLimited(String),
 }
 
-impl std::fmt::Display for AppError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for AppError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             AppError::NotFound(msg) => write!(f, "Not found: {msg}"),
             AppError::Unauthorised(msg) => write!(f, "Unauthorised: {msg}"),
@@ -19,4 +24,4 @@ impl std::fmt::Display for AppError {
     }
 }
 
-impl std::error::Error for AppError {}
+impl Error for AppError {}

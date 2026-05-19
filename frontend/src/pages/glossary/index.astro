@@ -1,0 +1,28 @@
+---
+import PageLayout from '@/layouts/PageLayout.astro';
+import Section from '@/components/layout/Section.astro';
+import { getCollection } from 'astro:content';
+import { siteConfig } from '@/config/site';
+
+const entries = await getCollection('glossary');
+const terms = entries
+	.map((entry) => ({ slug: entry.slug, term: entry.data.term }))
+	.sort((a, b) => a.term.localeCompare(b.term));
+
+const title = `Glossary | ${siteConfig.meta.title}`;
+const description = 'Definitions for terms referenced across the site.';
+---
+
+<PageLayout head={{ title, description }} heading="Glossary" intro={description}>
+	<Section>
+		<ul class="mt-6 flex flex-col gap-2">
+			{terms.map((t) => (
+				<li>
+					<a class="underline hover:text-[var(--accent-500)]" href={`/glossary/${t.slug}/`}>
+						{t.term}
+					</a>
+				</li>
+			))}
+		</ul>
+	</Section>
+</PageLayout>

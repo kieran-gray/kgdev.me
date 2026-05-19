@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::from_utf8, sync::Arc};
 
 use async_stream::stream;
 use async_trait::async_trait;
@@ -109,7 +109,7 @@ impl AiInferenceServiceTrait for WorkersAiService {
                         return;
                     }
                 };
-                let text = match std::str::from_utf8(&chunk) {
+                let text = match from_utf8(&chunk) {
                     Ok(s) => s,
                     Err(e) => {
                         error!(error = %e, "AI stream non-utf8 chunk");
@@ -119,8 +119,8 @@ impl AiInferenceServiceTrait for WorkersAiService {
                 };
                 buffer.push_str(text);
                 while let Some(idx) = buffer.find("\n\n") {
-                    let event = buffer[..idx].to_string();
-                    buffer.drain(..idx + 2);
+                    let event: String = buffer.drain(..idx).collect();
+                    buffer.drain(..2);
                     for line in event.lines() {
                         let Some(data) = line.strip_prefix("data:") else { continue };
                         let data = data.trim_start();
