@@ -20,9 +20,7 @@ struct BlogManifest {
 pub struct Config {
     pub security: SecurityConfig,
     pub cloudflare: CloudflareConfig,
-    pub ai: AiConfig,
     pub destination_email: String,
-    pub qa_daily_cap: u32,
 }
 
 #[derive(Clone)]
@@ -56,125 +54,17 @@ impl FromEnv for SecurityConfig {
 pub struct CloudflareConfig {
     pub account_id: String,
     pub api_token: String,
-    pub vectorize_api_token: String,
 }
 
 impl FromEnv for CloudflareConfig {
     fn from_env(env: &Env) -> Result<Self, SetupError> {
         let account_id = Config::parse(env, "CLOUDFLARE_ACCOUNT_ID")?;
         let api_token = Config::parse(env, "CLOUDFLARE_EMAIL_API_TOKEN")?;
-        let vectorize_api_token = Config::parse(env, "CLOUDFLARE_VECTORIZE_API_TOKEN")?;
 
         Ok(Self {
             account_id,
             api_token,
-            vectorize_api_token,
         })
-    }
-}
-
-#[derive(Clone)]
-pub struct AiConfig {
-    pub inference: InferenceConfig,
-    pub blog_index_name: String,
-    pub glossary_index_name: String,
-    pub blog_top_k: u32,
-    pub glossary_top_k: u32,
-    pub min_score: f32,
-}
-
-#[derive(Clone)]
-pub enum InferenceConfig {
-    Cloudflare {
-        embedding_model: String,
-        generation_model: String,
-    },
-
-    #[cfg(feature = "ollama")]
-    Ollama {
-        url: String,
-        embedding_model: String,
-        generation_model: String,
-    },
-}
-
-impl InferenceConfig {
-    pub fn generation_model(&self) -> &str {
-        match self {
-            Self::Cloudflare {
-                generation_model, ..
-            } => generation_model,
-            #[cfg(feature = "ollama")]
-            Self::Ollama {
-                generation_model, ..
-            } => generation_model,
-        }
-    }
-}
-
-impl FromEnv for AiConfig {
-    fn from_env(env: &Env) -> Result<Self, SetupError> {
-        let embedding_model = Config::parse(env, "EMBEDDING_MODEL")?;
-        let generation_model = Config::parse(env, "GENERATION_MODEL")?;
-        let inference = InferenceConfig::from_env(env, embedding_model, generation_model)?;
-        let blog_index_name = Config::parse(env, "VECTORIZE_BLOG_INDEX_NAME")?;
-        let glossary_index_name = Config::parse(env, "VECTORIZE_GLOSSARY_INDEX_NAME")?;
-        let blog_top_k = Config::parse(env, "VECTORIZE_BLOG_TOP_K")?;
-        let glossary_top_k = Config::parse(env, "VECTORIZE_GLOSSARY_TOP_K")?;
-        let min_score = Config::parse(env, "MIN_SCORE")?;
-
-        Ok(Self {
-            inference,
-            blog_index_name,
-            glossary_index_name,
-            blog_top_k,
-            glossary_top_k,
-            min_score,
-        })
-    }
-}
-
-impl InferenceConfig {
-    #[cfg(not(feature = "ollama"))]
-    fn from_env(
-        _env: &Env,
-        embedding_model: String,
-        generation_model: String,
-    ) -> Result<Self, SetupError> {
-        Ok(Self::Cloudflare {
-            embedding_model,
-            generation_model,
-        })
-    }
-
-    #[cfg(feature = "ollama")]
-    fn from_env(
-        env: &Env,
-        embedding_model: String,
-        generation_model: String,
-    ) -> Result<Self, SetupError> {
-        let provider = env
-            .var("AI_PROVIDER")
-            .map(|v| v.to_string())
-            .unwrap_or_else(|_| "cloudflare".to_string());
-
-        match provider.as_str() {
-            "cloudflare" => Ok(Self::Cloudflare {
-                embedding_model,
-                generation_model,
-            }),
-            "ollama" => {
-                let url = Config::parse(env, "OLLAMA_HOST")?;
-                Ok(Self::Ollama {
-                    url,
-                    embedding_model,
-                    generation_model,
-                })
-            }
-            other => Err(SetupError::InvalidVariable(format!(
-                "AI_PROVIDER should be cloudflare or ollama, got {other}"
-            ))),
-        }
     }
 }
 
@@ -182,17 +72,13 @@ impl Config {
     pub fn from_env(env: &Env) -> Result<Self, SetupError> {
         let security = SecurityConfig::from_env(env)?;
         let cloudflare = CloudflareConfig::from_env(env)?;
-        let ai = AiConfig::from_env(env)?;
 
         let destination_email = Config::parse(env, "DESTINATION_EMAIL")?;
-        let qa_daily_cap = Config::parse(env, "QA_DAILY_CAP")?;
 
         Ok(Config {
             security,
             cloudflare,
-            ai,
             destination_email,
-            qa_daily_cap,
         })
     }
 

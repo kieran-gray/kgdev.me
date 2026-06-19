@@ -131,16 +131,6 @@ const scenarios = [
 			return failures;
 		}
 	},
-	{
-		name: 'blogQa',
-		env: { PUBLIC_FEATURE_BLOG_QA: 'false' },
-		check() {
-			const failures = [];
-			const html = read('posts/blog-view-counter/index.html');
-			assert(!html.includes('id="blog-qa"'), 'Expected no Blog QA mount when blogQa is disabled', failures);
-			return failures;
-		}
-	},
 ];
 
 const scenarioFailures = [];

@@ -7,7 +7,7 @@
     "nodejs_compat"
   ],
   "build": {
-    "command": "cargo install -q worker-build && worker-build --release"
+    "command": "cargo install -q worker-build --version '=0.8.4' && worker-build --release"
   },
   "workers_dev": false,
   "route": {
@@ -33,10 +33,6 @@
       {
         "name": "VIEW_COUNTER",
         "class_name": "ViewCounter"
-      },
-      {
-        "name": "BLOG_POST_QA",
-        "class_name": "BlogPostQA"
       }
     ]
   },
@@ -52,68 +48,43 @@
       "new_sqlite_classes": [
         "BlogPostQA"
       ]
-    }
-  ],
-  "kv_namespaces": [
+    },
     {
-      "binding": "BLOG_POST_QA_CACHE",
-      "id": "ebdcf95e4fbe46719801f4de598840a7"
+      "tag": "v3",
+      "deleted_classes": [
+        "BlogPostQA"
+      ]
     }
   ],
-  "ai": {
-    "binding": "AI"
-  },
   "vars": {
     "ENVIRONMENT": "production",
     "CLOUDFLARE_SITEVERIFY_URL": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
     "DESTINATION_EMAIL": "gray.kieran@protonmail.com",
-    "ALLOWED_ORIGINS": "https://kgdev.me",
-    "VECTORIZE_BLOG_INDEX_NAME": "kgdev-me-blog",
-    "VECTORIZE_GLOSSARY_INDEX_NAME": "kgdev-me-glossary",
-    "EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b",
-    "GENERATION_MODEL": "@cf/meta/llama-3.1-8b-instruct",
-    "QA_DAILY_CAP": "200",
-    "VECTORIZE_BLOG_TOP_K": "8",
-    "VECTORIZE_GLOSSARY_TOP_K": "2",
-    "MIN_SCORE": "0.4"
+    "ALLOWED_ORIGINS": "https://kgdev.me"
   },
   "secrets": {
     "required": [
       "CLOUDFLARE_TURNSTILE_SECRET_KEY",
       "CLOUDFLARE_EMAIL_API_TOKEN",
-      "CLOUDFLARE_ACCOUNT_ID",
-      "CLOUDFLARE_VECTORIZE_API_TOKEN"
+      "CLOUDFLARE_ACCOUNT_ID"
     ]
   },
   "env": {
     "dev": {
       "build": {
-        "command": "cargo install -q worker-build && worker-build --release --features=ollama"
+        "command": "cargo install -q worker-build --version '=0.8.4' && worker-build --release"
       },
       "vars": {
         "ENVIRONMENT": "dev",
         "CLOUDFLARE_SITEVERIFY_URL": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
         "DESTINATION_EMAIL": "gray.kieran@protonmail.com",
-        "ALLOWED_ORIGINS": "",
-        "VECTORIZE_BLOG_INDEX_NAME": "kgdev-me-blog",
-        "VECTORIZE_GLOSSARY_INDEX_NAME": "kgdev-me-glossary",
-        // "EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b",
-        // "GENERATION_MODEL": "@cf/meta/llama-3.1-8b-instruct",
-        "QA_DAILY_CAP": "50",
-        "VECTORIZE_BLOG_TOP_K": "8",
-        "VECTORIZE_GLOSSARY_TOP_K": "2",
-        "MIN_SCORE": "0.4",
-        "AI_PROVIDER": "ollama",
-        "EMBEDDING_MODEL": "qwen3-embedding:0.6b",
-        "GENERATION_MODEL": "granite4.1:8b",
-        "OLLAMA_HOST": "http://192.168.1.234:11434"
+        "ALLOWED_ORIGINS": ""
       },
       "secrets": {
         "required": [
           "CLOUDFLARE_TURNSTILE_SECRET_KEY",
           "CLOUDFLARE_EMAIL_API_TOKEN",
-          "CLOUDFLARE_ACCOUNT_ID",
-          "CLOUDFLARE_VECTORIZE_API_TOKEN"
+          "CLOUDFLARE_ACCOUNT_ID"
         ]
       },
       "durable_objects": {
@@ -121,10 +92,6 @@
           {
             "name": "VIEW_COUNTER",
             "class_name": "ViewCounter"
-          },
-          {
-            "name": "BLOG_POST_QA",
-            "class_name": "BlogPostQA"
           }
         ]
       },
@@ -140,18 +107,14 @@
           "new_sqlite_classes": [
             "BlogPostQA"
           ]
-        }
-      ],
-      "kv_namespaces": [
+        },
         {
-          "binding": "BLOG_POST_QA_CACHE",
-          "id": "ebdcf95e4fbe46719801f4de598840a7",
-          "remote": true
+          "tag": "v3",
+          "deleted_classes": [
+            "BlogPostQA"
+          ]
         }
-      ],
-      "ai": {
-        "binding": "AI"
-      }
+      ]
     }
   }
 }

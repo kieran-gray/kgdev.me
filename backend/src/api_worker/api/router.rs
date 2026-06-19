@@ -2,7 +2,7 @@ use crate::api_worker::{
     api::{
         middleware::{create_options_handler, public},
         routes::{
-            ask_question::ask_question_handler, connect_websocket::handle_websocket_connect,
+            connect_websocket::handle_websocket_connect,
             create_contact_message::create_contact_message_handler,
         },
     },
@@ -18,12 +18,6 @@ pub fn create_router(app_state: AppState) -> Router<'static, AppState> {
             public(create_contact_message_handler, req, ctx)
         })
         .options("/api/v1/contact/", |req, ctx| {
-            create_options_handler(&req, ctx)
-        })
-        .post_async("/api/v1/ask/:page", |req, ctx| {
-            public(ask_question_handler, req, ctx)
-        })
-        .options("/api/v1/ask/:page", |req, ctx| {
             create_options_handler(&req, ctx)
         })
         .on_async("/api/v1/connect/:page", |req, ctx| {

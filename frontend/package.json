@@ -13,7 +13,6 @@
 		"setup": "node scripts/setup.mjs",
 		"books:import": "node scripts/convert-goodreads-export.mjs",
 		"test:features": "node scripts/test-feature-flags.mjs",
-		"test:ingest": "node --test scripts/ingest/*.test.mjs",
 		"test:unit": "vitest run",
 		"verify-template": "npm run typecheck && npm run build && npm run test:unit && npm run test:features",
 		"format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",

@@ -3,27 +3,17 @@ use std::sync::Arc;
 use worker::Env;
 
 use crate::api_worker::{
-    application::{
-        AiInferenceServiceTrait, BlogQaService, BlogQaServiceTrait, ContactMessageService,
-        ContactMessageServiceTrait, QaCacheService,
-    },
+    application::{ContactMessageService, ContactMessageServiceTrait},
     infrastructure::{
-        CloudflareEmailService, CloudflareRequestValidationService, HttpClientTrait, KVCache,
-        QaCoordinatorDoService, VectorizeRestService, WorkerHttpClient, WorkersAiService,
-        durable_object_client::DurableObjectClient,
+        CloudflareEmailService, CloudflareRequestValidationService, HttpClientTrait,
+        WorkerHttpClient, durable_object_client::DurableObjectClient,
     },
-    setup::{Config, config::InferenceConfig, exceptions::SetupError},
+    setup::{Config, exceptions::SetupError},
 };
-
-#[cfg(feature = "ollama")]
-use crate::api_worker::infrastructure::OllamaInferenceService;
-
-const QA_CACHE_TTL_SECONDS: u64 = 60 * 60 * 24 * 30;
 
 pub struct AppState {
     pub config: Config,
     pub contact_message_service: Arc<dyn ContactMessageServiceTrait>,
-    pub blog_qa_service: Arc<dyn BlogQaServiceTrait>,
     pub view_counter_do_client: DurableObjectClient,
 }
 
@@ -47,49 +37,6 @@ impl AppState {
         let contact_message_service =
             ContactMessageService::create(request_validation_service, email_service);
 
-        let ai_service =
-            create_inference_service(env, &config.ai.inference, Arc::clone(&http_client));
-        let ai_service = ai_service?;
-
-        let blog_vectorize = VectorizeRestService::create(
-            config.cloudflare.account_id.clone(),
-            config.cloudflare.vectorize_api_token.clone(),
-            config.ai.blog_index_name.clone(),
-            http_client.clone(),
-        );
-        let glossary_vectorize = VectorizeRestService::create(
-            config.cloudflare.account_id.clone(),
-            config.cloudflare.vectorize_api_token.clone(),
-            config.ai.glossary_index_name.clone(),
-            http_client.clone(),
-        );
-
-        let kv = env
-            .kv("BLOG_POST_QA_CACHE")
-            .map_err(|_e| SetupError::MissingVariable("BLOG_POST_QA_CACHE".to_string()))?;
-        let kv_cache = Arc::new(KVCache::create(kv, QA_CACHE_TTL_SECONDS));
-        let qa_cache_service = QaCacheService::create(kv_cache);
-
-        let qa_do_client = DurableObjectClient::new(
-            env.durable_object("BLOG_POST_QA")
-                .map_err(|_e| SetupError::MissingVariable("BLOG_POST_QA".to_string()))?,
-        );
-        let qa_coordinator = QaCoordinatorDoService::create(qa_do_client);
-
-        let blog_qa_service = BlogQaService::create(
-            ai_service,
-            blog_vectorize,
-            glossary_vectorize,
-            qa_cache_service,
-            qa_coordinator,
-            config.ai.inference.generation_model().to_string(),
-            config.qa_daily_cap,
-            config.ai.blog_index_name.clone(),
-            config.ai.blog_top_k,
-            config.ai.glossary_top_k,
-            config.ai.min_score,
-        );
-
         let view_counter_do_client = DurableObjectClient::new(
             env.durable_object("VIEW_COUNTER")
                 .map_err(|_e| SetupError::MissingVariable("VIEW_COUNTER".to_string()))?,
@@ -98,42 +45,7 @@ impl AppState {
         Ok(Self {
             config,
             contact_message_service,
-            blog_qa_service,
             view_counter_do_client,
         })
-    }
-}
-
-fn create_inference_service(
-    env: &Env,
-    config: &InferenceConfig,
-    _http_client: Arc<dyn HttpClientTrait>,
-) -> Result<Arc<dyn AiInferenceServiceTrait + Send + Sync>, SetupError> {
-    match config {
-        InferenceConfig::Cloudflare {
-            embedding_model,
-            generation_model,
-        } => {
-            let ai_binding = env
-                .ai("AI")
-                .map_err(|_e| SetupError::MissingVariable("AI".to_string()))?;
-            Ok(WorkersAiService::create(
-                ai_binding,
-                embedding_model.clone(),
-                generation_model.clone(),
-            ))
-        }
-
-        #[cfg(feature = "ollama")]
-        InferenceConfig::Ollama {
-            url,
-            embedding_model,
-            generation_model,
-        } => Ok(OllamaInferenceService::create(
-            _http_client,
-            embedding_model.clone(),
-            generation_model.clone(),
-            url.clone(),
-        )),
     }
 }
