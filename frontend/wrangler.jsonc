@@ -1,6 +1,7 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "kgdev-me",
+  "account_id": "012c3a0aee1e9b5b0768b1c7afb5e520",
   "compatibility_date": "2026-04-24",
   "observability": {
     "enabled": true

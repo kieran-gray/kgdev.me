@@ -118,17 +118,10 @@ const schemeList = theme.list.join('|');
 	</head>
 	<body class="flex min-h-screen flex-col bg-[var(--page-bg)] font-mono text-[var(--text-color)]">
 		<Navbar/>
-		<div class="flex-1" data-pagefind-body={features.search.enabled ? true : undefined}>
+		<main class="flex-1" data-pagefind-body={features.search.enabled ? true : undefined}>
 			<slot />
-		</div>
+		</main>
 		<Footer/>
 		{features.search.enabled && <Search />}
-		<script
-			is:inline
-			defer
-			src="https://ask.searchcrucible.com/v1/embed.js"
-			data-sc-key="pk_live_afa3AtcO8iCIJze5OgQVp4QuuNbmJewHoatEXnISLIw"
-			data-astro-rerun
-		></script>
 	</body>
 </html>

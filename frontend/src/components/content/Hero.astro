@@ -24,7 +24,7 @@ const { headline, currentRole } = Astro.props as Props;
 	<br />
 	<h1 class="sr-only">{author.name}</h1>
 	<div class="pb-4 pt-4">
-		<AsciiHeader text={headline} ariaLabel={author.name} />
+		<AsciiHeader text={headline} decorative />
 	</div>
 	<div class="text-sm leading-6 text-[var(--muted-text)] [&_a]:underline [&_a]:transition [&_a:hover]:text-[var(--accent-500)] [&_p]:py-2 [&_strong]:font-semibold [&_strong]:text-[var(--accent-500)]">
 		<slot />
